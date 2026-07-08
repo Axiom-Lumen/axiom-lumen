@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+
+@theme inline {
+  /* Fonts (mapped to next/font variables in layout.tsx) */
+  --font-sans: var(--font-plex-sans), 'IBM Plex Sans', sans-serif;
+  --font-serif: var(--font-fraunces), 'Fraunces', serif;
+  --font-mono: var(--font-plex-mono), 'IBM Plex Mono', monospace;
+
+  /* Axiom Lumen palette */
+  --color-navy: #0b1b33;
+  --color-deep: #071328;
+  --color-surface: #122b4d;
+  --color-surface2: #16335a;
+  --color-line: #24406b;
+  --color-linesoft: rgba(159, 179, 209, 0.18);
+  --color-ink: #f4f1e9;
+  --color-muted: #9fb3d1;
+  --color-dim: #6d85aa;
+  --color-gold: #d9a544;
+  --color-goldhover: #ecc067;
+  --color-golddim: #8a6b2e;
+  --color-cyan: #33c7e0;
+  --color-danger: #e0745a;
+
+  /* Map shadcn/base tokens to the brand so any base components stay on-brand */
+  --color-background: var(--color-navy);
+  --color-foreground: var(--color-ink);
+  --color-border: var(--color-line);
+  --color-ring: var(--color-cyan);
+
+  --radius: 0px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-navy);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-gold);
+  color: #201404;
+}
+
+/* Global keyboard focus visibility */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
