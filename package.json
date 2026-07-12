@@ -11,9 +11,12 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests specified\" && exit 0",
-    "test:integration": "echo \"No integration tests specified\" && exit 0",
-    "ci": "npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build"
+    "test": "node -e \"console.log('No automated tests are configured yet in this checkout. Add them under test/ before relying on this command in CI.')\"",
+    "test:integration": "node -e \"console.log('No integration tests are configured yet in this checkout.')\"",
+    "ingest:run": "node -e \"console.log('The ingest worker is not implemented yet in this checkout. See CONTRIBUTING.md for the target workflow.')\"",
+    "db:migrate": "node -e \"console.log('Database migrations are not implemented yet in this checkout. See CONTRIBUTING.md for the target workflow.')\"",
+    "db:seed": "node -e \"console.log('Database seeding is not implemented yet in this checkout. See CONTRIBUTING.md for the target workflow.')\"",
+    "ci": "npm run lint && npm run typecheck && npm run test && npm run test:integration && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
