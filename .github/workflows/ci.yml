@@ -2,12 +2,25 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+
   pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    name: Lint, typecheck, test and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -17,26 +30,27 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 11
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
+          node-version-file: ".nvmrc"
+          cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Run Lint
+      - name: Run lint
         run: pnpm lint
 
-      - name: Run Typecheck
-        run: pnpm tsc --noEmit
+      - name: Run typecheck
+        run: pnpm exec tsc --noEmit
 
-      - name: Run Tests
+      - name: Run tests
         run: pnpm test
 
-      - name: Run Integration Tests
+      - name: Run integration tests
         run: pnpm test:integration
 
       - name: Build
