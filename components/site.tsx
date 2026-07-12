@@ -248,49 +248,7 @@ export function S({ children }: { children: ReactNode }) {
   return <span className="text-gold">{children}</span>
 }
 
-export function ConfidenceJson() {
-  return (
-    <CodePanel label="GET /v1/supply/USDC — response">
-      <code>
-        {'{\n  '}
-        <K>{'"metric"'}</K>
-        {': '}
-        <S>{'"circulating_supply"'}</S>
-        {',\n  '}
-        <K>{'"asset"'}</K>
-        {': '}
-        <S>{'"USDC:GA5Z..."'}</S>
-        {',\n  '}
-        <K>{'"value"'}</K>
-        {': '}
-        <S>{'"48213092.44"'}</S>
-        {',\n  '}
-        <K>{'"confidence"'}</K>
-        {': 0.94,\n  '}
-        <K>{'"sources_agreeing"'}</K>
-        {': 4,\n  '}
-        <K>{'"sources_total"'}</K>
-        {': 5,\n  '}
-        <K>{'"discrepancies"'}</K>
-        {': [\n    {\n      '}
-        <K>{'"source"'}</K>
-        {': '}
-        <S>{'"anchor_api"'}</S>
-        {',\n      '}
-        <K>{'"delta_pct"'}</K>
-        {': 0.03,\n      '}
-        <K>{'"severity"'}</K>
-        {': '}
-        <S>{'"info"'}</S>
-        {'\n    }\n  ],\n  '}
-        <K>{'"as_of"'}</K>
-        {': '}
-        <S>{'"2026-07-06T14:22:01Z"'}</S>
-        {'\n}'}
-      </code>
-    </CodePanel>
-  )
-}
+export { ConfidenceJson, DataArtifactEmpty } from './confidence-json'
 
 /* Ruled notice — no box. A gold rule and a mono label carry the weight. */
 export function ShortDisclaimer({ className = '' }: { className?: string }) {
