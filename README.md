@@ -68,8 +68,8 @@ All supply endpoints will expose the following unified JSON payload contract:
 ## 3. Local Development
 
 ### Prerequisites
-* **Node.js** 20.x or later
-* **npm** or **pnpm** package manager
+* **Node.js** 22.x or later
+* **npm** (included with Node.js)
 
 ### Getting Started
 1. Clone the repository and navigate to the project directory:
@@ -78,13 +78,19 @@ All supply endpoints will expose the following unified JSON payload contract:
    ```
 2. Install local development dependencies:
    ```bash
-   npm install
+   npm ci
    ```
 3. Run the hot-reloading Next.js development server:
    ```bash
    npm run dev
    ```
 4. Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+To run the same checks as CI before pushing:
+
+```bash
+npm run ci
+```
 
 ---
 

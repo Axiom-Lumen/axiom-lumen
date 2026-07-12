@@ -2,13 +2,18 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "test": "echo \"No tests specified\" && exit 0",
-    "test:integration": "echo \"No integration tests specified\" && exit 0"
+    "test:integration": "echo \"No integration tests specified\" && exit 0",
+    "ci": "npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
