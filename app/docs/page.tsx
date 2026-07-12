@@ -51,11 +51,20 @@ export default function DocsPage() {
       <DocSection num="01" label="Implemented" title="Latest ledger reconciliation." wide>
         <div className="grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_460px]">
           <div className="max-w-[560px]">
-            <p className="mb-8 text-[15px] leading-relaxed text-muted">
+            <p className="mb-4 text-[15px] leading-relaxed text-muted">
               Configure comma-separated Horizon endpoints with{' '}
               <code className="font-mono text-[13px] text-cyan">STELLAR_HORIZON_URLS</code>. The
-              endpoint trims, validates, deduplicates, and caps configured sources, then reports
-              source availability separately from data discrepancies.
+              endpoint trims, validates endpoint format, deduplicates, and caps configured sources,
+              then reports source availability separately from data discrepancies.
+            </p>
+            <p className="mb-4 text-[15px] leading-relaxed text-muted">
+              All configured Horizon endpoints must serve the same Stellar network. Do not reconcile
+              mainnet, testnet, futurenet, or local-network endpoints together.
+            </p>
+            <p className="mb-8 text-[15px] leading-relaxed text-muted">
+              Current limitation: the route checks URL format and whether configured endpoints can
+              return latest-ledger data, but it does not yet validate Horizon network passphrases.
+              Planned: validate Horizon network passphrases before reconciliation.
             </p>
             <CodePanel label="Local request">
               <code>{'curl http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
@@ -108,9 +117,16 @@ export default function DocsPage() {
             source could produce a latest-ledger value.
           </p>
           <p>
-            Request failures and malformed source responses appear in <K>source_errors</K>.
-            Discrepancies are reserved for usable sources that responded with ledger data but
-            disagreed with the reconciled value.
+            <K>sources_configured</K> is the count of normalized endpoints accepted from configuration.
+            <K>sources_responded</K> includes usable observations plus HTTP or application-level source
+            errors, but not request failures or aborts. <K>sources_usable</K> is the count of valid
+            observations used in reconciliation, and <K>sources_agreeing</K> is the count within one
+            ledger of the reconciled value.
+          </p>
+          <p>
+            Request failures, non-200 responses, malformed payloads, and empty records appear in{' '}
+            <K>source_errors</K>. Discrepancies are reserved for usable sources that responded with
+            ledger data but disagreed with the reconciled value.
           </p>
         </div>
       </DocSection>
