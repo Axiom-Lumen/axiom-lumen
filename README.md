@@ -4,125 +4,158 @@
 
 > **"The foundational truth that illuminates Stellar."**
 
-Axiom Lumen is the verification and intelligence layer for the Stellar ecosystem. It aggregates on-chain and off-chain data—including Horizon endpoints, full-history Stellar Archive nodes, DEX order-book depth, and self-reported anchor stats—and cross-verifies them using mathematical models to produce a unified, confidence-scored reference value.
+Axiom Lumen is being built as a verification and intelligence layer for the Stellar ecosystem. The long-term product goal is to aggregate on-chain and off-chain data, cross-check it with published methodology, and return confidence-scored outputs with source context.
 
-By building on top of Axiom Lumen, developers, institutional market makers, and ecosystem analysts get a single, defensible source of truth instead of having to reconcile conflicting API data streams manually.
+This repository currently contains a Next.js presentation surface plus one real backend vertical slice: multiple Stellar Horizon sources can be queried for their latest closed ledger, normalized, reconciled, scored, and returned through a local API route.
 
 ---
 
 ## 1. System Architecture
 
-The core of Axiom Lumen is structured around a three-stage data pipeline:
+The intended Axiom Lumen pipeline is:
 
 ```
   [ INGEST ]              [ RECONCILE ]              [ SERVE ]
-Aggregates raw        Weighted median, staleness     JSON API, SSE stream,
-source streams   →   decay, agreement & confidence  →  interactive dashboard
-(Horizon/DEX/TOML)   scoring (Methodology v1.3)      & verified status logs
+Source observations  ->  Weighted consensus       ->  JSON API responses
+with timestamps          with freshness scoring       with source context
 ```
 
-1. **Ingest (Aggregation):** Continuous real-time ingestion from Horizon API, full-history archive storage, DEX order books, and SEP-0001 `stellar.toml` self-reported statistics.
-2. **Reconcile (Cross-verification):** Evaluates observations using source-class base weights, applies time-decay models, and computes a **weighted median** (instead of a weighted mean) to neutralize outlier manipulation or endpoint lag.
-3. **Serve (Actionable Output):** Exposes clean JSON payloads over REST and SSE/WebSockets, decorated with metadata (timestamp, methodology version, agreeing source ratio) and a confidence score between `0.0` and `1.0`.
+Implemented in this repository today:
+
+1. **Ingest:** Latest-ledger reads from configured Horizon REST endpoints.
+2. **Reconcile:** Weighted median over latest-ledger observations, half-life freshness weighting, availability-aware confidence, status classification, and discrepancy reporting.
+3. **Serve:** Local Next.js API route for latest-ledger reconciliation.
+
+Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/order-book reconciliation, anchor reserve comparison, persistence, authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard wiring, and anchor right-of-reply workflows.
 
 ---
 
 ## 2. Current Implementation Status
 
-This repository currently contains the **high-fidelity presentation and marketing surface** built using Next.js 16 (App Router), styled with vanilla CSS. 
+### Implemented
 
-### Status Checklist
+- [x] **Frontend shell:** Static pages under `/`, `/about`, `/docs`, `/methodology`, `/anchors`, and `/pricing`.
+- [x] **Latest-ledger Horizon connector:** Reads latest ledger records from configured Horizon endpoints.
+- [x] **Latest-ledger reconciliation:** Weighted median, freshness decay, availability-aware confidence, status classification, discrepancies, and source errors.
+- [x] **Local API route:** `GET /api/v1/stellar/latest-ledger`.
+- [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
+- [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
 
-- [x] **Frontend Shell:** Polished, theme-compliant pages (`/`, `/about`, `/docs`, `/methodology`, `/anchors`)
-- [x] **Responsive Navigation:** Interactive layouts, header menu, and structured document colophons
-- [x] **Layout & Assets:** Customized branding with `/logo.png` and high-resolution `/icon.png` favicon config
-- [ ] **Reconciliation Engine:** TypeScript mathematical engine (weighted median, staleness, confidence)
-- [ ] **Data Ingestion Worker:** Standalone scheduler, connectors, and health monitoring
-- [ ] **Persistence Layer:** Database schema, migrations, and append-only discrepancy logs
-- [ ] **Public API routes:** Authenticated REST endpoints (e.g. `GET /v1/supply/{asset}`)
-- [ ] **Anchor claim & reply portals:** Signed TOML verification, 72-hour Warning grace-period queues, and dispute forms
+### Mocked, static, planned, or missing
 
-### Target API Response Specification
-All supply endpoints will expose the following unified JSON payload contract:
-```json
-{
-  "metric": "circulating_supply",
-  "asset": "USDC:GA5Z...",
-  "value": "48213092.44",
-  "confidence": 0.94,
-  "sources_agreeing": 4,
-  "sources_total": 5,
-  "discrepancies": [
-    {
-      "source": "anchor_api",
-      "delta_pct": 0.03,
-      "severity": "info"
-    }
-  ],
-  "as_of": "2026-07-06T14:22:01Z"
-}
-```
+- [ ] **Homepage live reconciliation strip:** Static illustrative UI, not wired to the API.
+- [ ] **Supply API:** Planned; no `GET /v1/supply/{asset}` implementation yet.
+- [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
+- [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
+- [ ] **Persistence/audit log:** Planned; no database schema or append-only discrepancy store yet.
+- [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
+- [ ] **SSE/WebSocket streams:** Planned; not implemented.
+- [ ] **Right-of-reply tooling:** Described in product documentation, but not implemented in code.
 
 ---
 
-## 3. Local Development
+## 3. Implemented API
+
+### `GET /api/v1/stellar/latest-ledger`
+
+Configure one or more Horizon endpoints with `STELLAR_HORIZON_URLS`:
+
+```bash
+STELLAR_HORIZON_URLS="https://horizon.stellar.org,https://horizon.example.org" npm run dev
+```
+
+Then request the local endpoint:
+
+```bash
+curl http://localhost:3000/api/v1/stellar/latest-ledger
+```
+
+Response fields include:
+
+```json
+{
+  "metric": "latest_ledger",
+  "value": 54891234,
+  "status": "verified",
+  "confidence": 0.97,
+  "sources_configured": 2,
+  "sources_responded": 2,
+  "sources_usable": 2,
+  "sources_agreeing": 2,
+  "observations": [],
+  "discrepancies": [],
+  "source_errors": [],
+  "as_of": "2026-07-12T12:00:00.000Z",
+  "methodology_version": "latest-ledger-v0.1"
+}
+```
+
+`source_errors` reports request failures, non-200 responses, malformed Horizon payloads, and empty records. `discrepancies` is reserved for usable sources that returned ledger data but disagreed with the reconciled value.
+
+`status` is one of:
+
+- `verified`: at least two usable sources agree, no source errors are present, and confidence remains high.
+- `degraded`: a value is available, but availability, freshness, source count, or agreement is limited.
+- `unavailable`: no usable source can produce a value.
+
+A single usable source can return a value, but it is always `degraded` and confidence-capped so it is not presented as fully verified.
+
+---
+
+## 4. Local Development
 
 ### Prerequisites
-* **Node.js** 22.x or later
-* **npm** (included with Node.js)
+
+- Node.js 22.x or later
+- npm, using the tracked `package-lock.json`
 
 ### Getting Started
-1. Clone the repository and navigate to the project directory:
-   ```bash
-   cd axiom-lumen
-   ```
-2. Install local development dependencies:
-   ```bash
-   npm ci
-   ```
-3. Run the hot-reloading Next.js development server:
-   ```bash
-   npm run dev
-   ```
-4. Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-To run the same checks as CI before pushing:
+```bash
+npm ci
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+Run the same checks as CI:
 
 ```bash
 npm run ci
 ```
 
----
+Useful individual checks:
 
-## 4. Methodology Core Parameters (v1.3 Baseline)
-
-* **Source Classification Weights:**
-  * Canonical core state (Horizon): `1.0`
-  * Archive/history nodes: `0.9`
-  * DEX/SDEX order-books: `0.85`
-  * Self-reported anchor APIs: `0.5`
-  * Third-party feeds/oracles: `0.4`
-* **Staleness Decay Formula:**
-  $$\text{effective\_weight} = \text{base\_weight} \times e^{(-\lambda \times \text{age\_seconds})}$$
-* **Discrepancy Severity:**
-  * **Info:** Deviation within $2 \times$ tolerance band. Logged internally, not surfaced publicly.
-  * **Warning:** Deviation beyond tolerance, under 3 cycles old. Surfaced on status feeds with source timestamps.
-  * **Critical:** Persistent deviation beyond tolerance (3+ cycles). Surfaced publicly and triggers the 72-hour right-of-reply window for anchors.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run test:integration
+npm run build
+```
 
 ---
 
-## 5. Development & Language Guardrails
+## 5. Methodology Notes
 
-> [!IMPORTANT]
-> Axiom Lumen reports **measured deviations** between independent data sources. It is **never** a solvency checker, financial advisory service, or regulatory validator.
+The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md). The implemented latest-ledger slice uses a narrow v0.1 method:
 
-All developers and automated agents contributing code, copy, or documentation to this repository must strictly adhere to the project's legal and tone guidelines in [axiom-lumen-agent-guide.md](file:///home/c-shells/Desktop/Projects/axiom-lumen/axiom-lumen-agent-guide.md):
-* **Factual & Descriptive:** State facts and differences (e.g. *"variance of 2.1% observed"*), never judgements (*"insolvent"*, *"untrustworthy"*, *"scam"*).
-* **Context Preservation:** Always include source context, confidence levels, and timestamps when outputting calculations.
-* **Objective Voice:** Use sentence case, neutral, active voice. Do not use exclamation points, emojis, or sensationalist headlines.
-* **No Financial Advice:** Never use speculative investment terms or advise actions like buying, selling, or evaluating safety.
+- Horizon sources have equal base weight by default.
+- Freshness uses a half-life model: a source loses half its vote every 30 seconds after ledger close.
+- The reconciled latest ledger is the weighted median.
+- Confidence includes agreement, freshness, and source availability.
+- Source request failures are not data discrepancies.
 
 ---
 
-## 6. License
-Axiom Lumen is open-source software licensed under the **Apache License 2.0**. See the upcoming `LICENSE` and `NOTICE` files for copyright details and attributions.
+## 6. Development & Language Guardrails
+
+Axiom Lumen reports measured deviations between independent data sources. It is never a solvency checker, financial advisory service, or regulatory validator.
+
+Contributors and automated agents must follow the project tone and legal guardrails in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md): factual, descriptive, timestamped, confidence-aware, and never investment advice.
+
+---
+
+## 7. License
+
+Axiom Lumen is open-source software licensed under the Apache License 2.0. See [LICENSE](./LICENSE).

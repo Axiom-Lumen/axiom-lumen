@@ -1,9 +1,23 @@
 {
-  "name": "my-project",
+  "name": "axiom-lumen",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": ">=22.13.0"
+  "description": "[![CI](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml)",
+  "homepage": "https://github.com/Axiom-Lumen/axiom-lumen#readme",
+  "bugs": {
+    "url": "https://github.com/Axiom-Lumen/axiom-lumen/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Axiom-Lumen/axiom-lumen.git"
+  },
+  "license": "Apache-2.0",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
   },
   "scripts": {
     "dev": "next dev",
@@ -11,8 +25,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests specified\" && exit 0",
-    "test:integration": "echo \"No integration tests specified\" && exit 0",
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
     "ci": "npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build"
   },
   "dependencies": {
@@ -37,7 +51,11 @@
     "eslint-config-next": "14.2.6",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   },
   "overrides": {
     "hono": "4.12.25"
