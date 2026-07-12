@@ -1,5 +1,7 @@
 # Axiom Lumen — The Verification Layer for Stellar
 
+[![CI](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml)
+
 > **"The foundational truth that illuminates Stellar."**
 
 Axiom Lumen is the verification and intelligence layer for the Stellar ecosystem. It aggregates on-chain and off-chain data—including Horizon endpoints, full-history Stellar Archive nodes, DEX order-book depth, and self-reported anchor stats—and cross-verifies them using mathematical models to produce a unified, confidence-scored reference value.
