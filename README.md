@@ -1,6 +1,6 @@
 # Axiom Lumen — The Verification Layer for Stellar
 
-[![CI](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml)
+[![CI](https://github.com/Axiom-Lumen/axiom-lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/Axiom-Lumen/axiom-lumen/actions/workflows/ci.yml)
 
 > **"The foundational truth that illuminates Stellar."**
 
@@ -58,11 +58,19 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 
 ### `GET /api/v1/stellar/latest-ledger`
 
-Configure one or more Horizon endpoints with `STELLAR_HORIZON_URLS`:
+Configure at least one Horizon endpoint with `STELLAR_HORIZON_URLS`. The value accepts comma-separated Horizon base URLs; whitespace is trimmed and duplicate endpoints are ignored.
+
+> All configured Horizon endpoints must serve the same Stellar network. Do not reconcile mainnet and testnet endpoints together.
+>
+> Current limitation: URL validation checks endpoint format and availability, but it does not yet prove that every endpoint serves the same Stellar network. Planned: Validate Horizon network passphrases before reconciliation.
+
+For local mainnet development, use the public Stellar Horizon endpoint:
 
 ```bash
-STELLAR_HORIZON_URLS="https://horizon.stellar.org,https://horizon.example.org" npm run dev
+STELLAR_HORIZON_URLS="https://horizon.stellar.org" npm run dev
 ```
+
+Additional endpoints may be supplied, but they must belong to the same Stellar network as the first endpoint.
 
 Then request the local endpoint:
 
@@ -90,7 +98,15 @@ Response fields include:
 }
 ```
 
-`source_errors` reports request failures, non-200 responses, malformed Horizon payloads, and empty records. `discrepancies` is reserved for usable sources that returned ledger data but disagreed with the reconciled value.
+Field semantics:
+
+- `sources_configured`: normalized Horizon endpoints accepted from `STELLAR_HORIZON_URLS` after trimming and deduplication.
+- `sources_responded`: sources that returned a usable observation or an HTTP/application-level error response; request failures and aborts are not counted as responded.
+- `sources_usable`: responded sources with valid latest-ledger observations used in reconciliation.
+- `sources_agreeing`: usable sources within one ledger of the reconciled value.
+- `source_errors`: request failures, non-200 responses, malformed Horizon payloads, and empty records.
+- `discrepancies`: usable sources that returned ledger data but disagreed with the reconciled value.
+- `confidence`: 0 to 1 score based on agreement, freshness, source availability, and spread.
 
 `status` is one of:
 

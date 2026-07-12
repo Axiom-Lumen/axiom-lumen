@@ -2,8 +2,7 @@
   "name": "axiom-lumen",
   "version": "0.1.0",
   "private": true,
-  "description": "[![CI](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/testersweb0-bug/axiom-lumen/actions/workflows/ci.yml)",
-  "homepage": "https://github.com/Axiom-Lumen/axiom-lumen#readme",
+  "description": "A data verification and reconciliation layer for fragmented Stellar ecosystem data.",
   "bugs": {
     "url": "https://github.com/Axiom-Lumen/axiom-lumen/issues"
   },
@@ -12,7 +11,6 @@
     "url": "git+https://github.com/Axiom-Lumen/axiom-lumen.git"
   },
   "license": "Apache-2.0",
-  "author": "",
   "type": "module",
   "main": "index.js",
   "directories": {
