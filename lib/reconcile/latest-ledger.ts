@@ -44,6 +44,7 @@ export interface LatestLedgerReconciliationInput {
   observations: LatestLedgerObservation[]
   sourceErrors?: LatestLedgerSourceError[]
   sourcesConfigured: number
+  sourcesExcluded?: number
   asOf?: Date
   halfLifeSeconds?: number
 }
@@ -57,6 +58,7 @@ export interface LatestLedgerReconciliationResult {
   sources_responded: number
   sources_usable: number
   sources_agreeing: number
+  sources_excluded: number
   observations: WeightedLatestLedgerObservation[]
   discrepancies: LatestLedgerDiscrepancy[]
   source_errors: LatestLedgerSourceError[]
@@ -123,6 +125,7 @@ export function reconcileLatestLedger({
   observations,
   sourceErrors = [],
   sourcesConfigured,
+  sourcesExcluded = 0,
   asOf = new Date(),
   halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
 }: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
@@ -170,6 +173,7 @@ export function reconcileLatestLedger({
       sources_responded: sourcesResponded,
       sources_usable: 0,
       sources_agreeing: 0,
+      sources_excluded: Math.max(0, sourcesExcluded),
       observations: [],
       discrepancies: [],
       source_errors: sourceErrors,
@@ -243,6 +247,7 @@ export function reconcileLatestLedger({
     sources_responded: sourcesResponded,
     sources_usable: weightedObservations.length,
     sources_agreeing: agreeingObservations.length,
+    sources_excluded: Math.max(0, sourcesExcluded),
     observations: weightedObservations,
     discrepancies,
     source_errors: sourceErrors,

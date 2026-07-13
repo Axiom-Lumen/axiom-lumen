@@ -93,6 +93,8 @@ export default function DocsPage() {
               {': 3,\n  '}
               <K>{'"sources_agreeing"'}</K>
               {': 3,\n  '}
+              <K>{'"sources_excluded"'}</K>
+              {': 0,\n  '}
               <K>{'"observations"'}</K>
               {': [],\n  '}
               <K>{'"discrepancies"'}</K>
@@ -121,12 +123,13 @@ export default function DocsPage() {
             <K>sources_responded</K> includes usable observations plus HTTP or application-level source
             errors, but not request failures or aborts. <K>sources_usable</K> is the count of valid
             observations used in reconciliation, and <K>sources_agreeing</K> is the count within one
-            ledger of the reconciled value.
+            ledger of the reconciled value. <K>sources_excluded</K> counts endpoints rejected because
+            their root metadata reported a different network passphrase than the first usable source.
           </p>
           <p>
-            Request failures, non-200 responses, malformed payloads, and empty records appear in{' '}
-            <K>source_errors</K>. Discrepancies are reserved for usable sources that responded with
-            ledger data but disagreed with the reconciled value.
+            Request failures, non-200 responses, malformed payloads, empty records, and network
+            mismatches appear in <K>source_errors</K>. Discrepancies are reserved for usable sources
+            that responded with ledger data but disagreed with the reconciled value.
           </p>
         </div>
       </DocSection>
