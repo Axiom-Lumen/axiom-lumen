@@ -90,6 +90,7 @@ Response fields include:
   "sources_responded": 2,
   "sources_usable": 2,
   "sources_agreeing": 2,
+  "sources_excluded": 0,
   "observations": [],
   "discrepancies": [],
   "source_errors": [],
@@ -104,7 +105,8 @@ Field semantics:
 - `sources_responded`: sources that returned a usable observation or an HTTP/application-level error response; request failures and aborts are not counted as responded.
 - `sources_usable`: responded sources with valid latest-ledger observations used in reconciliation.
 - `sources_agreeing`: usable sources within one ledger of the reconciled value.
-- `source_errors`: request failures, non-200 responses, malformed Horizon payloads, and empty records.
+- `sources_excluded`: configured sources rejected because their root metadata reported a different network passphrase than the first usable source.
+- `source_errors`: request failures, non-200 responses, malformed Horizon payloads, empty records, and network mismatches.
 - `discrepancies`: usable sources that returned ledger data but disagreed with the reconciled value.
 - `confidence`: 0 to 1 score based on agreement, freshness, source availability, and spread.
 

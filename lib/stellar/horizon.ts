@@ -12,6 +12,7 @@ export interface HorizonLatestLedgerFetchResult {
   observations: LatestLedgerObservation[]
   source_errors: LatestLedgerSourceError[]
   sources_configured: number
+  sources_excluded: number
   retrieved_at: string
 }
 
@@ -26,6 +27,10 @@ interface HorizonLedgerPayload {
   _embedded?: {
     records?: HorizonLedgerRecord[]
   }
+}
+
+interface HorizonRootPayload {
+  network_passphrase?: unknown
 }
 
 export function parseHorizonSources(rawValue: string | undefined): HorizonSource[] {
@@ -106,6 +111,89 @@ function parseClosedAt(value: unknown): string | null {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) return null
   return new Date(timestamp).toISOString()
+}
+
+function parseNetworkPassphrase(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+async function fetchHorizonRootMetadata(
+  source: HorizonSource,
+  {
+    fetchImpl,
+    timeoutMs,
+  }: {
+    fetchImpl: FetchLike
+    timeoutMs: number
+  },
+): Promise<{ networkPassphrase?: string; sourceError?: LatestLedgerSourceError }> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(`${source.url}/`, {
+      signal: controller.signal,
+      headers: {
+        accept: 'application/json',
+      },
+    })
+    const retrievedAt = new Date().toISOString()
+
+    if (!response.ok) {
+      return {
+        sourceError: sourceError({
+          source,
+          code: 'non_200_response',
+          message: `Horizon root endpoint returned HTTP ${response.status}`,
+          retrievedAt,
+          status: response.status,
+        }),
+      }
+    }
+
+    let payload: HorizonRootPayload
+    try {
+      payload = (await response.json()) as HorizonRootPayload
+    } catch {
+      return {
+        sourceError: sourceError({
+          source,
+          code: 'malformed_payload',
+          message: 'Horizon root response was not valid JSON',
+          retrievedAt,
+        }),
+      }
+    }
+
+    const networkPassphrase = parseNetworkPassphrase(payload.network_passphrase)
+    if (!networkPassphrase) {
+      return {
+        sourceError: sourceError({
+          source,
+          code: 'malformed_payload',
+          message: 'Horizon root response did not include a valid network passphrase',
+          retrievedAt,
+        }),
+      }
+    }
+
+    return { networkPassphrase }
+  } catch (error) {
+    const retrievedAt = new Date().toISOString()
+    const isAbort = error instanceof Error && error.name === 'AbortError'
+    return {
+      sourceError: sourceError({
+        source,
+        code: isAbort ? 'request_aborted' : 'request_failed',
+        message: isAbort ? `Horizon request exceeded ${timeoutMs}ms` : 'Horizon request failed',
+        retrievedAt,
+      }),
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function fetchHorizonLatestLedger(
@@ -215,20 +303,64 @@ export async function fetchLatestLedgersFromHorizonSources({
   fetchImpl?: FetchLike
   timeoutMs?: number
 }): Promise<HorizonLatestLedgerFetchResult> {
-  const results = await Promise.all(
-    sources.map((source) => fetchHorizonLatestLedger(source, { fetchImpl, timeoutMs })),
+  const rootMetadataResults = await Promise.all(
+    sources.map((source) => fetchHorizonRootMetadata(source, { fetchImpl, timeoutMs })),
   )
-  const observations = results
+
+  const sourceErrors: LatestLedgerSourceError[] = []
+  const eligibleSources: HorizonSource[] = []
+  let expectedNetworkPassphrase: string | null = null
+
+  for (const [index, result] of rootMetadataResults.entries()) {
+    const source = sources[index]
+    if (!source) continue
+
+    if (result.sourceError) {
+      sourceErrors.push(result.sourceError)
+      continue
+    }
+
+    const networkPassphrase = result.networkPassphrase
+    if (!networkPassphrase) {
+      continue
+    }
+
+    if (expectedNetworkPassphrase === null) {
+      expectedNetworkPassphrase = networkPassphrase
+      eligibleSources.push(source)
+      continue
+    }
+
+    if (networkPassphrase === expectedNetworkPassphrase) {
+      eligibleSources.push(source)
+      continue
+    }
+
+    sourceErrors.push(
+      sourceError({
+        source,
+        code: 'network_mismatch',
+        message: 'Horizon network passphrase did not match the configured network',
+        retrievedAt: new Date().toISOString(),
+      }),
+    )
+  }
+
+  const ledgerResults = await Promise.all(
+    eligibleSources.map((source) => fetchHorizonLatestLedger(source, { fetchImpl, timeoutMs })),
+  )
+  const observations = ledgerResults
     .map((result) => result.observation)
     .filter((observation): observation is LatestLedgerObservation => Boolean(observation))
-  const source_errors = results
+  const ledgerErrors = ledgerResults
     .map((result) => result.sourceError)
     .filter((error): error is LatestLedgerSourceError => Boolean(error))
 
   return {
     observations,
-    source_errors,
+    source_errors: [...sourceErrors, ...ledgerErrors],
     sources_configured: sources.length,
+    sources_excluded: sourceErrors.filter((error) => error.code === 'network_mismatch').length,
     retrieved_at: new Date().toISOString(),
   }
 }

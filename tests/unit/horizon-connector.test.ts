@@ -33,9 +33,19 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
   }
 
   it('returns a normalized latest-ledger observation', async () => {
-    const fetchImpl = vi.fn(async () => Response.json(payload))
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target === 'https://horizon.example/') {
+        return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+      }
+      if (target === 'https://horizon.example/ledgers?order=desc&limit=1') {
+        return Response.json(payload)
+      }
+      throw new Error(`Unexpected request: ${target}`)
+    })
     const result = await fetchLatestLedgersFromHorizonSources({ sources, fetchImpl })
 
+    expect(fetchImpl).toHaveBeenCalledWith('https://horizon.example/', expect.any(Object))
     expect(fetchImpl).toHaveBeenCalledWith('https://horizon.example/ledgers?order=desc&limit=1', expect.any(Object))
     expect(result.source_errors).toEqual([])
     expect(result.observations[0]).toMatchObject({
@@ -64,7 +74,16 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
   })
 
   it('records empty ledger records as source errors', async () => {
-    const fetchImpl = vi.fn(async () => Response.json({ _embedded: { records: [] } }))
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target === 'https://horizon.example/') {
+        return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+      }
+      if (target === 'https://horizon.example/ledgers?order=desc&limit=1') {
+        return Response.json({ _embedded: { records: [] } })
+      }
+      throw new Error(`Unexpected request: ${target}`)
+    })
     const result = await fetchLatestLedgersFromHorizonSources({ sources, fetchImpl })
 
     expect(result.observations).toEqual([])
@@ -106,5 +125,40 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
 
     expect(result.observations).toEqual([])
     expect(result.source_errors[0]).toMatchObject({ code: 'request_aborted' })
+  })
+
+  it('excludes sources whose reported network passphrase does not match', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target === 'https://main.example/') {
+        return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+      }
+      if (target === 'https://test.example/') {
+        return Response.json({ network_passphrase: 'Test SDF Network ; September 2015' })
+      }
+      if (target === 'https://main.example/ledgers?order=desc&limit=1') {
+        return Response.json({ _embedded: { records: [{ sequence: 123, closed_at: '2026-07-12T12:00:00Z' }] } })
+      }
+      if (target === 'https://test.example/ledgers?order=desc&limit=1') {
+        return Response.json({ _embedded: { records: [{ sequence: 321, closed_at: '2026-07-12T12:00:00Z' }] } })
+      }
+      throw new Error(`Unexpected request: ${target}`)
+    })
+
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources: [
+        { id: 'horizon_1', url: 'https://main.example' },
+        { id: 'horizon_2', url: 'https://test.example' },
+      ],
+      fetchImpl,
+    })
+
+    expect(result.observations).toHaveLength(1)
+    expect(result.observations[0]).toMatchObject({ sourceId: 'horizon_1', ledgerSequence: 123 })
+    expect(result.source_errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'horizon_2', code: 'network_mismatch' }),
+      ]),
+    )
   })
 })

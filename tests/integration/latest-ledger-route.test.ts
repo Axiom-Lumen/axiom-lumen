@@ -19,7 +19,16 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     vi.stubEnv('STELLAR_HORIZON_URLS', 'https://a.example,https://b.example')
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(horizonPayload(500, new Date().toISOString()))),
+      vi.fn(async (url: string | URL | Request) => {
+        const target = String(url)
+        if (target === 'https://a.example/' || target === 'https://b.example/') {
+          return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+        }
+        if (target === 'https://a.example/ledgers?order=desc&limit=1' || target === 'https://b.example/ledgers?order=desc&limit=1') {
+          return Response.json(horizonPayload(500, new Date().toISOString()))
+        }
+        return new Response('not found', { status: 404 })
+      }),
     )
 
     const response = await GET()
@@ -44,10 +53,17 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string | URL | Request) => {
-        if (String(url).startsWith('https://b.example')) {
+        const target = String(url)
+        if (target === 'https://a.example/' || target === 'https://b.example/') {
+          return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+        }
+        if (target === 'https://a.example/ledgers?order=desc&limit=1') {
+          return Response.json(horizonPayload(500, new Date().toISOString()))
+        }
+        if (target === 'https://b.example/ledgers?order=desc&limit=1') {
           return new Response('bad gateway', { status: 502 })
         }
-        return Response.json(horizonPayload(500, new Date().toISOString()))
+        return new Response('not found', { status: 404 })
       }),
     )
 
@@ -70,7 +86,16 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     vi.stubEnv('STELLAR_HORIZON_URLS', 'https://a.example')
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(horizonPayload(500, new Date().toISOString()))),
+      vi.fn(async (url: string | URL | Request) => {
+        const target = String(url)
+        if (target === 'https://a.example/') {
+          return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+        }
+        if (target === 'https://a.example/ledgers?order=desc&limit=1') {
+          return Response.json(horizonPayload(500, new Date().toISOString()))
+        }
+        return new Response('not found', { status: 404 })
+      }),
     )
 
     const response = await GET()
@@ -81,6 +106,39 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     expect(body.status).toBe('degraded')
     expect(body.confidence).toBeLessThanOrEqual(0.6)
     expect(body.sources_usable).toBe(1)
+  })
+
+  it('returns a degraded response when a mixed-network source is excluded', async () => {
+    vi.stubEnv('STELLAR_HORIZON_URLS', 'https://main.example,https://test.example')
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target === 'https://main.example/') {
+        return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+      }
+      if (target === 'https://test.example/') {
+        return Response.json({ network_passphrase: 'Test SDF Network ; September 2015' })
+      }
+      if (target === 'https://main.example/ledgers?order=desc&limit=1') {
+        return Response.json(horizonPayload(500, new Date().toISOString()))
+      }
+      if (target === 'https://test.example/ledgers?order=desc&limit=1') {
+        return Response.json(horizonPayload(501, new Date().toISOString()))
+      }
+      return new Response('not found', { status: 404 })
+    }))
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.status).toBe('degraded')
+    expect(body.value).toBe(500)
+    expect(body.sources_usable).toBe(1)
+    expect(body.sources_excluded).toBe(1)
+    expect(body.discrepancies).toEqual([])
+    expect(body.source_errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sourceId: 'horizon_2', code: 'network_mismatch' })]),
+    )
   })
 
   it('returns unavailable when no Horizon sources are configured', async () => {

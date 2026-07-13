@@ -15,6 +15,7 @@ function unavailableResponse(message: string, sourcesConfigured = 0) {
       sources_responded: 0,
       sources_usable: 0,
       sources_agreeing: 0,
+      sources_excluded: 0,
       observations: [],
       discrepancies: [],
       source_errors: [
@@ -50,6 +51,7 @@ export async function GET() {
     observations: latestLedgers.observations,
     sourceErrors: latestLedgers.source_errors,
     sourcesConfigured: latestLedgers.sources_configured,
+    sourcesExcluded: latestLedgers.sources_excluded,
   })
 
   return NextResponse.json(reconciled, {
