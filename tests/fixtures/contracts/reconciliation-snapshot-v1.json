@@ -1,0 +1,73 @@
+{
+  "metric": "latest_ledger",
+  "subject": {
+    "kind": "network",
+    "network": "public"
+  },
+  "status": "degraded",
+  "value": {
+    "kind": "ledger",
+    "value": 500
+  },
+  "confidence": 0.85,
+  "confidence_formula_version": "latest-ledger-confidence-v0.1",
+  "confidence_components": {
+    "agreement": 1,
+    "freshness": 1,
+    "availability": 0.5,
+    "spread": 0.8
+  },
+  "confidence_caps_applied": [
+    "source_error"
+  ],
+  "sources_configured": 2,
+  "sources_responded": 1,
+  "sources_usable": 1,
+  "sources_agreeing": 1,
+  "sources_excluded": 0,
+  "contributions": [
+    {
+      "observation_id": "obs_1",
+      "source_id": "horizon_1",
+      "source_class": "canonical_ledger",
+      "age_seconds": 5,
+      "effective_weight": 0.8909,
+      "agrees": true
+    }
+  ],
+  "discrepancies": [
+    {
+      "id": "disc_1",
+      "source_id": "horizon_1",
+      "severity": "warning",
+      "lifecycle_state": "open",
+      "publication_state": "approved_public",
+      "consecutive_cycles": 1,
+      "observed_value": {
+        "kind": "ledger",
+        "value": 501
+      },
+      "reference_value": {
+        "kind": "ledger",
+        "value": 500
+      },
+      "first_observed_at": "2026-08-09T12:00:00.000Z",
+      "last_observed_at": "2026-08-09T12:00:00.000Z"
+    }
+  ],
+  "source_errors": [
+    {
+      "source_id": "horizon_2",
+      "source_url": "https://b.example/",
+      "code": "request_failed",
+      "category": "transport",
+      "message": "Horizon request failed",
+      "occurred_at": "2026-08-09T12:00:00.000Z",
+      "retryable": true
+    }
+  ],
+  "as_of": "2026-08-09T12:00:05.000Z",
+  "methodology_version": "latest-ledger-v0.1",
+  "request_id": "req_1",
+  "api_version": "v1"
+}
