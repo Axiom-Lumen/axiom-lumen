@@ -1,22 +1,29 @@
-import { methodologyConfig } from '../../config/methodology'
-import type { SourceClassId } from '../../config/methodology'
+import { z } from 'zod'
+import { SOURCE_CLASS_IDS, methodologyConfig, type SourceClassId } from '../../config/methodology'
 import {
-  computeAvailabilityScore,
-  computeSourceClassDiversity,
-  computeWeightedAgreement,
-} from './agreement'
-import { computeConfidence, type ConfidenceComponents } from './confidence'
-import { computeNormalizedSpread } from './spread'
-import { computeEffectiveWeight as computeObservationEffectiveWeight, computeWeightFromAge } from './staleness'
-import { computeSafeIntegerWeightedMedian } from './weighted-median'
+  identifierSchema,
+  latestLedgerObservationSchema,
+  networkIdentitySchema,
+  sourceErrorCodeSchema,
+  type NetworkIdentity,
+  type SourceError,
+  type SourceIdentity,
+} from '../contracts/domain'
+import { classifySafeIntegerDeviationBand } from './discrepancy-state'
+import { reconcileMetric, type MetricReconciliationProfile, type ReconciliationMethodologyConfig } from './orchestrator'
+import { computeWeightFromAge } from './staleness'
 
-const latestLedgerProfile = methodologyConfig.metrics.latestLedger
-const latestLedgerConfidence = latestLedgerProfile.confidence
+const latestLedgerMethodology = methodologyConfig.metrics.latestLedger
+const latestLedgerConfidence = latestLedgerMethodology.confidence
+const PUBLIC_NETWORK: NetworkIdentity = {
+  id: 'public',
+  passphrase: 'Public Global Stellar Network ; September 2015',
+}
 
-export const LATEST_LEDGER_METHODOLOGY_VERSION = latestLedgerProfile.methodologyVersion
-export const DEFAULT_HORIZON_HALF_LIFE_SECONDS = latestLedgerProfile.freshnessHalfLifeSeconds
+export const LATEST_LEDGER_METHODOLOGY_VERSION = latestLedgerMethodology.methodologyVersion
+export const DEFAULT_HORIZON_HALF_LIFE_SECONDS = latestLedgerMethodology.freshnessHalfLifeSeconds
 export const DEFAULT_HORIZON_BASE_WEIGHT =
-  methodologyConfig.sourceClasses[latestLedgerProfile.sourceClass].baseWeight
+  methodologyConfig.sourceClasses[latestLedgerMethodology.sourceClass].baseWeight
 export const LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION = latestLedgerConfidence.formulaVersion
 
 export type LatestLedgerStatus = 'verified' | 'degraded' | 'unavailable'
@@ -67,31 +74,98 @@ export interface LatestLedgerReconciliationInput {
   asOf?: Date
   halfLifeSeconds?: number
   expectedSourceClasses?: readonly SourceClassId[]
+  network?: NetworkIdentity
 }
 
-export interface LatestLedgerReconciliationResult {
-  metric: 'latest_ledger'
-  value: number | null
-  status: LatestLedgerStatus
-  confidence: number
-  confidence_formula_version: typeof LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION
-  confidence_components: ConfidenceComponents
-  confidence_caps_applied: string[]
-  sources_configured: number
-  sources_responded: number
-  sources_usable: number
-  sources_agreeing: number
-  sources_excluded: number
-  observations: WeightedLatestLedgerObservation[]
-  discrepancies: LatestLedgerDiscrepancy[]
-  source_errors: LatestLedgerSourceError[]
-  as_of: string
-  methodology_version: typeof LATEST_LEDGER_METHODOLOGY_VERSION
-}
+const confidenceComponentsSchema = z
+  .object({
+    agreement: z.number().finite().min(0).max(1),
+    freshness: z.number().finite().min(0).max(1),
+    availability: z.number().finite().min(0).max(1),
+    diversity: z.number().finite().min(0).max(1),
+    spread: z.number().finite().min(0).max(1),
+  })
+  .strict()
 
-function didSourceRespond(error: LatestLedgerSourceError) {
-  return !['request_aborted', 'request_failed'].includes(error.code)
-}
+const legacyObservationSchema = z
+  .object({
+    sourceId: identifierSchema,
+    sourceUrl: z.string().url(),
+    ledgerSequence: z.number().int().safe().positive(),
+    closedAt: z.string().datetime({ offset: true }),
+    retrievedAt: z.string().datetime({ offset: true }),
+    baseWeight: z.number().finite().positive().optional(),
+    sourceClass: z.enum(SOURCE_CLASS_IDS).optional(),
+    upstreamId: z.string().trim().min(1).optional(),
+    ageSeconds: z.number().finite().nonnegative(),
+    effectiveWeight: z.number().finite().nonnegative(),
+    agrees: z.boolean(),
+    ledgerDelta: z.number().int().safe(),
+  })
+  .strict()
+
+const legacySourceErrorSchema = z
+  .object({
+    sourceId: z.string(),
+    sourceUrl: z.string(),
+    code: z.string().min(1),
+    message: z.string().min(1),
+    retrievedAt: z.string().datetime({ offset: true }),
+    status: z.number().int().min(100).max(599).optional(),
+  })
+  .strict()
+
+export const latestLedgerResponseSchema = z
+  .object({
+    metric: z.literal('latest_ledger'),
+    value: z.number().int().safe().positive().nullable(),
+    status: z.enum(['verified', 'degraded', 'unavailable']),
+    confidence: z.number().finite().min(0).max(1),
+    confidence_formula_version: z.literal(LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION),
+    confidence_components: confidenceComponentsSchema,
+    confidence_caps_applied: z.array(z.string().min(1)),
+    sources_configured: z.number().int().safe().nonnegative(),
+    sources_responded: z.number().int().safe().nonnegative(),
+    sources_usable: z.number().int().safe().nonnegative(),
+    sources_agreeing: z.number().int().safe().nonnegative(),
+    sources_excluded: z.number().int().safe().nonnegative(),
+    observations: z.array(legacyObservationSchema),
+    discrepancies: z.array(
+      z
+        .object({
+          source: identifierSchema,
+          source_url: z.string().url(),
+          observed_value: z.number().int().safe().positive(),
+          delta_ledgers: z.number().int().safe(),
+          severity: z.enum(['info', 'warning', 'critical']),
+          closed_at: z.string().datetime({ offset: true }),
+          retrieved_at: z.string().datetime({ offset: true }),
+        })
+        .strict(),
+    ),
+    source_errors: z.array(legacySourceErrorSchema),
+    as_of: z.string().datetime({ offset: true }),
+    methodology_version: z.literal(LATEST_LEDGER_METHODOLOGY_VERSION),
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if ((response.status === 'unavailable') !== (response.value === null)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: 'availability and value disagree' })
+    }
+    if (response.sources_responded > response.sources_configured) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['sources_responded'], message: 'responded exceeds configured' })
+    }
+    if (response.sources_usable > response.sources_responded) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['sources_usable'], message: 'usable exceeds responded' })
+    }
+    if (response.sources_agreeing > response.sources_usable) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['sources_agreeing'], message: 'agreeing exceeds usable' })
+    }
+    if (response.sources_excluded > response.sources_configured) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['sources_excluded'], message: 'excluded exceeds configured' })
+    }
+  })
+export type LatestLedgerReconciliationResult = z.infer<typeof latestLedgerResponseSchema>
 
 export function computeFreshnessWeight({
   baseWeight = DEFAULT_HORIZON_BASE_WEIGHT,
@@ -107,22 +181,7 @@ export function computeFreshnessWeight({
   if (!Number.isFinite(halfLifeSeconds) || halfLifeSeconds <= 0) {
     throw new Error('halfLifeSeconds must be greater than zero')
   }
-
-  return computeWeightFromAge({
-    baseWeight,
-    ageSeconds: Math.max(0, ageSeconds),
-    halfLifeSeconds,
-  })
-}
-
-function parseTime(value: string) {
-  const ms = Date.parse(value)
-  return Number.isFinite(ms) ? ms : Number.NaN
-}
-
-function normalizeBaseWeight(value: number | undefined) {
-  const baseWeight = value ?? DEFAULT_HORIZON_BASE_WEIGHT
-  return Number.isFinite(baseWeight) && baseWeight > 0 ? baseWeight : 0
+  return computeWeightFromAge({ baseWeight, ageSeconds: Math.max(0, ageSeconds), halfLifeSeconds })
 }
 
 export function classifyLatestLedgerDiscrepancy(deltaLedgers: number): LedgerDiscrepancySeverity {
@@ -132,6 +191,111 @@ export function classifyLatestLedgerDiscrepancy(deltaLedgers: number): LedgerDis
   return 'critical'
 }
 
+function sourceIdentity(
+  sourceId: string,
+  sourceUrl: string,
+  network: NetworkIdentity,
+  sourceClass: SourceClassId = latestLedgerMethodology.sourceClass,
+): SourceIdentity {
+  return {
+    id: identifierSchema.parse(sourceId),
+    sourceClass,
+    adapter: sourceClass === 'archive' ? 'archive' : 'horizon',
+    url: sourceUrl,
+    network,
+  }
+}
+
+function sourceErrorCategory(code: SourceError['code']): SourceError['category'] {
+  if (code === 'invalid_configuration') return 'configuration'
+  if (code === 'request_failed' || code === 'request_aborted') return 'transport'
+  if (code === 'non_200_response' || code === 'redirect_rejected') return 'http'
+  if (code === 'network_mismatch') return 'network'
+  if (code === 'stale_observation') return 'freshness'
+  if (code === 'excluded_source') return 'policy'
+  return 'payload'
+}
+
+function toDomainSourceError(error: LatestLedgerSourceError): SourceError {
+  const parsedCode = sourceErrorCodeSchema.safeParse(error.code)
+  const code: SourceError['code'] = parsedCode.success ? parsedCode.data : 'request_failed'
+  return {
+    sourceId: identifierSchema.parse(error.sourceId),
+    sourceUrl: error.sourceUrl,
+    code,
+    category: sourceErrorCategory(code),
+    message: error.message,
+    occurredAt: error.retrievedAt,
+    ...(error.status === undefined ? {} : { httpStatus: error.status }),
+    retryable:
+      code === 'request_failed' ||
+      code === 'request_aborted' ||
+      code === 'response_too_large' ||
+      (code === 'non_200_response' && (error.status ?? 0) >= 500),
+  }
+}
+
+function methodology(
+  halfLifeSeconds: number,
+  expectedSourceClasses: readonly SourceClassId[],
+): ReconciliationMethodologyConfig {
+  return {
+    version: LATEST_LEDGER_METHODOLOGY_VERSION,
+    freshnessHalfLifeSeconds: halfLifeSeconds,
+    expectedSourceClasses,
+    sourceClassBaseWeights: Object.fromEntries(
+      SOURCE_CLASS_IDS.map((sourceClass) => [sourceClass, methodologyConfig.sourceClasses[sourceClass].baseWeight]),
+    ) as ReconciliationMethodologyConfig['sourceClassBaseWeights'],
+    minimumVerifiedSources: latestLedgerMethodology.minimumVerifiedSources,
+    verifiedThreshold: latestLedgerConfidence.verifiedThreshold,
+    confidenceFormulaVersion: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
+    confidenceCoefficients: {
+      agreement: latestLedgerConfidence.agreementCoefficient,
+      freshness: latestLedgerConfidence.freshnessCoefficient,
+      availability: latestLedgerConfidence.availabilityCoefficient,
+      spread: latestLedgerConfidence.spreadCoefficient,
+    },
+    singleSourceCap: latestLedgerConfidence.singleSourceCap,
+    sameUpstreamCap: latestLedgerConfidence.sameUpstreamCap,
+    sourceErrorCap: latestLedgerConfidence.sourceErrorCap,
+  }
+}
+
+const profiledLatestLedgerObservationSchema = latestLedgerObservationSchema
+  .extend({
+    baseWeight: z.number().finite().positive().optional(),
+    upstreamId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict()
+type DomainLatestLedgerObservation = ReturnType<typeof profiledLatestLedgerObservationSchema.parse>
+
+const profile: MetricReconciliationProfile<DomainLatestLedgerObservation, number> = {
+  metric: 'latest_ledger',
+  parseObservation: (input) => profiledLatestLedgerObservationSchema.parse(input),
+  matchesSubject: (observation, subject) =>
+    subject.kind === 'network' &&
+    observation.provenance.source.network.id === subject.network.id &&
+    observation.provenance.source.network.passphrase === subject.network.passphrase,
+  getValue: (observation) => observation.ledgerSequence,
+  getBaseWeight: (observation, configuredBaseWeight) => observation.baseWeight ?? configuredBaseWeight,
+  compareValues: (left, right) => left - right,
+  agrees: (observed, reference) =>
+    Math.abs(observed - reference) <= latestLedgerMethodology.agreementToleranceLedgers,
+  deviationBand: (observed, reference) =>
+    classifySafeIntegerDeviationBand({
+      absoluteDeviation: Math.abs(observed - reference),
+      tolerance: latestLedgerMethodology.agreementToleranceLedgers,
+    }),
+  spreadDistance: (observed, reference) => Math.abs(observed - reference),
+  maximumSpreadDistance: latestLedgerConfidence.maximumSpreadLedgers,
+  toMetricValue: (value) => ({ kind: 'ledger', value }),
+  getUpstreamId: (observation) => observation.upstreamId ?? observation.provenance.source.id,
+}
+
+/**
+ * Runs the latest-ledger-v0.2 direct diagnostic profile through the shared orchestrator and then preserves the
+ * established route response. It is intentionally not the persisted v1 snapshot serializer.
+ */
 export function reconcileLatestLedger({
   observations,
   sourceErrors = [],
@@ -139,145 +303,70 @@ export function reconcileLatestLedger({
   sourcesExcluded = 0,
   asOf = new Date(),
   halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
-  expectedSourceClasses = [latestLedgerProfile.sourceClass],
+  expectedSourceClasses = [latestLedgerMethodology.sourceClass],
+  network: networkInput = PUBLIC_NETWORK,
 }: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
-  const sourceErrorsCount = sourceErrors.length
-  const sourcesResponded = observations.length + sourceErrors.filter(didSourceRespond).length
-  const normalizedSourceCount = Math.max(0, sourcesConfigured)
-  const sourceErrorIds = new Set(sourceErrors.map((error) => error.sourceId))
-  const usableObservations = observations.filter((observation) => {
-    return (
-      !sourceErrorIds.has(observation.sourceId) &&
-      Number.isSafeInteger(observation.ledgerSequence) &&
-      Number.isFinite(parseTime(observation.retrievedAt))
+  const network = networkIdentitySchema.parse(networkInput)
+  const configuredCount = Number.isSafeInteger(sourcesConfigured) ? Math.max(0, sourcesConfigured) : 0
+  const identities = new Map<string, SourceIdentity>()
+  observations.forEach((observation) => {
+    identities.set(
+      observation.sourceId,
+      sourceIdentity(observation.sourceId, observation.sourceUrl, network, observation.sourceClass),
     )
   })
-
-  const preliminaryWeighted = usableObservations.map((observation) => {
-    const weighted = computeObservationEffectiveWeight({
-      baseWeight: normalizeBaseWeight(observation.baseWeight),
-      sourceTimestamp: observation.closedAt,
-      retrievedAt: observation.retrievedAt,
-      now: asOf,
-      halfLifeSeconds,
-    })
-
-    return {
-      ...observation,
-      ageSeconds: weighted.ageSeconds,
-      effectiveWeight: weighted.effectiveWeight,
-      agrees: false,
-      ledgerDelta: 0,
+  sourceErrors.forEach((error) => {
+    if (!identities.has(error.sourceId)) {
+      identities.set(error.sourceId, sourceIdentity(error.sourceId, error.sourceUrl, network))
     }
   })
-
-  const value =
-    computeSafeIntegerWeightedMedian(
-      preliminaryWeighted.map((observation) => ({
-        id: observation.sourceId,
-        value: observation.ledgerSequence,
-        effectiveWeight: observation.effectiveWeight,
-      })),
-    )?.value ?? null
-
-  if (value === null) {
-    return {
-      metric: 'latest_ledger',
-      value: null,
-      status: 'unavailable',
-      confidence: 0,
-      confidence_formula_version: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
-      confidence_components: {
-        agreement: 0,
-        freshness: 0,
-        availability: 0,
-        diversity: 0,
-        spread: 0,
-      },
-      confidence_caps_applied: [],
-      sources_configured: normalizedSourceCount,
-      sources_responded: sourcesResponded,
-      sources_usable: 0,
-      sources_agreeing: 0,
-      sources_excluded: Math.max(0, sourcesExcluded),
-      observations: [],
-      discrepancies: [],
-      source_errors: sourceErrors,
-      as_of: asOf.toISOString(),
-      methodology_version: LATEST_LEDGER_METHODOLOGY_VERSION,
-    }
+  for (let index = identities.size; index < configuredCount; index += 1) {
+    let sourceId = `configured_${index + 1}`
+    while (identities.has(sourceId)) sourceId = `${sourceId}_placeholder`
+    identities.set(sourceId, sourceIdentity(sourceId, `https://${sourceId}.invalid`, network))
   }
 
-  const weightedObservations = preliminaryWeighted.map((observation) => {
-    const ledgerDelta = observation.ledgerSequence - value
-    return {
-      ...observation,
-      ledgerDelta,
-      agrees: Math.abs(ledgerDelta) <= latestLedgerProfile.agreementToleranceLedgers,
-    }
-  })
-  const totalEffectiveWeight = weightedObservations.reduce(
-    (sum, observation) => sum + observation.effectiveWeight,
-    0,
-  )
-  const totalBaseWeight = weightedObservations.reduce(
-    (sum, observation) => sum + normalizeBaseWeight(observation.baseWeight),
-    0,
-  )
-  const agreeingObservations = weightedObservations.filter((observation) => observation.agrees)
-  const availabilityScore = computeAvailabilityScore({
-    usableSources: weightedObservations.length,
-    configuredSources: Math.max(normalizedSourceCount, weightedObservations.length),
-  })
-  const agreementScore = computeWeightedAgreement(weightedObservations).score
-  const freshnessScore = totalBaseWeight === 0 ? 0 : totalEffectiveWeight / totalBaseWeight
-  const spreadScore = computeNormalizedSpread({
-    distances: weightedObservations.map((observation) => observation.ledgerDelta),
-    maximumDistance: latestLedgerConfidence.maximumSpreadLedgers,
-  }).score
-  const diversityScore = computeSourceClassDiversity({
-    representedSourceClasses: weightedObservations.map(
-      (observation) => observation.sourceClass ?? latestLedgerProfile.sourceClass,
-    ),
-    expectedSourceClasses,
-  }).score
-  const uniqueUpstreams = new Set(
-    weightedObservations.map((observation) => observation.upstreamId?.trim() || observation.sourceId),
-  ).size
-  const confidenceResult = computeConfidence({
-    formulaVersion: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
-    components: {
-      agreement: agreementScore,
-      freshness: freshnessScore,
-      availability: availabilityScore,
-      diversity: diversityScore,
-      spread: spreadScore,
+  const asOfValue = new Date(asOf)
+  const cycleId = `latest-ledger:${asOfValue.toISOString()}`
+  const domainObservations = observations.map((observation) => ({
+    observationId: observation.sourceId,
+    cycleId,
+    metric: 'latest_ledger' as const,
+    ledgerSequence: observation.ledgerSequence,
+    ...(observation.baseWeight && observation.baseWeight > 0 ? { baseWeight: observation.baseWeight } : {}),
+    provenance: {
+      source: identities.get(observation.sourceId),
+      sourceTimestamp: observation.closedAt,
+      retrievedAt: observation.retrievedAt,
     },
-    coefficients: {
-      agreement: latestLedgerConfidence.agreementCoefficient,
-      freshness: latestLedgerConfidence.freshnessCoefficient,
-      availability: latestLedgerConfidence.availabilityCoefficient,
-      spread: latestLedgerConfidence.spreadCoefficient,
-    },
-    caps: [
-      {
-        id: 'single_source',
-        maximum: latestLedgerConfidence.singleSourceCap,
-        applies: weightedObservations.length === 1,
-      },
-      {
-        id: 'same_upstream_replicas',
-        maximum: latestLedgerConfidence.sameUpstreamCap,
-        applies: weightedObservations.length > 1 && uniqueUpstreams === 1,
-      },
-      {
-        id: 'source_error',
-        maximum: latestLedgerConfidence.sourceErrorCap,
-        applies: sourceErrorsCount > 0,
-      },
-    ],
+    ...(observation.upstreamId ? { upstreamId: observation.upstreamId } : {}),
+  }))
+  const result = reconcileMetric({
+    snapshotId: `diagnostic:${asOfValue.toISOString()}`,
+    cycleId,
+    subject: { kind: 'network', network },
+    configuredSources: [...identities.values()],
+    observations: domainObservations,
+    sourceErrors: sourceErrors.map(toDomainSourceError),
+    clock: () => new Date(asOfValue),
+    methodology: methodology(halfLifeSeconds, expectedSourceClasses),
+    profile,
   })
 
+  const reference = result.snapshot.value?.kind === 'ledger' ? result.snapshot.value.value : null
+  const contributions = new Map(result.snapshot.contributions.map((item) => [item.sourceId, item]))
+  const weightedObservations: WeightedLatestLedgerObservation[] = observations.flatMap((observation) => {
+    const contribution = contributions.get(observation.sourceId)
+    if (!contribution || reference === null) return []
+    const ledgerDelta = observation.ledgerSequence - reference
+    return [{
+      ...observation,
+      ageSeconds: contribution.ageSeconds,
+      effectiveWeight: contribution.effectiveWeight,
+      agrees: contribution.agrees,
+      ledgerDelta,
+    }]
+  })
   const discrepancies = weightedObservations
     .filter((observation) => observation.ledgerDelta !== 0)
     .map((observation) => ({
@@ -290,30 +379,23 @@ export function reconcileLatestLedger({
       retrieved_at: observation.retrievedAt,
     }))
 
-  const degraded =
-    weightedObservations.length < latestLedgerProfile.minimumVerifiedSources ||
-    sourceErrorsCount > 0 ||
-    availabilityScore < 1 ||
-    agreementScore < 1 ||
-    confidenceResult.score < latestLedgerConfidence.verifiedThreshold
-
-  return {
+  return latestLedgerResponseSchema.parse({
     metric: 'latest_ledger',
-    value,
-    status: degraded ? 'degraded' : 'verified',
-    confidence: confidenceResult.score,
-    confidence_formula_version: confidenceResult.formulaVersion,
-    confidence_components: confidenceResult.components,
-    confidence_caps_applied: confidenceResult.capsApplied,
-    sources_configured: normalizedSourceCount,
-    sources_responded: sourcesResponded,
-    sources_usable: weightedObservations.length,
-    sources_agreeing: agreeingObservations.length,
-    sources_excluded: Math.max(0, sourcesExcluded),
+    value: reference,
+    status: result.snapshot.status,
+    confidence: result.snapshot.confidence.score,
+    confidence_formula_version: result.snapshot.confidence.formulaVersion,
+    confidence_components: result.snapshot.confidence.components,
+    confidence_caps_applied: result.snapshot.confidence.capsApplied,
+    sources_configured: result.snapshot.sourcesConfigured,
+    sources_responded: result.snapshot.sourcesResponded,
+    sources_usable: result.snapshot.sourcesUsable,
+    sources_agreeing: result.snapshot.sourcesAgreeing,
+    sources_excluded: Math.max(result.snapshot.sourcesExcluded, Math.max(0, sourcesExcluded)),
     observations: weightedObservations,
     discrepancies,
     source_errors: sourceErrors,
-    as_of: asOf.toISOString(),
+    as_of: result.snapshot.asOf,
     methodology_version: LATEST_LEDGER_METHODOLOGY_VERSION,
-  }
+  })
 }

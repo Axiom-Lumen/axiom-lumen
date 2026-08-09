@@ -31,6 +31,7 @@ export const networkIdentitySchema = z
       })
     }
   })
+export type NetworkIdentity = z.infer<typeof networkIdentitySchema>
 
 export const stellarAccountIdSchema = z
   .string()
@@ -216,6 +217,8 @@ export const sourceErrorCodeSchema = z.enum([
   'request_failed',
   'request_aborted',
   'non_200_response',
+  'redirect_rejected',
+  'response_too_large',
   'malformed_payload',
   'empty_records',
   'empty_ledger_records',

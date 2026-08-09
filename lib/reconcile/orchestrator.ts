@@ -50,6 +50,7 @@ export interface MetricReconciliationProfile<TObservation extends ObservationBas
   parseObservation: (input: unknown) => TObservation
   matchesSubject: (observation: TObservation, subject: MetricSubject) => boolean
   getValue: (observation: TObservation) => TValue
+  getBaseWeight?: (observation: TObservation, configuredBaseWeight: number) => number
   compareValues: ValueComparator<TValue>
   agrees: (observed: TValue, reference: TValue) => boolean
   deviationBand: (observed: TValue, reference: TValue) => DeviationBand
@@ -258,7 +259,8 @@ export function reconcileMetric<TObservation extends ObservationBase, TValue>({
     .sort((left, right) => compareText(left.observationId, right.observationId))
   const weighted: WeightedObservation<TObservation, TValue>[] = eligibleObservations.map((observation) => {
     const sourceClass = observation.provenance.source.sourceClass
-    const baseWeight = methodology.sourceClassBaseWeights[sourceClass]
+    const configuredBaseWeight = methodology.sourceClassBaseWeights[sourceClass]
+    const baseWeight = profile.getBaseWeight?.(observation, configuredBaseWeight) ?? configuredBaseWeight
     if (!Number.isFinite(baseWeight) || baseWeight <= 0) {
       throw new Error(`missing positive base weight for source class: ${sourceClass}`)
     }

@@ -361,7 +361,7 @@ Acceptance:
 - No partial snapshot is emitted if required invariants fail.
 - Golden fixtures cover verified, degraded, unavailable, stale, split-network, and outlier cases.
 
-### [ ] LED-01 — Migrate the latest-ledger slice
+### [x] LED-01 — Migrate the latest-ledger slice
 
 Move existing behavior onto shared schemas and reconciliation primitives without changing its public contract
 accidentally. Decide whether `latest-ledger-v0.2` remains a deliberately separate method or becomes a named

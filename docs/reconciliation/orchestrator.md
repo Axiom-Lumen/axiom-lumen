@@ -35,8 +35,10 @@ returns a bounded spread distance, and converts the reference into a domain `Met
 exercise both safe-integer ledger sequences and values beyond JavaScript's safe integer range using
 `StellarAmount`.
 
-This profile boundary is also the compatibility seam for LED-01: the current latest-ledger route remains on its
-existing adapter until that work item deliberately migrates it onto the shared orchestrator.
+The latest-ledger route uses this profile boundary while a validated compatibility adapter preserves its named
+v0.2 diagnostic response. It does not serialize the internal result as a persisted v1 snapshot. The distinction
+and migration policy are recorded in
+[`ADR 0003`](../decisions/0003-latest-ledger-diagnostic-compatibility.md).
 
 ## Golden cases
 

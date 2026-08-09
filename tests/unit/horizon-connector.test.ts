@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchLatestLedgersFromHorizonSources, parseHorizonSources } from '../../lib/stellar/horizon'
+import {
+  PUBLIC_NETWORK_PASSPHRASE,
+  fetchLatestLedgersFromHorizonSources,
+  parseHorizonSources,
+} from '../../lib/stellar/horizon'
 
 describe('parseHorizonSources', () => {
   it('trims, removes empties, normalizes trailing slashes, and deduplicates endpoints', () => {
@@ -16,6 +20,18 @@ describe('parseHorizonSources', () => {
 
     const tooMany = Array.from({ length: 11 }, (_, index) => `https://h${index}.example`).join(',')
     expect(() => parseHorizonSources(tooMany)).toThrow(/at most 10/)
+  })
+
+  it('rejects credentials, private hosts, and hosts outside endpoint policy', () => {
+    expect(() => parseHorizonSources('https://user:secret@horizon.example')).toThrow(/credentials/)
+    expect(() => parseHorizonSources('http://127.0.0.1:8000')).toThrow(/not allowed/)
+    expect(() => parseHorizonSources('http://[::ffff:127.0.0.1]:8000')).toThrow(/not allowed/)
+    expect(() => parseHorizonSources('https://horizon.example', { deniedHosts: ['horizon.example'] })).toThrow(
+      /denied by policy/,
+    )
+    expect(() => parseHorizonSources('https://other.example', { allowedHosts: ['horizon.example'] })).toThrow(
+      /allow list/,
+    )
   })
 })
 
@@ -57,6 +73,23 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
     expect(result.observations[0].retrievedAt).toEqual(expect.any(String))
   })
 
+  it('uses one injected retrieval timestamp for the complete cycle', async () => {
+    const cycleTime = new Date('2026-08-09T14:15:16.000Z')
+    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
+      String(url).endsWith('/')
+        ? Response.json({ network_passphrase: PUBLIC_NETWORK_PASSPHRASE })
+        : Response.json(payload),
+    )
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources,
+      fetchImpl,
+      clock: () => new Date(cycleTime),
+    })
+
+    expect(result.retrieved_at).toBe(cycleTime.toISOString())
+    expect(result.observations[0]?.retrievedAt).toBe(cycleTime.toISOString())
+  })
+
   it('records non-200 responses as source errors', async () => {
     const fetchImpl = vi.fn(async () => new Response('bad gateway', { status: 502 }))
     const result = await fetchLatestLedgersFromHorizonSources({ sources, fetchImpl })
@@ -71,6 +104,50 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
 
     expect(result.observations).toEqual([])
     expect(result.source_errors[0]).toMatchObject({ code: 'malformed_payload' })
+  })
+
+  it('rejects a root payload that does not match the expected schema', async () => {
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources,
+      fetchImpl: vi.fn(async () => Response.json({ horizon_version: 'unknown' })),
+    })
+
+    expect(result.observations).toEqual([])
+    expect(result.source_errors[0]).toMatchObject({ code: 'malformed_payload' })
+  })
+
+  it('bounds response bodies before parsing JSON', async () => {
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources,
+      maxResponseBytes: 16,
+      fetchImpl: vi.fn(async () => Response.json({ network_passphrase: PUBLIC_NETWORK_PASSPHRASE })),
+    })
+
+    expect(result.observations).toEqual([])
+    expect(result.source_errors[0]).toMatchObject({ code: 'response_too_large' })
+  })
+
+  it('rejects redirects and disables automatic redirect following', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'https://other.example/' } }))
+    const result = await fetchLatestLedgersFromHorizonSources({ sources, fetchImpl })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://horizon.example/',
+      expect.objectContaining({ redirect: 'error' }),
+    )
+    expect(result.source_errors[0]).toMatchObject({ code: 'redirect_rejected' })
+  })
+
+  it('rejects duplicate source identities before retrieval', async () => {
+    await expect(
+      fetchLatestLedgersFromHorizonSources({
+        sources: [
+          { id: 'duplicate', url: 'https://a.example' },
+          { id: 'duplicate', url: 'https://b.example' },
+        ],
+        fetchImpl: vi.fn(),
+      }),
+    ).rejects.toThrow(/duplicate Horizon source ID/)
   })
 
   it('records empty ledger records as source errors', async () => {
@@ -160,5 +237,32 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
         expect.objectContaining({ sourceId: 'horizon_2', code: 'network_mismatch' }),
       ]),
     )
+  })
+
+  it('uses configured network identity instead of trusting the first responding source', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target === 'https://test.example/') {
+        return Response.json({ network_passphrase: 'Test SDF Network ; September 2015' })
+      }
+      if (target === 'https://main.example/') {
+        return Response.json({ network_passphrase: PUBLIC_NETWORK_PASSPHRASE })
+      }
+      if (target === 'https://main.example/ledgers?order=desc&limit=1') return Response.json(payload)
+      throw new Error(`Unexpected request: ${target}`)
+    })
+
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources: [
+        { id: 'test', url: 'https://test.example' },
+        { id: 'main', url: 'https://main.example' },
+      ],
+      fetchImpl,
+    })
+
+    expect(result.observations.map((item) => item.sourceId)).toEqual(['main'])
+    expect(result.source_errors).toEqual([
+      expect.objectContaining({ sourceId: 'test', code: 'network_mismatch' }),
+    ])
   })
 })

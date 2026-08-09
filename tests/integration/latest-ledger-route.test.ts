@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '../../app/api/v1/stellar/latest-ledger/route'
+import { latestLedgerResponseSchema } from '../../lib/reconcile/latest-ledger'
 
 function horizonPayload(sequence: number, closedAt = '2026-07-12T12:00:00Z') {
   return {
@@ -11,6 +12,7 @@ function horizonPayload(sequence: number, closedAt = '2026-07-12T12:00:00Z') {
 
 describe('GET /api/v1/stellar/latest-ledger', () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
@@ -54,6 +56,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
       discrepancies: [],
       source_errors: [],
     })
+    expect(latestLedgerResponseSchema.parse(body)).toEqual(body)
   })
 
   it('keeps source failures separate from data discrepancies', async () => {
@@ -165,6 +168,21 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
       sources_usable: 0,
     })
     expect(body.source_errors[0]).toMatchObject({ code: 'invalid_configuration' })
+    expect(latestLedgerResponseSchema.parse(body)).toEqual(body)
+  })
+
+  it('applies the configured endpoint allow list before making requests', async () => {
+    vi.stubEnv('STELLAR_HORIZON_URLS', 'https://unapproved.example')
+    vi.stubEnv('STELLAR_HORIZON_ALLOWED_HOSTS', 'horizon.stellar.org')
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(body.source_errors[0]).toMatchObject({ code: 'invalid_configuration' })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('returns unavailable when all configured sources fail', async () => {
