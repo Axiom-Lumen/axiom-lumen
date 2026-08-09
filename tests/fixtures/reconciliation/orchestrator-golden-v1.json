@@ -1,0 +1,98 @@
+[
+  {
+    "name": "verified",
+    "expected": {
+      "status": "verified",
+      "value": 100,
+      "confidence": 1,
+      "sources_configured": 2,
+      "sources_responded": 2,
+      "sources_usable": 2,
+      "sources_agreeing": 2,
+      "sources_excluded": 0,
+      "caps": [],
+      "discrepancy_severities": [],
+      "event_types": []
+    }
+  },
+  {
+    "name": "degraded",
+    "expected": {
+      "status": "degraded",
+      "value": 100,
+      "confidence": 0.85,
+      "sources_configured": 3,
+      "sources_responded": 2,
+      "sources_usable": 2,
+      "sources_agreeing": 2,
+      "sources_excluded": 0,
+      "caps": ["source_error"],
+      "discrepancy_severities": [],
+      "event_types": []
+    }
+  },
+  {
+    "name": "unavailable",
+    "expected": {
+      "status": "unavailable",
+      "value": null,
+      "confidence": 0,
+      "sources_configured": 2,
+      "sources_responded": 0,
+      "sources_usable": 0,
+      "sources_agreeing": 0,
+      "sources_excluded": 0,
+      "caps": [],
+      "discrepancy_severities": [],
+      "event_types": []
+    }
+  },
+  {
+    "name": "stale",
+    "expected": {
+      "status": "degraded",
+      "value": 100,
+      "confidence": 0.75,
+      "sources_configured": 2,
+      "sources_responded": 2,
+      "sources_usable": 2,
+      "sources_agreeing": 2,
+      "sources_excluded": 0,
+      "caps": [],
+      "discrepancy_severities": [],
+      "event_types": []
+    }
+  },
+  {
+    "name": "split-network",
+    "expected": {
+      "status": "degraded",
+      "value": 100,
+      "confidence": 0.6,
+      "sources_configured": 2,
+      "sources_responded": 2,
+      "sources_usable": 1,
+      "sources_agreeing": 1,
+      "sources_excluded": 1,
+      "caps": ["single_source"],
+      "discrepancy_severities": [],
+      "event_types": []
+    }
+  },
+  {
+    "name": "outlier",
+    "expected": {
+      "status": "degraded",
+      "value": 100,
+      "confidence": 0.7833,
+      "sources_configured": 3,
+      "sources_responded": 3,
+      "sources_usable": 3,
+      "sources_agreeing": 2,
+      "sources_excluded": 0,
+      "caps": [],
+      "discrepancy_severities": ["warning"],
+      "event_types": ["opened"]
+    }
+  }
+]
