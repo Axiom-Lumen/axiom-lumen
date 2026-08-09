@@ -330,7 +330,7 @@ Acceptance:
 - Single-source and same-upstream replicas are capped according to policy.
 - Property-based tests cover bounds and monotonicity; worked fixtures match public methodology examples.
 
-### [ ] REC-03 — Implement stateful discrepancy classification
+### [x] REC-03 — Implement stateful discrepancy classification
 
 Return measurement severity separately from lifecycle/publication state. Consume prior persisted state and
 produce appendable events for opened, observed, escalated, reconverged, resolved, corrected, or retracted

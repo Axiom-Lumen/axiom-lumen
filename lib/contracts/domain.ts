@@ -316,6 +316,118 @@ export const confidenceSchema = z
   .strict()
 export type Confidence = z.infer<typeof confidenceSchema>
 
+export const measurementSeveritySchema = z.enum(['info', 'warning', 'critical'])
+export const discrepancyLifecycleStateSchema = z.enum(['open', 'resolved'])
+export const discrepancyPublicationStateSchema = z.enum(['internal', 'pending_reply', 'approved_public', 'withheld'])
+export const replyReviewStateSchema = z.enum([
+  'not_required',
+  'awaiting_reply',
+  'response_received',
+  'response_reviewed',
+  'window_expired',
+])
+
+export const persistedDiscrepancyStateSchema = z
+  .object({
+    discrepancyId: identifierSchema,
+    sourceId: identifierSchema,
+    methodologyVersion: z.string().trim().min(1).max(100),
+    namedParty: z.boolean(),
+    severity: measurementSeveritySchema,
+    lifecycleState: discrepancyLifecycleStateSchema,
+    publicationState: discrepancyPublicationStateSchema,
+    replyReviewState: replyReviewStateSchema,
+    consecutiveCycles: z.number().int().safe().nonnegative(),
+    consecutiveAboveInfoCycles: z.number().int().safe().nonnegative(),
+    firstObservedAt: utcTimestampSchema,
+    lastObservedAt: utcTimestampSchema,
+    lastFinalizedCycleAt: utcTimestampSchema,
+    lastFinalizedCycleId: identifierSchema,
+    publicationUpdatedAt: utcTimestampSchema,
+  })
+  .strict()
+  .superRefine((state, context) => {
+    if (state.lastObservedAt < state.firstObservedAt) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['lastObservedAt'], message: 'last observation precedes first observation' })
+    }
+    if (state.lastFinalizedCycleAt < state.firstObservedAt) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['lastFinalizedCycleAt'], message: 'last finalized cycle precedes first observation' })
+    }
+    if (state.lastFinalizedCycleAt < state.lastObservedAt) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['lastFinalizedCycleAt'], message: 'last finalized cycle precedes last observation' })
+    }
+    if (state.publicationUpdatedAt < state.firstObservedAt) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['publicationUpdatedAt'], message: 'publication update precedes first observation' })
+    }
+    if (state.consecutiveAboveInfoCycles > state.consecutiveCycles) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['consecutiveAboveInfoCycles'],
+        message: 'above-Info cycles exceed total consecutive cycles',
+      })
+    }
+    if (state.lifecycleState === 'open' && state.consecutiveCycles === 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['consecutiveCycles'], message: 'open discrepancy requires persistence' })
+    }
+    if (
+      state.lifecycleState === 'resolved' &&
+      (state.consecutiveCycles !== 0 || state.consecutiveAboveInfoCycles !== 0)
+    ) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['consecutiveCycles'], message: 'resolved discrepancy must reset persistence' })
+    }
+    if (state.lifecycleState === 'open') {
+      const severityMatchesStreak =
+        (state.severity === 'info' && state.consecutiveAboveInfoCycles === 0) ||
+        (state.severity === 'warning' && [1, 2].includes(state.consecutiveAboveInfoCycles)) ||
+        (state.severity === 'critical' && state.consecutiveAboveInfoCycles >= 3)
+      if (!severityMatchesStreak) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['severity'],
+          message: 'severity does not match the above-Info persistence streak',
+        })
+      }
+    }
+    if (state.severity === 'info' && state.publicationState !== 'internal') {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['publicationState'], message: 'Info discrepancy must remain internal' })
+    }
+    if (state.namedParty && state.severity !== 'info' && state.publicationState === 'internal') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['publicationState'],
+        message: 'named-party Warning or Critical discrepancy requires reply review',
+      })
+    }
+    if (state.publicationState === 'internal' && state.replyReviewState !== 'not_required') {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['replyReviewState'], message: 'internal discrepancy cannot have an active reply review' })
+    }
+    if (state.publicationState === 'pending_reply' && state.replyReviewState === 'not_required') {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['replyReviewState'], message: 'pending publication requires reply review state' })
+    }
+    if (state.publicationState === 'pending_reply' && !state.namedParty) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['namedParty'], message: 'pending reply requires a named party' })
+    }
+    if (
+      state.namedParty &&
+      state.publicationState === 'approved_public' &&
+      !['response_reviewed', 'window_expired'].includes(state.replyReviewState)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['replyReviewState'],
+        message: 'named-party public discrepancy requires completed reply review',
+      })
+    }
+    if (!state.namedParty && state.publicationState === 'approved_public' && state.replyReviewState !== 'not_required') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['replyReviewState'],
+        message: 'non-named public discrepancy cannot retain a reply review state',
+      })
+    }
+  })
+export type PersistedDiscrepancyState = z.infer<typeof persistedDiscrepancyStateSchema>
+
 export const reconciliationContributionSchema = z
   .object({
     observationId: identifierSchema,
@@ -332,9 +444,9 @@ export const discrepancySchema = z
   .object({
     id: identifierSchema,
     sourceId: identifierSchema,
-    severity: z.enum(['info', 'warning', 'critical']),
-    lifecycleState: z.enum(['open', 'resolved']),
-    publicationState: z.enum(['internal', 'pending_reply', 'approved_public', 'withheld']),
+    severity: measurementSeveritySchema,
+    lifecycleState: discrepancyLifecycleStateSchema,
+    publicationState: discrepancyPublicationStateSchema,
     consecutiveCycles: z.number().int().safe().nonnegative(),
     observedValue: metricValueSchema,
     referenceValue: metricValueSchema,
