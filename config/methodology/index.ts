@@ -4,5 +4,4 @@ export {
   methodologyConfig,
   validateMethodologyConfig,
   type SourceClassId,
-} from './v1_4'
-
+} from './v1_5'

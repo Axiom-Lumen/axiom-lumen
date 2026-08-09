@@ -86,6 +86,15 @@ Response fields include:
   "value": 54891234,
   "status": "verified",
   "confidence": 0.97,
+  "confidence_formula_version": "latest-ledger-confidence-v0.2",
+  "confidence_components": {
+    "agreement": 1,
+    "freshness": 0.88,
+    "availability": 1,
+    "diversity": 1,
+    "spread": 1
+  },
+  "confidence_caps_applied": [],
   "sources_configured": 2,
   "sources_responded": 2,
   "sources_usable": 2,
@@ -95,7 +104,7 @@ Response fields include:
   "discrepancies": [],
   "source_errors": [],
   "as_of": "2026-07-12T12:00:00.000Z",
-  "methodology_version": "latest-ledger-v0.1"
+  "methodology_version": "latest-ledger-v0.2"
 }
 ```
 
@@ -108,7 +117,10 @@ Field semantics:
 - `sources_excluded`: configured sources rejected because their root metadata reported a different network passphrase than the first usable source.
 - `source_errors`: request failures, non-200 responses, malformed Horizon payloads, empty records, and network mismatches.
 - `discrepancies`: usable sources that returned ledger data but disagreed with the reconciled value.
-- `confidence`: 0 to 1 score based on agreement, freshness, source availability, and spread.
+- `confidence`: a bounded quality indicator based on agreement, freshness, source availability, source-class
+  diversity, and spread; it is not a probability of correctness.
+- `confidence_formula_version`, `confidence_components`, and `confidence_caps_applied`: audit metadata explaining
+  which formula produced the score and which policy constraints lowered it.
 
 `status` is one of:
 
@@ -156,12 +168,13 @@ npm run build
 
 ## 5. Methodology Notes
 
-The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md). The implemented latest-ledger slice uses a narrow v0.1 method:
+The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md). The implemented latest-ledger slice uses a narrow v0.2 method:
 
 - Horizon sources have equal base weight by default.
 - Freshness uses a half-life model: a source loses half its vote every 30 seconds after ledger close.
 - The reconciled latest ledger is the weighted median.
-- Confidence includes agreement, freshness, and source availability.
+- Confidence includes weighted agreement, freshness, availability, expected source-class diversity, and
+  normalized spread. See [the formula and worked example](./docs/reconciliation/confidence.md).
 - Source request failures are not data discrepancies.
 
 ---

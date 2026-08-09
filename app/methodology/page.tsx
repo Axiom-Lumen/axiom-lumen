@@ -14,7 +14,7 @@ import { SOURCE_CLASS_IDS, methodologyConfig } from '@/config/methodology'
 export const metadata: Metadata = {
   title: 'Methodology',
   description:
-    'How Axiom Lumen weights sources, decays stale data, computes weighted-median consensus, scores confidence, and handles discrepancies — published in full, versioned as v1.4.',
+    'How Axiom Lumen weights sources, decays stale data, computes weighted-median consensus, scores confidence, and handles discrepancies — published in full, versioned as v1.5.',
 }
 
 const sourceClasses = SOURCE_CLASS_IDS.map((sourceClassId) => {
@@ -143,10 +143,10 @@ export default function MethodologyPage() {
           <div className="flex max-w-[520px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
             <p>
               Every value returned by the API carries a confidence score between 0 and 1. It is a
-              function of the agreement score, the total effective weight of contributing sources,
-              and the spread of their readings. A score of 1.0 means every weighted source agreed
-              within tolerance on fresh data. A score near 0 means the sources available could not
-              corroborate one another.
+              function of effective-weight agreement, freshness, configured-source availability,
+              expected source-class diversity, and normalized reading spread. A score of 1.0 means
+              the expected independent evidence is present, fresh, and agrees within tolerance. A
+              score near 0 means the available evidence could not strongly corroborate the result.
             </p>
             <p>
               Confidence is not a probability that the value is correct. It is a measure of how
@@ -271,12 +271,12 @@ export default function MethodologyPage() {
 
       {/* Version colophon */}
       <DocSection num="—" label="Version">
-        <FigureRow figures={[{ value: 'v1.4', label: 'current methodology version' }]} />
+        <FigureRow figures={[{ value: 'v1.5', label: 'current methodology version' }]} />
         <p className="mt-8 max-w-[520px] text-sm leading-relaxed text-muted">
           Changes to weights, decay constants, severity triggers, or the consensus function
           increment this version. A full changelog will be published at{' '}
           <span className="font-mono text-[13px] text-dim">/methodology/changelog</span> (coming
-          with v1.4).
+          with v1.5).
         </p>
       </DocSection>
     </main>

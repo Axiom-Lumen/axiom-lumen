@@ -93,7 +93,7 @@ reply window never changes severity by itself. The authoritative transition rule
 
 ### 4.5 Methodology versioning
 
-Any change to weights, decay rates, tolerance bands, or severity thresholds requires a version bump and a changelog entry. Current version: **v1.4**.
+Any change to weights, decay rates, tolerance bands, confidence policy, or severity thresholds requires a version bump and a changelog entry. Current version: **v1.5**.
 
 ---
 

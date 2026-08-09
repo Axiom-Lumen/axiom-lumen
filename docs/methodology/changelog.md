@@ -3,6 +3,16 @@
 The public methodology is versioned independently from application releases. Changes to weights, freshness
 parameters, tolerance bands, confidence formulas, or severity thresholds require a new methodology version.
 
+## v1.5 — 2026-08-09
+
+- Published the five-component confidence formula with auditable agreement, freshness, availability,
+  source-class diversity, and normalized-spread components.
+- Added an explicit cap for replicas that share one declared upstream.
+- Added formula/component/cap metadata to the latest-ledger response and clarified that confidence is a
+  quality indicator, not a probability of correctness.
+
+Decision record: [`0002-versioned-confidence.md`](../decisions/0002-versioned-confidence.md)
+
 ## v1.4 — 2026-08-09
 
 - Separated measurement severity, discrepancy lifecycle, and publication state.
