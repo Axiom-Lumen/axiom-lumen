@@ -44,4 +44,5 @@ converting them to JavaScript numbers.
 
 The existing `GET /api/v1/stellar/latest-ledger` reconciler delegates freshness decay and median selection to
 these shared modules. Agreement, spread, and versioned confidence are documented in
-[`confidence.md`](./confidence.md); stateful severity remains separate roadmap work.
+[`confidence.md`](./confidence.md). Stateful severity, lifecycle, amendments, and publication safeguards are
+documented in [`discrepancy-state.md`](./discrepancy-state.md).
