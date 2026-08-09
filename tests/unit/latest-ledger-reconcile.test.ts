@@ -27,6 +27,23 @@ describe('reconcileLatestLedger', () => {
     expect(result.discrepancies[0]).toMatchObject({ source: 'c', severity: 'critical' })
   })
 
+  it('preserves positive per-observation base-weight overrides through the shared profile', () => {
+    const result = reconcileLatestLedger({
+      observations: [
+        { ...observation('light', 100), baseWeight: 0.1 },
+        { ...observation('heavy-a', 200), baseWeight: 1 },
+        { ...observation('heavy-b', 200), baseWeight: 1 },
+      ],
+      sourcesConfigured: 3,
+      asOf,
+    })
+
+    expect(result.value).toBe(200)
+    expect(result.observations.find((item) => item.sourceId === 'light')?.effectiveWeight).toBeLessThan(
+      result.observations.find((item) => item.sourceId === 'heavy-a')?.effectiveWeight ?? 0,
+    )
+  })
+
   it('uses half-life freshness decay', () => {
     expect(computeFreshnessWeight({ baseWeight: 1, ageSeconds: 30, halfLifeSeconds: 30 })).toBeCloseTo(0.5)
     expect(computeFreshnessWeight({ baseWeight: 1, ageSeconds: 60, halfLifeSeconds: 30 })).toBeCloseTo(0.25)

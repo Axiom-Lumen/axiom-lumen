@@ -83,5 +83,8 @@ Changes that alter its field names, types, required fields, or amount/count seri
 API compatibility decision. Additive changes must still be reviewed because schemas currently reject unknown
 fields deliberately.
 
-The existing latest-ledger route retains its v0.1 response during MTH-04. It will migrate to these shared
-contracts under LED-01 so that the migration can be reviewed as a deliberate compatibility change.
+The latest-ledger route now runs through the shared domain orchestrator but deliberately retains its named
+`latest-ledger-v0.2` diagnostic response. It is an on-demand request-time result, not a persisted production
+snapshot. [ADR 0003](../decisions/0003-latest-ledger-diagnostic-compatibility.md) records the compatibility and
+network-boundary decision. Persisted APIs will use this document's v1 snapshot serializer after the repository
+and ingestion layers exist.

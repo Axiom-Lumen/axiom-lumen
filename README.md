@@ -60,7 +60,8 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 
 Configure at least one Horizon endpoint with `STELLAR_HORIZON_URLS`. The value accepts comma-separated Horizon base URLs; whitespace is trimmed and duplicate endpoints are ignored.
 
-> All configured Horizon endpoints must serve the same Stellar network. Do not reconcile mainnet and testnet endpoints together.
+> This diagnostic route is pinned to the Stellar Public Network. Testnet, futurenet, standalone, and
+> network-mismatched endpoints are excluded before their ledger values are requested.
 >
 > The connector validates each Horizon root endpoint's network passphrase before requesting ledgers. Mismatched sources are excluded and reported in `source_errors`.
 
@@ -70,7 +71,10 @@ For local mainnet development, use the public Stellar Horizon endpoint:
 STELLAR_HORIZON_URLS="https://horizon.stellar.org" npm run dev
 ```
 
-Additional endpoints may be supplied, but they must belong to the same Stellar network as the first endpoint.
+Additional endpoints may be supplied, but each must report the Public Network passphrase.
+Optional `STELLAR_HORIZON_ALLOWED_HOSTS` and `STELLAR_HORIZON_DENIED_HOSTS` comma-separated lists constrain
+configured hostnames. Redirects, credential-bearing URLs, and local/private literal hosts are rejected, and
+Horizon response bodies are size-bounded and schema-validated.
 
 Then request the local endpoint:
 
@@ -114,7 +118,7 @@ Field semantics:
 - `sources_responded`: sources that returned a usable observation or an HTTP/application-level error response; request failures and aborts are not counted as responded.
 - `sources_usable`: responded sources with valid latest-ledger observations used in reconciliation.
 - `sources_agreeing`: usable sources within one ledger of the reconciled value.
-- `sources_excluded`: configured sources rejected because their root metadata reported a different network passphrase than the first usable source.
+- `sources_excluded`: configured sources rejected because their root metadata did not report the Public Network passphrase.
 - `source_errors`: request failures, non-200 responses, malformed Horizon payloads, empty records, and network mismatches.
 - `discrepancies`: usable sources that returned ledger data but disagreed with the reconciled value.
 - `confidence`: a bounded quality indicator based on agreement, freshness, source availability, source-class
@@ -129,6 +133,9 @@ Field semantics:
 - `unavailable`: no usable source can produce a value.
 
 A single usable source can return a value, but it is always `degraded` and confidence-capped so it is not presented as fully verified.
+
+This endpoint is a live, request-time diagnostic profile. It does not read or return a persisted production
+snapshot; that contract will be introduced with the persistence and ingestion roadmap items.
 
 ---
 
