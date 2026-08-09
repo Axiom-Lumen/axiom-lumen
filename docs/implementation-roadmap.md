@@ -304,7 +304,7 @@ Acceptance:
 
 ## 9. Phase 2 — build the reusable reconciliation engine
 
-### [ ] REC-01 — Extract pure freshness and weighted-median modules
+### [x] REC-01 — Extract pure freshness and weighted-median modules
 
 Implement source timestamp preference with receipt-time fallback, non-negative age handling, configurable
 decay, zero-weight exclusion, deterministic sorting, and documented tie behavior. Amount comparisons use the
