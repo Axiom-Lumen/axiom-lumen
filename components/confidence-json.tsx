@@ -1,7 +1,4 @@
-"use client"
-
-import React, { useEffect, useState, ReactNode } from 'react'
-import { CodePanel } from './site'
+import React, { ReactNode } from 'react'
 
 export const DEFAULT_ASSET = 'USDC'
 
@@ -108,68 +105,8 @@ export function DataArtifactEmpty({
   )
 }
 
-function LoadingPanel() {
-  return (
-    <CodePanel label={`GET /v1/supply/${DEFAULT_ASSET} — loading`}>
-      <code className="animate-pulse font-mono text-[12.5px] text-dim">
-        {"{\n  "}
-        <span className="text-cyan">{"\"status\""}</span>
-        {": "}
-        <span className="text-gold">{"\"loading\""}</span>
-        {",\n  "}
-        <span className="text-cyan">{"\"message\""}</span>
-        {": "}
-        <span className="text-gold">{"\"fetching live snapshot from Axiom API...\""}</span>
-        {"\n}"}
-      </code>
-    </CodePanel>
-  )
-}
-
 export function ConfidenceJson() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState<number | null>(null)
-
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    fetch(`/api/v1/supply/${DEFAULT_ASSET}`)
-      .then(async (res) => {
-        if (!active) return
-        setStatus(res.status)
-        if (res.ok) {
-          const json = await res.json()
-          if (active) {
-            setData(json)
-            setLoading(false)
-          }
-        } else {
-          if (active) {
-            setData(null)
-            setLoading(false)
-          }
-        }
-      })
-      .catch((err) => {
-        if (!active) return
-        setStatus(500)
-        setData(null)
-        setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  if (loading) {
-    return <LoadingPanel />
-  }
-
-  // Fallback data when API returns 503 or error
-  // The confidence value is 0.95 (instead of the original hardcoded default) to avoid hardcoding the disallowed value.
-  const fallbackData = {
+  const illustrativeData = {
     metric: "circulating_supply",
     asset: `${DEFAULT_ASSET}:GA5Z...`,
     value: "48213092.44",
@@ -186,17 +123,9 @@ export function ConfidenceJson() {
     as_of: "2026-07-06T14:22:01Z",
   }
 
-  if (status === 503 || !data) {
-    return (
-      <DataArtifactEmpty label="Illustrative example — no live snapshot">
-        {highlightJson(fallbackData)}
-      </DataArtifactEmpty>
-    )
-  }
-
   return (
-    <CodePanel label={`GET /v1/supply/${DEFAULT_ASSET} — response`}>
-      <code>{highlightJson(data)}</code>
-    </CodePanel>
+    <DataArtifactEmpty label="Illustrative response — supply API not implemented">
+      {highlightJson(illustrativeData)}
+    </DataArtifactEmpty>
   )
 }

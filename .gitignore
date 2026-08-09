@@ -13,4 +13,5 @@ __v0_jsx-dev-runtime.ts
 node_modules
 docs/issue-backlog.md
 .next/
+tsconfig.tsbuildinfo
 .DS_Store

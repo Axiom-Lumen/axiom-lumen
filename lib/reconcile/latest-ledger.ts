@@ -1,6 +1,12 @@
-export const LATEST_LEDGER_METHODOLOGY_VERSION = 'latest-ledger-v0.1'
-export const DEFAULT_HORIZON_HALF_LIFE_SECONDS = 30
-export const DEFAULT_HORIZON_BASE_WEIGHT = 1
+import { methodologyConfig } from '../../config/methodology'
+
+const latestLedgerProfile = methodologyConfig.metrics.latestLedger
+const latestLedgerConfidence = latestLedgerProfile.confidence
+
+export const LATEST_LEDGER_METHODOLOGY_VERSION = latestLedgerProfile.methodologyVersion
+export const DEFAULT_HORIZON_HALF_LIFE_SECONDS = latestLedgerProfile.freshnessHalfLifeSeconds
+export const DEFAULT_HORIZON_BASE_WEIGHT =
+  methodologyConfig.sourceClasses[latestLedgerProfile.sourceClass].baseWeight
 
 export type LatestLedgerStatus = 'verified' | 'degraded' | 'unavailable'
 export type LedgerDiscrepancySeverity = 'info' | 'warning' | 'critical'
@@ -187,7 +193,7 @@ export function reconcileLatestLedger({
     return {
       ...observation,
       ledgerDelta,
-      agrees: Math.abs(ledgerDelta) <= 1,
+      agrees: Math.abs(ledgerDelta) <= latestLedgerProfile.agreementToleranceLedgers,
     }
   })
   const totalEffectiveWeight = weightedObservations.reduce(
@@ -211,9 +217,12 @@ export function reconcileLatestLedger({
     normalizedSourceCount === 0 ? 0 : weightedObservations.length / normalizedSourceCount
   const agreementScore = totalEffectiveWeight === 0 ? 0 : agreeingWeight / totalEffectiveWeight
   const freshnessScore = totalBaseWeight === 0 ? 0 : totalEffectiveWeight / totalBaseWeight
-  const spreadScore = 1 - Math.min(1, maxLedgerDelta / 5)
+  const spreadScore = 1 - Math.min(1, maxLedgerDelta / latestLedgerConfidence.maximumSpreadLedgers)
   let confidence = clamp01(
-    agreementScore * 0.5 + freshnessScore * 0.25 + availabilityScore * 0.2 + spreadScore * 0.05,
+    agreementScore * latestLedgerConfidence.agreementCoefficient +
+      freshnessScore * latestLedgerConfidence.freshnessCoefficient +
+      availabilityScore * latestLedgerConfidence.availabilityCoefficient +
+      spreadScore * latestLedgerConfidence.spreadCoefficient,
   )
 
   const discrepancies = weightedObservations
@@ -229,14 +238,18 @@ export function reconcileLatestLedger({
     }))
 
   const degraded =
-    weightedObservations.length < 2 ||
+    weightedObservations.length < latestLedgerProfile.minimumVerifiedSources ||
     sourceErrorsCount > 0 ||
     availabilityScore < 1 ||
     agreementScore < 1 ||
-    confidence < 0.9
+    confidence < latestLedgerConfidence.verifiedThreshold
 
-  if (weightedObservations.length === 1) confidence = Math.min(confidence, 0.6)
-  if (sourceErrorsCount > 0) confidence = Math.min(confidence, 0.85)
+  if (weightedObservations.length === 1) {
+    confidence = Math.min(confidence, latestLedgerConfidence.singleSourceCap)
+  }
+  if (sourceErrorsCount > 0) {
+    confidence = Math.min(confidence, latestLedgerConfidence.sourceErrorCap)
+  }
 
   return {
     metric: 'latest_ledger',

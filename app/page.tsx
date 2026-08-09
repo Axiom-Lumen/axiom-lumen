@@ -59,7 +59,7 @@ export default function HomePage() {
             </p>
             <FigureRow
               figures={[
-                { value: 'v1.3', label: 'methodology version' },
+                { value: 'v1.4', label: 'methodology version' },
                 { value: '5', label: 'source classes weighted' },
                 { value: '100%', label: 'discrepancies logged' },
               ]}

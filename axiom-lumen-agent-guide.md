@@ -74,17 +74,26 @@ effective_weight = base_weight × e^(−λ × age_seconds)
 
 ### 4.4 Discrepancy severity
 
-| Severity | Trigger | Public treatment |
+| Severity | Trigger | Treatment |
 |---|---|---|
-| Info | Deviation within 2x tolerance band | Logged only, not surfaced |
-| Warning | Deviation beyond tolerance, <3 refresh cycles old | Surfaced with both values + timestamps |
-| Critical | Deviation beyond tolerance, persists 3+ refresh cycles | Surfaced + affected party notified for right of reply |
+| Info | Deviation above tolerance and at or below 2× tolerance | Logged only; not public |
+| Warning | Deviation above 2× tolerance for 1–2 completed refresh cycles | Opens review; named parties enter right-of-reply before publication |
+| Critical | Deviation above 2× tolerance for 3+ completed refresh cycles | Remains subject to right-of-reply and human publication approval |
+
+Values at or within tolerance are not discrepancies. Stale, missing, malformed, excluded, and unreachable
+sources are source-health outcomes, not numeric discrepancies.
+
+Severity measures magnitude and persistence only. Case lifecycle and publication state are separate. For a
+named anchor or issuer, Warning or Critical output must remain non-public until the party has been notified
+and a human reviewer approves publication after reviewing the response or expiry of the 72-hour window. The
+reply window never changes severity by itself. The authoritative transition rules are recorded in
+`docs/decisions/0001-discrepancy-severity-and-publication.md`.
 
 **Discrepancies are never deleted** — even after they resolve, they remain in a permanent, timestamped audit log. This is a hard requirement, not an optimization to skip under time pressure.
 
 ### 4.5 Methodology versioning
 
-Any change to weights, decay rates, tolerance bands, or severity thresholds requires a version bump and a changelog entry. Current version: **v1.3**.
+Any change to weights, decay rates, tolerance bands, or severity thresholds requires a version bump and a changelog entry. Current version: **v1.4**.
 
 ---
 

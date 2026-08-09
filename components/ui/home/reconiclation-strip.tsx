@@ -16,11 +16,11 @@ export function ReconciliationStrip() {
           <span className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="inline-block size-1.5 rounded-full bg-cyan [animation:pulse-dot_2s_infinite]"
+              className="inline-block size-1.5 rounded-full bg-dim"
             />
-            Live reconciliation — USDC circulating supply
+            Illustrative reconciliation — USDC circulating supply
           </span>
-          <span>as of 14:22:01 UTC</span>
+          <span>example snapshot · not live</span>
         </div>
         <div className="grid gap-x-0 gap-y-6 py-7 sm:grid-cols-[1fr_1fr_1fr_auto] sm:gap-y-0">
           {readings.map((r) => (
@@ -44,7 +44,7 @@ export function ReconciliationStrip() {
           ))}
           <div className="sm:pl-8">
             <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-gold">
-              verified · 0.94 confidence
+              illustrative · 0.94 confidence
             </div>
             <div className="mt-2 font-serif text-[26px] font-medium leading-none tabular-nums text-gold">
               48,213,091.02
