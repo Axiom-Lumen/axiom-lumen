@@ -1,6 +1,6 @@
 # Contributing to Axiom Lumen
 
-This repository is in an early, presentation-focused state. The current checkout contains the polished Next.js web experience, but the ingest worker, reconciliation engine, and database-backed API layer are still planned work rather than fully implemented services.
+This repository is in an early implementation stage. It contains the Next.js web experience and one real backend vertical slice: multiple Stellar Horizon endpoints can be queried, checked for network identity, reconciled for their latest closed ledger, and served through a local API route.
 
 The goal of this guide is to make the contributor path clear without pretending that more backend functionality exists than is actually present.
 
@@ -9,12 +9,15 @@ The goal of this guide is to make the contributor path clear without pretending 
 The current repository supports:
 
 - a Next.js web app for the marketing and documentation experience
-- local development of the frontend shell
+- `GET /api/v1/stellar/latest-ledger`
+- a multi-Horizon latest-ledger connector and reconciliation module
+- unit and route integration tests
+- CI for lint, typecheck, tests, integration tests, and production build
 
 The following are not yet implemented in this checkout:
 
 - a background ingest worker
-- a reconciliation engine with persisted methodology state
+- a reusable metric-agnostic reconciliation engine with persisted methodology state
 - database migrations and seed scripts
 - a production API layer backed by Postgres
 
@@ -32,15 +35,15 @@ INGEST → RECONCILE → SERVE
 - RECONCILE: compare observations, apply methodology rules, and record discrepancies.
 - SERVE: expose verified outputs through the web experience and future API surfaces.
 
-This repository currently only covers the SERVE surface in a frontend sense. The other stages are documented here as the intended target state, not as implemented services.
+The latest-ledger endpoint implements a narrow version of all three stages in the request lifecycle. Durable background ingestion, shared methodology configuration, and database-backed serving remain planned.
 
 ## 3. Prerequisites
 
 Before contributing, install the following:
 
-- Node.js 20 or newer (the repository pins Node 22 in [.nvmrc](.nvmrc))
+- Node.js 22.13 or newer (the repository pins Node 22 in [.nvmrc](.nvmrc))
 - npm 10 or newer
-- Docker Desktop or another local Docker runtime for Postgres
+- Docker Desktop or another local Docker runtime will be needed when Postgres persistence is implemented
 
 ## 4. Initial setup
 
@@ -61,7 +64,7 @@ Before contributing, install the following:
 3. Install dependencies:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 4. Copy the example environment file:
@@ -70,7 +73,7 @@ Before contributing, install the following:
    cp .env.example .env.local
    ```
 
-5. Review the environment values in [.env.local](.env.local) and adjust them if needed. The defaults assume a local Postgres instance.
+5. Review the environment values in [.env.local](.env.local). At least one HTTP or HTTPS Horizon URL is required to call the latest-ledger endpoint.
 
 ## 5. Local development workflow
 
@@ -84,54 +87,25 @@ npm run dev
 
 Then open http://localhost:3000.
 
-### 5.2 Start the database
+### 5.2 Exercise the implemented API
 
-The target architecture expects Postgres. A local container is the simplest way to get started:
-
-```bash
-docker run --name axiom-lumen-postgres \
-  -e POSTGRES_DB=axiom_lumen \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  -d postgres:16
-```
-
-If you already have a running Postgres instance, point DATABASE_URL at that instance instead.
-
-### 5.3 Run the ingest worker
-
-The ingest worker is not implemented in this checkout. The intended command is:
+With `STELLAR_HORIZON_URLS` configured and the development server running:
 
 ```bash
-npm run ingest:run
+curl http://localhost:3000/api/v1/stellar/latest-ledger
 ```
 
-At the moment that command only prints a notice so contributors know the workflow is planned but not yet available.
-
-### 5.4 Run database migrations and seed data
-
-The database workflow is also planned rather than implemented in the current checkout. The intended commands are:
-
-```bash
-npm run db:migrate
-npm run db:seed
-```
-
-These commands currently report that the workflow is not implemented yet.
+Database and background-worker commands will be documented when those implementations land. Do not rely on `db:*` or `ingest:*` scripts until they exist in `package.json`.
 
 ## 6. Tests and quality checks
 
-Run the available checks before opening a pull request:
+Run the same aggregate check used by CI before opening a pull request:
 
 ```bash
-npm run test
-npm run lint
-npm run typecheck
-npm run build
+npm run ci
 ```
 
-If you are adding backend functionality, add real tests rather than only relying on the placeholder commands above.
+The individual `lint`, `typecheck`, `test`, `test:integration`, and `build` scripts are also available. Add focused tests for new behavior rather than relying only on existing coverage.
 
 ## 7. Methodology change policy
 
@@ -144,6 +118,8 @@ Any change to the reconciliation methodology requires a version bump. This inclu
 - severity rules
 
 The canonical product rules document is [axiom-lumen-agent-guide.md](axiom-lumen-agent-guide.md). Any methodology change should be reflected there and in the public methodology copy.
+
+The ordered remaining work and acceptance criteria are maintained in [docs/implementation-roadmap.md](docs/implementation-roadmap.md). `docs/issue-backlog.md` is a historical pre-backend audit, not the current execution plan.
 
 ## 8. Pull request checklist
 

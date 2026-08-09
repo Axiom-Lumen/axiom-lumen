@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { methodologyConfig } from '@/config/methodology'
 import type { ReactNode } from 'react'
 
 /* ---------------------------------------------------------------------------
@@ -273,27 +274,28 @@ export function ShortDisclaimer({ className = '' }: { className?: string }) {
 /* Severity table — ruled, unboxed. Double rule under the header like a
    printed rate schedule. */
 export function SeverityTable() {
+  const infoMaximum = methodologyConfig.discrepancy.infoMaximumToleranceMultiplier
+  const criticalCycles = methodologyConfig.discrepancy.criticalMinimumConsecutiveCycles
   const rows = [
     {
       level: 'Info',
       color: 'text-cyan',
-      trigger: 'Deviation below 0.1% between any two sources, or a single stale source',
-      treatment: 'Logged in the audit trail. Included in API responses. Not surfaced publicly.',
+      trigger: `Deviation above tolerance and at or below ${infoMaximum}× the metric tolerance`,
+      treatment: 'Logged in the audit trail. Not surfaced publicly.',
     },
     {
       level: 'Warning',
       color: 'text-gold',
-      trigger: 'Deviation of 0.1–1% persisting across three consecutive measurement windows',
+      trigger: `Deviation above ${infoMaximum}× tolerance for one to ${criticalCycles - 1} completed refresh cycles`,
       treatment:
-        'Flagged in API responses and the dashboard. The affected anchor is notified before any public listing.',
+        'Opens review. A named affected party is notified and given a right of reply before publication.',
     },
     {
       level: 'Critical',
       color: 'text-danger',
-      trigger:
-        'Deviation above 1%, or a Warning unresolved after the right-of-reply window closes',
+      trigger: `Deviation above ${infoMaximum}× tolerance for ${criticalCycles} or more completed refresh cycles`,
       treatment:
-        "Publicly listed with full source data, timestamps, and the anchor's response if one was provided.",
+        'Remains non-public for a named party until the reply process completes and a reviewer approves publication.',
     },
   ]
   return (

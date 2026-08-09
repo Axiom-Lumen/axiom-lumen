@@ -43,7 +43,7 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 
 ### Mocked, static, planned, or missing
 
-- [ ] **Homepage live reconciliation strip:** Static illustrative UI, not wired to the API.
+- [ ] **Homepage reconciliation strip:** Clearly labeled illustrative UI, not wired to the API.
 - [ ] **Supply API:** Planned; no `GET /v1/supply/{asset}` implementation yet.
 - [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
@@ -62,7 +62,7 @@ Configure at least one Horizon endpoint with `STELLAR_HORIZON_URLS`. The value a
 
 > All configured Horizon endpoints must serve the same Stellar network. Do not reconcile mainnet and testnet endpoints together.
 >
-> Current limitation: URL validation checks endpoint format and availability, but it does not yet prove that every endpoint serves the same Stellar network. Planned: Validate Horizon network passphrases before reconciliation.
+> The connector validates each Horizon root endpoint's network passphrase before requesting ledgers. Mismatched sources are excluded and reported in `source_errors`.
 
 For local mainnet development, use the public Stellar Horizon endpoint:
 
@@ -171,6 +171,8 @@ The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](.
 Axiom Lumen reports measured deviations between independent data sources. It is never a solvency checker, financial advisory service, or regulatory validator.
 
 Contributors and automated agents must follow the project tone and legal guardrails in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md): factual, descriptive, timestamped, confidence-aware, and never investment advice.
+
+The dependency-ordered remaining work is tracked in [docs/implementation-roadmap.md](./docs/implementation-roadmap.md). The older issue backlog is a historical audit and should not be used as the current implementation status.
 
 ---
 

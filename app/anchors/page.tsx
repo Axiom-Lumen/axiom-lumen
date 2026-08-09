@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const replySteps = [
   {
     title: 'Detection',
-    body: 'A deviation between your published data and on-chain state crosses the Warning threshold and persists across three consecutive measurement windows. The severity classification is mechanical — see the trigger table below.',
+    body: 'A deviation between your published data and on-chain state crosses the Warning threshold. Severity is based only on measured magnitude and persistence across completed refresh cycles.',
   },
   {
     title: 'Notification',
@@ -27,7 +27,7 @@ const replySteps = [
   },
   {
     title: 'Disclosure',
-    body: 'If the deviation persists after the window closes, the discrepancy is published with the full measurement record and your response, verbatim and unedited. You are never quoted selectively.',
+    body: 'After the response is reviewed, or the window closes without a response, a human reviewer decides whether the evidence and process requirements permit publication. Approved disclosures include the measurement record and your response in full.',
   },
 ]
 
@@ -152,7 +152,7 @@ export default function AnchorsPage() {
         num="03"
         label="Severity thresholds"
         title="What triggers a Warning. What triggers a Critical."
-        lede="These are the same thresholds published in the methodology. Info-level deviations are logged but never surfaced publicly; only a Warning starts the right-of-reply clock."
+        lede="These are the same thresholds published in the methodology. Info-level deviations are logged but never surfaced publicly. Warning and Critical describe measured persistence; publication remains a separate reviewed decision."
       >
         <SeverityTable />
       </DocSection>

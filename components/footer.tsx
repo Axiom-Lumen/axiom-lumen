@@ -25,7 +25,7 @@ export function Footer() {
               should not be relied upon as financial or investment advice.
             </p>
             <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.14em] text-dim">
-              Methodology v1.3 · All discrepancies logged
+              Methodology v1.4 · All discrepancies logged
             </p>
           </div>
           <nav aria-label="Document index">

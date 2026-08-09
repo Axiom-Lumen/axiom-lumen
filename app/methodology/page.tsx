@@ -9,46 +9,28 @@ import {
   Kicker,
   FigureRow,
 } from '@/components/site'
+import { SOURCE_CLASS_IDS, methodologyConfig } from '@/config/methodology'
 
 export const metadata: Metadata = {
   title: 'Methodology',
   description:
-    'How Axiom Lumen weights sources, decays stale data, computes weighted-median consensus, scores confidence, and handles discrepancies — published in full, versioned as v1.3.',
+    'How Axiom Lumen weights sources, decays stale data, computes weighted-median consensus, scores confidence, and handles discrepancies — published in full, versioned as v1.4.',
 }
 
-const sourceClasses = [
-  {
-    cls: 'Canonical ledger state',
-    example: 'Stellar Core validator quorum, closed-ledger data',
-    weight: '1.0',
-  },
-  {
-    cls: 'Archive',
-    example: 'Horizon history archives, full-history nodes',
-    weight: '0.9',
-  },
-  {
-    cls: 'DEX',
-    example: 'Stellar DEX order books and trade streams',
-    weight: '0.85',
-  },
-  {
-    cls: 'Anchor self-reported',
-    example: 'Anchor reserve endpoints, published supply figures',
-    weight: '0.5',
-  },
-  {
-    cls: 'Third-party oracle',
-    example: 'External price and reserve attestation feeds',
-    weight: '0.4',
-  },
-]
+const sourceClasses = SOURCE_CLASS_IDS.map((sourceClassId) => {
+  const sourceClass = methodologyConfig.sourceClasses[sourceClassId]
+  return {
+    cls: sourceClass.label,
+    example: sourceClass.example,
+    weight: sourceClass.baseWeight.toString(),
+  }
+})
 
 export default function MethodologyPage() {
   return (
     <main>
       <PageHero
-        docCode="AL-SPEC-01 · METHODOLOGY V1.3"
+        docCode="AL-SPEC-01 · METHODOLOGY V1.4"
         kicker="Methodology"
         title="How Axiom Lumen decides what to report."
       >
@@ -239,16 +221,16 @@ export default function MethodologyPage() {
       >
         <div className="flex max-w-[620px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
           <p>
-            Before any Warning-level discrepancy involving a named anchor or issuer is listed
-            publicly, the affected party is notified at their registered contact endpoint with the
+            Before any Warning or Critical discrepancy involving a named anchor or issuer can be
+            listed publicly, the affected party is notified at their registered contact endpoint with the
             full measurement record: sources, timestamps, deltas, and the severity classification.
           </p>
           <p>
-            The reply window is 72 hours. Within it, the anchor can supply a correction, an
+            The reply window is 72 hours. It controls publication review, not severity. Within it, the anchor can supply a correction, an
             explanation, or evidence that the deviation originates from a data or timing artifact
             on our side. If the explanation resolves the discrepancy, the flag is closed and the
-            resolution is recorded in the audit log. If it does not, the discrepancy is published
-            together with the anchor&apos;s response, verbatim and unedited.
+            resolution is recorded in the audit log. If it does not, a human reviewer decides whether
+            the evidence and process requirements permit publication with the anchor&apos;s response.
           </p>
           <p>
             The process for anchors is documented in full on the{' '}
@@ -289,7 +271,7 @@ export default function MethodologyPage() {
 
       {/* Version colophon */}
       <DocSection num="—" label="Version">
-        <FigureRow figures={[{ value: 'v1.3', label: 'current methodology version' }]} />
+        <FigureRow figures={[{ value: 'v1.4', label: 'current methodology version' }]} />
         <p className="mt-8 max-w-[520px] text-sm leading-relaxed text-muted">
           Changes to weights, decay constants, severity triggers, or the consensus function
           increment this version. A full changelog will be published at{' '}

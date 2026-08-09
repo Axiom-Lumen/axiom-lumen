@@ -62,9 +62,9 @@ export default function DocsPage() {
               mainnet, testnet, futurenet, or local-network endpoints together.
             </p>
             <p className="mb-8 text-[15px] leading-relaxed text-muted">
-              Current limitation: the route checks URL format and whether configured endpoints can
-              return latest-ledger data, but it does not yet validate Horizon network passphrases.
-              Planned: validate Horizon network passphrases before reconciliation.
+              Before reading ledgers, the connector checks each Horizon root endpoint&apos;s network
+              passphrase. Sources on a different network are excluded and reported as source errors;
+              they never contribute to the reconciled value or confidence.
             </p>
             <CodePanel label="Local request">
               <code>{'curl http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
