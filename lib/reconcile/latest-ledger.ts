@@ -1,4 +1,6 @@
 import { methodologyConfig } from '../../config/methodology'
+import { computeEffectiveWeight as computeObservationEffectiveWeight, computeWeightFromAge } from './staleness'
+import { computeSafeIntegerWeightedMedian } from './weighted-median'
 
 const latestLedgerProfile = methodologyConfig.metrics.latestLedger
 const latestLedgerConfidence = latestLedgerProfile.confidence
@@ -95,8 +97,11 @@ export function computeFreshnessWeight({
     throw new Error('halfLifeSeconds must be greater than zero')
   }
 
-  // A Horizon latest-ledger source loses half its vote every 30 seconds after ledger close by default.
-  return baseWeight * 0.5 ** (Math.max(0, ageSeconds) / halfLifeSeconds)
+  return computeWeightFromAge({
+    baseWeight,
+    ageSeconds: Math.max(0, ageSeconds),
+    halfLifeSeconds,
+  })
 }
 
 function parseTime(value: string) {
@@ -104,20 +109,9 @@ function parseTime(value: string) {
   return Number.isFinite(ms) ? ms : Number.NaN
 }
 
-function weightedMedian(observations: { ledgerSequence: number; effectiveWeight: number }[]) {
-  const usable = observations
-    .filter((observation) => observation.effectiveWeight > 0)
-    .sort((a, b) => a.ledgerSequence - b.ledgerSequence)
-  const totalWeight = usable.reduce((sum, observation) => sum + observation.effectiveWeight, 0)
-  const midpoint = totalWeight / 2
-  let runningWeight = 0
-
-  for (const observation of usable) {
-    runningWeight += observation.effectiveWeight
-    if (runningWeight >= midpoint) return observation.ledgerSequence
-  }
-
-  return null
+function normalizeBaseWeight(value: number | undefined) {
+  const baseWeight = value ?? DEFAULT_HORIZON_BASE_WEIGHT
+  return Number.isFinite(baseWeight) && baseWeight > 0 ? baseWeight : 0
 }
 
 export function classifyLatestLedgerDiscrepancy(deltaLedgers: number): LedgerDiscrepancySeverity {
@@ -135,7 +129,6 @@ export function reconcileLatestLedger({
   asOf = new Date(),
   halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
 }: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
-  const asOfMs = asOf.getTime()
   const sourceErrorsCount = sourceErrors.length
   const sourcesResponded = observations.length + sourceErrors.filter(didSourceRespond).length
   const normalizedSourceCount = Math.max(0, sourcesConfigured)
@@ -144,30 +137,36 @@ export function reconcileLatestLedger({
     return (
       !sourceErrorIds.has(observation.sourceId) &&
       Number.isSafeInteger(observation.ledgerSequence) &&
-      Number.isFinite(parseTime(observation.closedAt)) &&
       Number.isFinite(parseTime(observation.retrievedAt))
     )
   })
 
   const preliminaryWeighted = usableObservations.map((observation) => {
-    const closedAtMs = parseTime(observation.closedAt)
-    const ageSeconds = Math.max(0, (asOfMs - closedAtMs) / 1000)
-    const effectiveWeight = computeFreshnessWeight({
-      baseWeight: observation.baseWeight ?? DEFAULT_HORIZON_BASE_WEIGHT,
-      ageSeconds,
+    const weighted = computeObservationEffectiveWeight({
+      baseWeight: normalizeBaseWeight(observation.baseWeight),
+      sourceTimestamp: observation.closedAt,
+      retrievedAt: observation.retrievedAt,
+      now: asOf,
       halfLifeSeconds,
     })
 
     return {
       ...observation,
-      ageSeconds,
-      effectiveWeight,
+      ageSeconds: weighted.ageSeconds,
+      effectiveWeight: weighted.effectiveWeight,
       agrees: false,
       ledgerDelta: 0,
     }
   })
 
-  const value = weightedMedian(preliminaryWeighted)
+  const value =
+    computeSafeIntegerWeightedMedian(
+      preliminaryWeighted.map((observation) => ({
+        id: observation.sourceId,
+        value: observation.ledgerSequence,
+        effectiveWeight: observation.effectiveWeight,
+      })),
+    )?.value ?? null
 
   if (value === null) {
     return {
@@ -201,7 +200,7 @@ export function reconcileLatestLedger({
     0,
   )
   const totalBaseWeight = weightedObservations.reduce(
-    (sum, observation) => sum + (observation.baseWeight ?? DEFAULT_HORIZON_BASE_WEIGHT),
+    (sum, observation) => sum + normalizeBaseWeight(observation.baseWeight),
     0,
   )
   const agreeingObservations = weightedObservations.filter((observation) => observation.agrees)
