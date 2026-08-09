@@ -71,6 +71,52 @@ describe('reconcileLatestLedger', () => {
     expect(result.confidence).toBeLessThanOrEqual(0.6)
     expect(result.sources_usable).toBe(1)
     expect(result.sources_agreeing).toBe(1)
+    expect(result.confidence_caps_applied).toContain('single_source')
+  })
+
+  it('caps replicas backed by the same upstream even when they agree', () => {
+    const result = reconcileLatestLedger({
+      observations: [
+        { ...observation('replica-a', 100), upstreamId: 'shared-validator' },
+        { ...observation('replica-b', 100), upstreamId: 'shared-validator' },
+      ],
+      sourcesConfigured: 2,
+      asOf,
+    })
+
+    expect(result.confidence).toBeLessThanOrEqual(0.7)
+    expect(result.confidence_caps_applied).toContain('same_upstream_replicas')
+    expect(result.status).toBe('degraded')
+  })
+
+  it('reports all versioned confidence components', () => {
+    const result = reconcileLatestLedger({
+      observations: [observation('a', 100), observation('b', 100)],
+      sourcesConfigured: 2,
+      asOf,
+    })
+
+    expect(result.confidence_formula_version).toBe('latest-ledger-confidence-v0.2')
+    expect(Object.keys(result.confidence_components).sort()).toEqual([
+      'agreement',
+      'availability',
+      'diversity',
+      'freshness',
+      'spread',
+    ])
+  })
+
+  it('does not treat replicas from one source class as independent class diversity', () => {
+    const result = reconcileLatestLedger({
+      observations: [observation('a', 100), observation('b', 100), observation('c', 100)],
+      sourcesConfigured: 3,
+      expectedSourceClasses: ['canonical_ledger', 'archive'],
+      asOf,
+    })
+
+    expect(result.confidence_components.diversity).toBe(0.5)
+    expect(result.confidence).toBeLessThan(0.5)
+    expect(result.status).toBe('degraded')
   })
 
   it('returns unavailable when no usable observations exist', () => {

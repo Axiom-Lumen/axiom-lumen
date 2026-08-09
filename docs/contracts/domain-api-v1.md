@@ -67,7 +67,7 @@ snapshots must carry a value.
 
 ## Discrepancy states
 
-Discrepancies follow methodology v1.4 and keep three independent dimensions:
+Discrepancies follow methodology v1.5 and keep three independent dimensions:
 
 - severity: `info`, `warning`, or `critical`;
 - lifecycle: `open` or `resolved`;

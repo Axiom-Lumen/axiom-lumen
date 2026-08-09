@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { LATEST_LEDGER_METHODOLOGY_VERSION, reconcileLatestLedger } from '../../../../../lib/reconcile/latest-ledger'
+import {
+  LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
+  LATEST_LEDGER_METHODOLOGY_VERSION,
+  reconcileLatestLedger,
+} from '../../../../../lib/reconcile/latest-ledger'
 import { fetchLatestLedgersFromHorizonSources, parseHorizonSources } from '../../../../../lib/stellar/horizon'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +15,15 @@ function unavailableResponse(message: string, sourcesConfigured = 0) {
       value: null,
       status: 'unavailable',
       confidence: 0,
+      confidence_formula_version: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
+      confidence_components: {
+        agreement: 0,
+        freshness: 0,
+        availability: 0,
+        diversity: 0,
+        spread: 0,
+      },
+      confidence_caps_applied: [],
       sources_configured: sourcesConfigured,
       sources_responded: 0,
       sources_usable: 0,

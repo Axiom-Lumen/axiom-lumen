@@ -1,4 +1,12 @@
 import { methodologyConfig } from '../../config/methodology'
+import type { SourceClassId } from '../../config/methodology'
+import {
+  computeAvailabilityScore,
+  computeSourceClassDiversity,
+  computeWeightedAgreement,
+} from './agreement'
+import { computeConfidence, type ConfidenceComponents } from './confidence'
+import { computeNormalizedSpread } from './spread'
 import { computeEffectiveWeight as computeObservationEffectiveWeight, computeWeightFromAge } from './staleness'
 import { computeSafeIntegerWeightedMedian } from './weighted-median'
 
@@ -9,6 +17,7 @@ export const LATEST_LEDGER_METHODOLOGY_VERSION = latestLedgerProfile.methodology
 export const DEFAULT_HORIZON_HALF_LIFE_SECONDS = latestLedgerProfile.freshnessHalfLifeSeconds
 export const DEFAULT_HORIZON_BASE_WEIGHT =
   methodologyConfig.sourceClasses[latestLedgerProfile.sourceClass].baseWeight
+export const LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION = latestLedgerConfidence.formulaVersion
 
 export type LatestLedgerStatus = 'verified' | 'degraded' | 'unavailable'
 export type LedgerDiscrepancySeverity = 'info' | 'warning' | 'critical'
@@ -20,6 +29,8 @@ export interface LatestLedgerObservation {
   closedAt: string
   retrievedAt: string
   baseWeight?: number
+  sourceClass?: SourceClassId
+  upstreamId?: string
 }
 
 export interface LatestLedgerSourceError {
@@ -55,6 +66,7 @@ export interface LatestLedgerReconciliationInput {
   sourcesExcluded?: number
   asOf?: Date
   halfLifeSeconds?: number
+  expectedSourceClasses?: readonly SourceClassId[]
 }
 
 export interface LatestLedgerReconciliationResult {
@@ -62,6 +74,9 @@ export interface LatestLedgerReconciliationResult {
   value: number | null
   status: LatestLedgerStatus
   confidence: number
+  confidence_formula_version: typeof LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION
+  confidence_components: ConfidenceComponents
+  confidence_caps_applied: string[]
   sources_configured: number
   sources_responded: number
   sources_usable: number
@@ -76,10 +91,6 @@ export interface LatestLedgerReconciliationResult {
 
 function didSourceRespond(error: LatestLedgerSourceError) {
   return !['request_aborted', 'request_failed'].includes(error.code)
-}
-
-function clamp01(value: number) {
-  return Math.max(0, Math.min(1, value))
 }
 
 export function computeFreshnessWeight({
@@ -128,6 +139,7 @@ export function reconcileLatestLedger({
   sourcesExcluded = 0,
   asOf = new Date(),
   halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
+  expectedSourceClasses = [latestLedgerProfile.sourceClass],
 }: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
   const sourceErrorsCount = sourceErrors.length
   const sourcesResponded = observations.length + sourceErrors.filter(didSourceRespond).length
@@ -174,6 +186,15 @@ export function reconcileLatestLedger({
       value: null,
       status: 'unavailable',
       confidence: 0,
+      confidence_formula_version: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
+      confidence_components: {
+        agreement: 0,
+        freshness: 0,
+        availability: 0,
+        diversity: 0,
+        spread: 0,
+      },
+      confidence_caps_applied: [],
       sources_configured: normalizedSourceCount,
       sources_responded: sourcesResponded,
       sources_usable: 0,
@@ -204,25 +225,58 @@ export function reconcileLatestLedger({
     0,
   )
   const agreeingObservations = weightedObservations.filter((observation) => observation.agrees)
-  const agreeingWeight = agreeingObservations.reduce(
-    (sum, observation) => sum + observation.effectiveWeight,
-    0,
-  )
-  const maxLedgerDelta = Math.max(
-    0,
-    ...weightedObservations.map((observation) => Math.abs(observation.ledgerDelta)),
-  )
-  const availabilityScore =
-    normalizedSourceCount === 0 ? 0 : weightedObservations.length / normalizedSourceCount
-  const agreementScore = totalEffectiveWeight === 0 ? 0 : agreeingWeight / totalEffectiveWeight
+  const availabilityScore = computeAvailabilityScore({
+    usableSources: weightedObservations.length,
+    configuredSources: Math.max(normalizedSourceCount, weightedObservations.length),
+  })
+  const agreementScore = computeWeightedAgreement(weightedObservations).score
   const freshnessScore = totalBaseWeight === 0 ? 0 : totalEffectiveWeight / totalBaseWeight
-  const spreadScore = 1 - Math.min(1, maxLedgerDelta / latestLedgerConfidence.maximumSpreadLedgers)
-  let confidence = clamp01(
-    agreementScore * latestLedgerConfidence.agreementCoefficient +
-      freshnessScore * latestLedgerConfidence.freshnessCoefficient +
-      availabilityScore * latestLedgerConfidence.availabilityCoefficient +
-      spreadScore * latestLedgerConfidence.spreadCoefficient,
-  )
+  const spreadScore = computeNormalizedSpread({
+    distances: weightedObservations.map((observation) => observation.ledgerDelta),
+    maximumDistance: latestLedgerConfidence.maximumSpreadLedgers,
+  }).score
+  const diversityScore = computeSourceClassDiversity({
+    representedSourceClasses: weightedObservations.map(
+      (observation) => observation.sourceClass ?? latestLedgerProfile.sourceClass,
+    ),
+    expectedSourceClasses,
+  }).score
+  const uniqueUpstreams = new Set(
+    weightedObservations.map((observation) => observation.upstreamId?.trim() || observation.sourceId),
+  ).size
+  const confidenceResult = computeConfidence({
+    formulaVersion: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
+    components: {
+      agreement: agreementScore,
+      freshness: freshnessScore,
+      availability: availabilityScore,
+      diversity: diversityScore,
+      spread: spreadScore,
+    },
+    coefficients: {
+      agreement: latestLedgerConfidence.agreementCoefficient,
+      freshness: latestLedgerConfidence.freshnessCoefficient,
+      availability: latestLedgerConfidence.availabilityCoefficient,
+      spread: latestLedgerConfidence.spreadCoefficient,
+    },
+    caps: [
+      {
+        id: 'single_source',
+        maximum: latestLedgerConfidence.singleSourceCap,
+        applies: weightedObservations.length === 1,
+      },
+      {
+        id: 'same_upstream_replicas',
+        maximum: latestLedgerConfidence.sameUpstreamCap,
+        applies: weightedObservations.length > 1 && uniqueUpstreams === 1,
+      },
+      {
+        id: 'source_error',
+        maximum: latestLedgerConfidence.sourceErrorCap,
+        applies: sourceErrorsCount > 0,
+      },
+    ],
+  })
 
   const discrepancies = weightedObservations
     .filter((observation) => observation.ledgerDelta !== 0)
@@ -241,20 +295,16 @@ export function reconcileLatestLedger({
     sourceErrorsCount > 0 ||
     availabilityScore < 1 ||
     agreementScore < 1 ||
-    confidence < latestLedgerConfidence.verifiedThreshold
-
-  if (weightedObservations.length === 1) {
-    confidence = Math.min(confidence, latestLedgerConfidence.singleSourceCap)
-  }
-  if (sourceErrorsCount > 0) {
-    confidence = Math.min(confidence, latestLedgerConfidence.sourceErrorCap)
-  }
+    confidenceResult.score < latestLedgerConfidence.verifiedThreshold
 
   return {
     metric: 'latest_ledger',
     value,
     status: degraded ? 'degraded' : 'verified',
-    confidence: Number(confidence.toFixed(4)),
+    confidence: confidenceResult.score,
+    confidence_formula_version: confidenceResult.formulaVersion,
+    confidence_components: confidenceResult.components,
+    confidence_caps_applied: confidenceResult.capsApplied,
     sources_configured: normalizedSourceCount,
     sources_responded: sourcesResponded,
     sources_usable: weightedObservations.length,

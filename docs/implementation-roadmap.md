@@ -28,7 +28,7 @@ dependencies are complete and doing so does not create a second implementation o
 - Multiple configured Horizon endpoints with URL normalization, timeouts, structured source errors,
   network-passphrase validation, and mismatched-network exclusion.
 - Latest-ledger weighted median, freshness decay, confidence scoring, status classification, and
-  discrepancy output under the narrow `latest-ledger-v0.1` methodology.
+  discrepancy output under the narrow `latest-ledger-v0.2` methodology.
 - Unit and route integration tests, plus lint, typecheck, test, integration-test, and build CI gates.
 - A client-side confidence example with loading and illustrative fallback states.
 
@@ -227,7 +227,7 @@ Acceptance:
 
 **Goal:** make one reviewed rule set authoritative before persisting or publishing discrepancies.
 
-Engineering rules are recorded in ADR 0001 and synchronized as methodology v1.4. Product/legal approval
+Engineering rules are recorded in ADR 0001 and synchronized as methodology v1.5. Product/legal approval
 remains required before named-party publication is enabled; this does not block non-public engine work.
 
 Decision record must resolve:
@@ -317,7 +317,7 @@ Acceptance:
   deterministic output under input reordering.
 - A regression test proves an asymmetric outlier cannot drag the result as a mean would.
 
-### [ ] REC-02 — Implement agreement, spread, and versioned confidence
+### [x] REC-02 — Implement agreement, spread, and versioned confidence
 
 First document the formula and its rationale. Calculate agreement by effective weight, source availability,
 source-class diversity, freshness, and normalized spread without presenting confidence as probability of
@@ -364,7 +364,7 @@ Acceptance:
 ### [ ] LED-01 — Migrate the latest-ledger slice
 
 Move existing behavior onto shared schemas and reconciliation primitives without changing its public contract
-accidentally. Decide whether `latest-ledger-v0.1` remains a deliberately separate method or becomes a named
+accidentally. Decide whether `latest-ledger-v0.2` remains a deliberately separate method or becomes a named
 profile under the current methodology. Document the compatibility policy.
 
 Also add deterministic retrieval timestamps, response-schema validation, response-size bounds, endpoint

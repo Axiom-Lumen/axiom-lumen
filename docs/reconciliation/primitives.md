@@ -42,6 +42,6 @@ converting them to JavaScript numbers.
 
 ## Compatibility
 
-The existing `GET /api/v1/stellar/latest-ledger` response is unchanged. Its reconciler now delegates
-freshness decay and median selection to these shared modules. Agreement, spread, confidence, and stateful
-severity remain separate roadmap items.
+The existing `GET /api/v1/stellar/latest-ledger` reconciler delegates freshness decay and median selection to
+these shared modules. Agreement, spread, and versioned confidence are documented in
+[`confidence.md`](./confidence.md); stateful severity remains separate roadmap work.
