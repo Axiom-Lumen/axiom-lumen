@@ -343,7 +343,7 @@ Acceptance:
 - Reconvergence appends a resolution; it never deletes history.
 - Named-party Warning/Critical records cannot enter a public state without the required review/reply state.
 
-### [ ] REC-04 — Build the metric-agnostic orchestrator
+### [x] REC-04 — Build the metric-agnostic orchestrator
 
 Pipeline:
 

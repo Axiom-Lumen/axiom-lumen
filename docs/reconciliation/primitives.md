@@ -46,3 +46,4 @@ The existing `GET /api/v1/stellar/latest-ledger` reconciler delegates freshness 
 these shared modules. Agreement, spread, and versioned confidence are documented in
 [`confidence.md`](./confidence.md). Stateful severity, lifecycle, amendments, and publication safeguards are
 documented in [`discrepancy-state.md`](./discrepancy-state.md).
+The complete deterministic cycle composition is documented in [`orchestrator.md`](./orchestrator.md).
