@@ -124,6 +124,18 @@ function cycleBatch(label: string, completedAt: string): PersistCompletedCycleIn
         observedAt: completedAt,
       },
     ],
+    sourceHealthStates: [
+      {
+        sourceId: 'source-a',
+        state: 'healthy',
+        consecutiveFailures: 0,
+        circuitState: 'closed',
+        circuitOpenedAt: null,
+        nextAttemptAt: null,
+        lastErrorCode: null,
+        lastObservedAt: completedAt,
+      },
+    ],
     snapshot: {
       snapshotId,
       cycleId,
@@ -246,6 +258,15 @@ describeWithDatabase('transactional persistence repositories', () => {
       expect(readings[0]?.payloadSha256).not.toBe(computePayloadSha256(batch.readings[0]?.rawPayload))
       expect(computePayloadSha256({ value: 1 })).toBe(computePayloadSha256({ value: 1 }))
       expect(computePayloadSha256({ value: 1 })).not.toBe(computePayloadSha256({ value: 2 }))
+      expect(await repositories.getSourceHealthStates(['source-a', 'source-a'])).toEqual({
+        'source-a': expect.objectContaining({
+          state: 'healthy',
+          consecutiveFailures: 0,
+          circuitState: 'closed',
+          lastObservedAt: '2026-08-10T10:00:00.000Z',
+        }),
+      })
+      expect(await repositories.getSourceHealthStates([])).toEqual({})
 
       const counts = await pool.query(`
         SELECT
@@ -310,6 +331,16 @@ describeWithDatabase('transactional persistence repositories', () => {
       await repositories.persistCompletedCycle(opened)
 
       const resolved = cycleBatch('two', '2026-08-10T11:00:00.000Z')
+      resolved.sourceHealthStates = [{
+        sourceId: 'source-a',
+        state: 'unreachable',
+        consecutiveFailures: 3,
+        circuitState: 'open',
+        circuitOpenedAt: '2026-08-10T11:00:00.000Z',
+        nextAttemptAt: '2026-08-10T11:01:00.000Z',
+        lastErrorCode: 'request_failed',
+        lastObservedAt: '2026-08-10T11:00:00.000Z',
+      }]
       const resolvedState = {
         ...(resolved.discrepancyStates['source-a'] as Record<string, unknown>),
         lifecycleState: 'resolved',
@@ -372,6 +403,14 @@ describeWithDatabase('transactional persistence repositories', () => {
         },
       ]
       await repositories.persistCompletedCycle(resolved)
+      expect(await repositories.getSourceHealthStates(['source-a'])).toEqual({
+        'source-a': expect.objectContaining({
+          state: 'unreachable',
+          consecutiveFailures: 3,
+          circuitState: 'open',
+          nextAttemptAt: '2026-08-10T11:01:00.000Z',
+        }),
+      })
 
       const stale = cycleBatch('stale', '2026-08-10T10:30:00.000Z')
       await expect(repositories.persistCompletedCycle(stale)).rejects.toThrow('newer finalization or incompatible identity')

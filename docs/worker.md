@@ -1,8 +1,9 @@
 # Ingestion worker
 
-ING-01 runs collection and reconciliation outside the Next.js request lifecycle. The worker discovers enabled
-Horizon sources from PostgreSQL, creates one deterministic cycle per metric, network, methodology version, and
-schedule boundary, and commits the complete evidence/snapshot batch atomically.
+ING-01 runs collection and reconciliation outside the Next.js request lifecycle. ING-02 adds bounded per-source
+retries, circuit breaking, payload and timeout limits, and durable source-health projections. The worker discovers
+enabled Horizon sources from PostgreSQL, creates one deterministic cycle per metric, network, methodology
+version, and schedule boundary, and commits the complete evidence/snapshot batch atomically.
 
 ## Local setup
 
@@ -53,10 +54,33 @@ After one finalized cycle, `npm run dev` serves the latest persisted Public Netw
 - `WORKER_POLL_INTERVAL_MS`: delay between continuous scheduler passes; defaults to `5000`.
 - `STELLAR_HORIZON_ALLOWED_HOSTS` / `STELLAR_HORIZON_DENIED_HOSTS`: optional hostname policy applied to
   database-discovered endpoints. Credentials and local/private literal hosts are always rejected.
+- `SOURCE_RETRY_MAX_ATTEMPTS`: total attempts per source and cycle; defaults to `3`.
+- `SOURCE_RETRY_BASE_DELAY_MS` / `SOURCE_RETRY_MAX_DELAY_MS`: exponential-backoff bounds; defaults to `250`
+  and `5000`. The maximum must not be lower than the base.
+- `SOURCE_RETRY_JITTER_RATIO`: symmetric jitter from `0` through `1`; defaults to `0.2`.
+- `SOURCE_CONCURRENCY`: maximum sources collected concurrently within one job; defaults to `4`.
+- `SOURCE_CIRCUIT_FAILURE_THRESHOLD`: consecutive transient failures before opening a source circuit; defaults
+  to `3`.
+- `SOURCE_CIRCUIT_COOLDOWN_MS`: minimum open-circuit cooldown; defaults to `60000`.
+- `HORIZON_TIMEOUT_MS`: timeout applied to each Horizon request; defaults to `5000`.
+- `HORIZON_MAX_RESPONSE_BYTES`: maximum decoded bytes accepted from each Horizon response; defaults to
+  `1000000`.
 
-Every numeric setting must be a positive integer. Keep the lease duration comfortably above normal connector
-latency. ING-02 will add retry/backoff and circuit-breaker policy; ING-01 intentionally retries only work whose
-lease expired before a durable finalization boundary.
+Except for the bounded jitter ratio, every numeric setting must be a positive integer. Keep the lease duration
+comfortably above the worst-case per-source retry duration. `WORKER_CONCURRENCY` limits jobs; the independent
+`SOURCE_CONCURRENCY` limit bounds upstream fan-out inside each job.
+
+Only transport failures, timeouts, HTTP 408/425/429, and server errors are retried. Validation failures,
+network mismatches, redirect/policy rejection, malformed or oversized bodies, and permanent HTTP failures are
+attempted once. Backoff is exponential with bounded jitter; a valid `Retry-After` value can extend the delay up
+to the configured maximum.
+
+The mutable `source_health_states` projection persists circuit state and the next permitted attempt across
+worker restarts. Every finalized cycle also appends an immutable health sample. States are `healthy`,
+`unreachable`, `rejected`, `malformed`, `stale`, or `network_mismatched`. An observation older than the
+latest-ledger freshness half-life is retained as evidence with decayed reconciliation weight and recorded as
+`stale` health. An open circuit skips network retrieval until its cooldown expires; unrelated sources continue
+and can still produce a degraded snapshot.
 
 ## Lease and shutdown behavior
 

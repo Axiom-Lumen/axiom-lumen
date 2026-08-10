@@ -181,14 +181,28 @@ function sourceError({
   message,
   retrievedAt,
   status,
+  retryAfterMs,
 }: {
   source: HorizonSource
   code: string
   message: string
   retrievedAt: string
   status?: number
+  retryAfterMs?: number
 }): LatestLedgerSourceError {
-  return { sourceId: source.id, sourceUrl: source.url, code, message, retrievedAt, status }
+  return { sourceId: source.id, sourceUrl: source.url, code, message, retrievedAt, status, retryAfterMs }
+}
+
+export function parseRetryAfter(value: string | null, now: string) {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (/^\d+$/.test(trimmed)) {
+    const milliseconds = Number(trimmed) * 1_000
+    return Number.isSafeInteger(milliseconds) ? milliseconds : undefined
+  }
+  const target = Date.parse(trimmed)
+  const baseline = Date.parse(now)
+  return Number.isFinite(target) && Number.isFinite(baseline) ? Math.max(0, target - baseline) : undefined
 }
 
 class ResponseTooLargeError extends Error {}
@@ -239,6 +253,7 @@ function responseFailure(source: HorizonSource, response: Response, retrievedAt:
       message: `${endpoint} returned HTTP ${response.status}`,
       retrievedAt,
       status: response.status,
+      retryAfterMs: parseRetryAfter(response.headers.get('retry-after'), retrievedAt),
     })
   }
   return null

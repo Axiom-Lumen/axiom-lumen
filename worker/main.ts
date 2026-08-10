@@ -3,7 +3,7 @@ import { createPersistenceRepositories } from '../lib/db/repositories'
 import { createSchedulerRepository } from '../lib/db/scheduler-repository'
 import { LATEST_LEDGER_METHODOLOGY_VERSION } from '../lib/reconcile/latest-ledger'
 import { parseHorizonHostList } from '../lib/stellar/horizon'
-import { parseWorkerConfig } from '../lib/worker/config'
+import { parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
 import { serializeWorkerError } from '../lib/worker/errors'
 import { createLatestLedgerJobHandler } from '../lib/worker/latest-ledger-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
@@ -18,6 +18,7 @@ function executionMode(arguments_: readonly string[]) {
 async function main() {
   const mode = executionMode(process.argv.slice(2))
   const options = parseWorkerConfig()
+  const { timeoutMs, maxResponseBytes, ...resiliencePolicy } = parseSourceResilienceConfig()
   const client = createDatabaseClient()
   const persistenceRepositories = createPersistenceRepositories(client)
   const schedulerRepository = createSchedulerRepository(client)
@@ -33,8 +34,13 @@ async function main() {
       methodologyVersion: LATEST_LEDGER_METHODOLOGY_VERSION,
       handlers: {
         latest_ledger: createLatestLedgerJobHandler(persistenceRepositories, () => new Date(), {
-          allowedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_ALLOWED_HOSTS),
-          deniedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_DENIED_HOSTS),
+          endpointPolicy: {
+            allowedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_ALLOWED_HOSTS),
+            deniedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_DENIED_HOSTS),
+          },
+          resiliencePolicy,
+          timeoutMs,
+          maxResponseBytes,
         }),
       },
     }

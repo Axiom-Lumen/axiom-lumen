@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, asc, eq, lt } from 'drizzle-orm'
+import { and, asc, eq, inArray, lt } from 'drizzle-orm'
 import {
   persistedDiscrepancyStateSchema,
   reconciliationSnapshotSchema,
@@ -21,6 +21,7 @@ import {
   retrievalAttempts,
   snapshotContributions,
   sourceHealthSamples,
+  sourceHealthStates,
 } from './schema'
 
 type JsonPrimitive = boolean | number | string | null
@@ -119,11 +120,23 @@ export interface SourceHealthRecord {
   observedAt: string
 }
 
+export interface SourceHealthStateRecord {
+  sourceId: string
+  state: typeof sourceHealthStates.$inferInsert.state
+  consecutiveFailures: number
+  circuitState: typeof sourceHealthStates.$inferInsert.circuitState
+  circuitOpenedAt?: string | null
+  nextAttemptAt?: string | null
+  lastErrorCode?: string | null
+  lastObservedAt: string
+}
+
 export interface PersistCompletedCycleInput {
   cycle: CompletedCycleRecord
   attempts: readonly RetrievalAttemptRecord[]
   readings: readonly RawReadingRecord[]
   sourceHealth?: readonly SourceHealthRecord[]
+  sourceHealthStates?: readonly SourceHealthStateRecord[]
   snapshot: ReconciliationSnapshot | unknown
   discrepancyStates: Readonly<Record<string, PersistedDiscrepancyState | unknown>>
   events: readonly DiscrepancyMeasurementEvent[]
@@ -275,6 +288,29 @@ export function createPersistenceRepositories(client: DatabaseClient) {
               details: normalizeJsonObject(health.details ?? {}),
             })),
           )
+        }
+
+        for (const health of input.sourceHealthStates ?? []) {
+          if (!Number.isSafeInteger(health.consecutiveFailures) || health.consecutiveFailures < 0) {
+            throw new Error(`source health ${health.sourceId} has an invalid failure count`)
+          }
+          await tx
+            .insert(sourceHealthStates)
+            .values(health)
+            .onConflictDoUpdate({
+              target: sourceHealthStates.sourceId,
+              setWhere: lt(sourceHealthStates.lastObservedAt, health.lastObservedAt),
+              set: {
+                state: health.state,
+                consecutiveFailures: health.consecutiveFailures,
+                circuitState: health.circuitState,
+                circuitOpenedAt: health.circuitOpenedAt,
+                nextAttemptAt: health.nextAttemptAt,
+                lastErrorCode: health.lastErrorCode,
+                lastObservedAt: health.lastObservedAt,
+                updatedAt: health.lastObservedAt,
+              },
+            })
         }
 
         await tx.insert(reconciliationSnapshots).values({
@@ -501,6 +537,25 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           }),
         ]),
       )
+    },
+
+    async getSourceHealthStates(sourceIds: readonly string[]) {
+      if (sourceIds.length === 0) return {}
+      const rows = await db
+        .select()
+        .from(sourceHealthStates)
+        .where(inArray(sourceHealthStates.sourceId, [...new Set(sourceIds)]))
+        .orderBy(asc(sourceHealthStates.sourceId))
+      return Object.fromEntries(rows.map((row) => [row.sourceId, {
+        sourceId: row.sourceId,
+        state: row.state,
+        consecutiveFailures: row.consecutiveFailures,
+        circuitState: row.circuitState,
+        circuitOpenedAt: row.circuitOpenedAt ? new Date(row.circuitOpenedAt).toISOString() : null,
+        nextAttemptAt: row.nextAttemptAt ? new Date(row.nextAttemptAt).toISOString() : null,
+        lastErrorCode: row.lastErrorCode,
+        lastObservedAt: new Date(row.lastObservedAt).toISOString(),
+      } satisfies SourceHealthStateRecord]))
     },
 
     async enqueueNotification(notification: NotificationRecord) {

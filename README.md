@@ -24,7 +24,8 @@ with timestamps          with freshness scoring       with source context
 
 Implemented in this repository today:
 
-1. **Ingest:** An idempotent leased worker reads registered Horizon REST endpoints with bounded concurrency.
+1. **Ingest:** An idempotent leased worker reads registered Horizon REST endpoints with bounded concurrency,
+   retries transient failures, and persists source health and circuit state.
 2. **Reconcile:** Weighted median over latest-ledger observations, half-life freshness weighting, availability-aware confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
@@ -46,6 +47,8 @@ wiring, and anchor right-of-reply workflows.
   repositories, content-hashed evidence, and database-enforced append-only audit history.
 - [x] **Background ingestion:** Database source discovery, deterministic cycles, leases/heartbeats, bounded
   concurrency, cancellation, graceful shutdown, abandoned-lease recovery, and idempotent finalization.
+- [x] **Source resilience:** Per-request timeouts and payload limits, retry budgets with bounded jitter and
+  `Retry-After`, per-job source concurrency, circuit breakers, and persisted health transitions.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
@@ -128,7 +131,7 @@ Field semantics:
 - `sources_responded`: sources that returned a usable observation or an HTTP/application-level error response; request failures and aborts are not counted as responded.
 - `sources_usable`: responded sources with valid latest-ledger observations used in reconciliation.
 - `sources_agreeing`: usable sources within one ledger of the reconciled value.
-- `sources_excluded`: configured sources rejected because their root metadata did not report the Public Network passphrase.
+- `sources_excluded`: configured sources omitted by policy, including network mismatch or an open circuit.
 - `source_errors`: request failures, non-200 responses, malformed Horizon payloads, empty records, and network mismatches.
 - `discrepancies`: usable sources that returned ledger data but disagreed with the reconciled value.
 - `confidence`: a bounded quality indicator based on agreement, freshness, source availability, source-class
