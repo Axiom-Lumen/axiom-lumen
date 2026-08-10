@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server'
+import { loadLatestLedgerReadModel } from '../../../../../lib/db/latest-ledger-read-model'
 import {
   LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
   LATEST_LEDGER_METHODOLOGY_VERSION,
   latestLedgerResponseSchema,
-  reconcileLatestLedger,
 } from '../../../../../lib/reconcile/latest-ledger'
-import {
-  PUBLIC_NETWORK_PASSPHRASE,
-  fetchLatestLedgersFromHorizonSources,
-  parseHorizonHostList,
-  parseHorizonSources,
-} from '../../../../../lib/stellar/horizon'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,34 +49,14 @@ function unavailableResponse(message: string, sourcesConfigured = 0) {
 }
 
 export async function GET() {
-  let sources
   try {
-    sources = parseHorizonSources(process.env.STELLAR_HORIZON_URLS, {
-      allowedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_ALLOWED_HOSTS),
-      deniedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_DENIED_HOSTS),
-    })
+    const reconciled = await loadLatestLedgerReadModel()
+    if (!reconciled) return unavailableResponse('No finalized latest-ledger snapshot is available')
+    return NextResponse.json(reconciled, { status: reconciled.status === 'unavailable' ? 503 : 200 })
   } catch (error) {
-    return unavailableResponse(error instanceof Error ? error.message : 'Invalid Horizon sources')
+    console.error('Unable to load the latest-ledger read model', {
+      name: error instanceof Error ? error.name : 'Error',
+    })
+    return unavailableResponse('The latest-ledger read model is temporarily unavailable')
   }
-
-  if (sources.length === 0) {
-    return unavailableResponse('STELLAR_HORIZON_URLS must include at least one HTTP or HTTPS URL')
-  }
-
-  const latestLedgers = await fetchLatestLedgersFromHorizonSources({
-    sources,
-    expectedNetworkPassphrase: PUBLIC_NETWORK_PASSPHRASE,
-  })
-  const reconciled = reconcileLatestLedger({
-    observations: latestLedgers.observations,
-    sourceErrors: latestLedgers.source_errors,
-    sourcesConfigured: latestLedgers.sources_configured,
-    sourcesExcluded: latestLedgers.sources_excluded,
-    asOf: new Date(latestLedgers.retrieved_at),
-    network: { id: 'public', passphrase: latestLedgers.network_passphrase },
-  })
-
-  return NextResponse.json(reconciled, {
-    status: reconciled.status === 'unavailable' ? 503 : 200,
-  })
 }

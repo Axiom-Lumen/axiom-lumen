@@ -19,7 +19,7 @@ import { computeConfidence, type ConfidenceCoefficients } from './confidence'
 import {
   advanceDiscrepancyState,
   type DeviationBand,
-  type DiscrepancyEvent,
+  type DiscrepancyMeasurementEvent,
 } from './discrepancy-state'
 import { computeEffectiveWeight } from './staleness'
 import { computeWeightedMedian, type ValueComparator } from './weighted-median'
@@ -78,7 +78,7 @@ export interface ReconcileMetricInput<TObservation extends ObservationBase, TVal
 export interface ReconcileMetricResult {
   snapshot: ReconciliationSnapshot
   discrepancyStates: Readonly<Record<string, PersistedDiscrepancyState>>
-  events: readonly DiscrepancyEvent[]
+  events: readonly DiscrepancyMeasurementEvent[]
 }
 
 interface WeightedObservation<TObservation, TValue> {
@@ -391,7 +391,7 @@ export function reconcileMetric<TObservation extends ObservationBase, TValue>({
   }
 
   const discrepancyStates: Record<string, PersistedDiscrepancyState> = Object.fromEntries(priorStates)
-  const events: DiscrepancyEvent[] = []
+  const events: DiscrepancyMeasurementEvent[] = []
   const discrepancies: ReconciliationSnapshot['discrepancies'] = []
   for (const item of evaluated) {
     const sourceId = item.observation.provenance.source.id

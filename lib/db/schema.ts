@@ -218,6 +218,56 @@ export const ingestCycles = pgTable(
   ],
 )
 
+export const scheduledCycleLeases = pgTable(
+  'scheduled_cycle_leases',
+  {
+    id: text('id').primaryKey(),
+    metric: metricEnum('metric').notNull(),
+    subjectKey: text('subject_key').notNull(),
+    methodologyVersion: text('methodology_version').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    scheduledAt: utcTimestamp('scheduled_at').notNull(),
+    status: ingestCycleStatusEnum('status').notNull().default('pending'),
+    leaseOwner: text('lease_owner'),
+    leaseToken: integer('lease_token').notNull().default(0),
+    leaseExpiresAt: utcTimestamp('lease_expires_at'),
+    heartbeatAt: utcTimestamp('heartbeat_at'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    finalizedCycleId: text('finalized_cycle_id').references(() => ingestCycles.id, {
+      onDelete: 'restrict',
+      onUpdate: 'cascade',
+    }),
+    lastError: jsonb('last_error').$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+    updatedAt: utcTimestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('scheduled_cycle_leases_idempotency_uidx').on(table.idempotencyKey),
+    uniqueIndex('scheduled_cycle_leases_finalized_cycle_uidx').on(table.finalizedCycleId),
+    uniqueIndex('scheduled_cycle_leases_active_subject_uidx')
+      .on(table.metric, table.subjectKey)
+      .where(sql`${table.status} IN ('pending', 'running')`),
+    index('scheduled_cycle_leases_pending_idx').on(table.status, table.scheduledAt),
+    index('scheduled_cycle_leases_expiry_idx').on(table.status, table.leaseExpiresAt),
+    check(
+      'scheduled_cycle_leases_counts_check',
+      sql`${table.leaseToken} >= 0 AND ${table.attemptCount} >= 0`,
+    ),
+    check(
+      'scheduled_cycle_leases_ownership_check',
+      sql`(${table.status} = 'running' AND ${table.leaseOwner} IS NOT NULL AND
+            ${table.leaseExpiresAt} IS NOT NULL AND ${table.heartbeatAt} IS NOT NULL) OR
+          (${table.status} <> 'running' AND ${table.leaseOwner} IS NULL AND
+            ${table.leaseExpiresAt} IS NULL AND ${table.heartbeatAt} IS NULL)`,
+    ),
+    check(
+      'scheduled_cycle_leases_finalization_check',
+      sql`(${table.status} = 'completed' AND ${table.finalizedCycleId} IS NOT NULL) OR
+          (${table.status} <> 'completed' AND ${table.finalizedCycleId} IS NULL)`,
+    ),
+  ],
+)
+
 export const retrievalAttempts = pgTable(
   'retrieval_attempts',
   {
@@ -274,6 +324,7 @@ export const rawReadings = pgTable(
       .references(() => sourceDefinitions.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
     metric: metricEnum('metric').notNull(),
     subjectKey: text('subject_key').notNull(),
+    sourceIdentity: jsonb('source_identity').$type<Record<string, unknown>>().notNull(),
     normalizedValue: jsonb('normalized_value').$type<Record<string, unknown>>().notNull(),
     rawPayload: jsonb('raw_payload').$type<unknown>().notNull(),
     payloadSha256: text('payload_sha256').notNull(),

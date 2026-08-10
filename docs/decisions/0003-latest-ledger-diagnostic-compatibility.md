@@ -1,6 +1,6 @@
 # ADR 0003: Latest-ledger diagnostic compatibility and network boundary
 
-- Status: Accepted
+- Status: Accepted; request-time execution superseded by ING-01
 - Date: 2026-08-09
 - Roadmap item: LED-01
 
@@ -42,3 +42,11 @@ snapshot contract requires an explicit API compatibility decision and versioned 
 - Public Network identity no longer depends on source ordering.
 - Local/private Horizon endpoints are not supported by this public route; a future explicitly privileged ingest
   worker may define a separate network and endpoint policy.
+
+## ING-01 amendment
+
+ING-01 preserves the v0.2 response shape and Public Network boundary but moves collection and reconciliation to
+the background worker. The route now reads only the latest finalized PostgreSQL snapshot and never contacts
+Horizon. Database-discovered worker endpoints retain the credential/private-host/allow-list/deny-list protections
+described above. The direct reconciliation function remains available for deterministic tests and diagnostics,
+but it is no longer invoked by the public route.

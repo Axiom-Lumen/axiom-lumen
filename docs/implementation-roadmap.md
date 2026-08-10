@@ -40,11 +40,12 @@ dependencies are complete and doing so does not create a second implementation o
 - The public methodology describes v1.3, but executable shared v1.3 configuration does not exist.
 - Latest-ledger v0.1 logic is monolithic and uses thresholds not governed by the published v1.3 rules.
 - The severity table, agent guide, and anchor-process copy disagree about thresholds and timing.
-- No database, scheduler, durable readings, snapshots, source health, or append-only discrepancy log exists.
+- PostgreSQL persistence, scheduler leases, durable readings/snapshots, source-health samples, and append-only
+  discrepancy events are implemented for the latest-ledger slice.
 - Supply, trustline, DEX depth, anchor reserve, authentication, rate limiting, streaming, and operational
   status surfaces remain planned.
-- `CONTRIBUTING.md` still describes the repository as presentation-only and mentions scripts that do not
-  exist in `package.json`.
+- Several broader product surfaces remain static or planned; current status is maintained in the README and this
+  roadmap rather than the historical issue backlog.
 - `tsconfig.tsbuildinfo` is tracked even though it is generated build output.
 
 ## 3. Non-negotiable engineering rules
@@ -412,7 +413,7 @@ Acceptance:
 - Resolution and correction are new events linked to originals.
 - Repository integration tests run against real PostgreSQL in CI.
 
-### [ ] ING-01 — Add an idempotent scheduler and worker
+### [x] ING-01 — Add an idempotent scheduler and worker
 
 Separate the worker entry point from Next.js request handling. Implement metric/source job discovery, cycle
 leases, bounded concurrency, cancellation, graceful shutdown, and reaping of abandoned leases.

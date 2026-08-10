@@ -83,8 +83,7 @@ Changes that alter its field names, types, required fields, or amount/count seri
 API compatibility decision. Additive changes must still be reviewed because schemas currently reject unknown
 fields deliberately.
 
-The latest-ledger route now runs through the shared domain orchestrator but deliberately retains its named
-`latest-ledger-v0.2` diagnostic response. It is an on-demand request-time result, not a persisted production
-snapshot. [ADR 0003](../decisions/0003-latest-ledger-diagnostic-compatibility.md) records the compatibility and
-network-boundary decision. Persisted APIs will use this document's v1 snapshot serializer after the repository
-and ingestion layers exist.
+The latest-ledger worker runs through the shared domain orchestrator and atomically persists its domain snapshot.
+The route reads that finalized snapshot but deliberately retains the named `latest-ledger-v0.2` compatibility
+response. [ADR 0003](../decisions/0003-latest-ledger-diagnostic-compatibility.md) records the response-shape and
+network-boundary decision. A future versioned API may expose the shared v1 snapshot serializer directly.

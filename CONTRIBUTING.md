@@ -1,6 +1,8 @@
 # Contributing to Axiom Lumen
 
-This repository is in an early implementation stage. It contains the Next.js web experience and one real backend vertical slice: multiple Stellar Horizon endpoints can be queried, checked for network identity, reconciled for their latest closed ledger, and served through a local API route.
+This repository is in an early implementation stage. It contains the Next.js web experience and one durable
+backend vertical slice: a leased worker reconciles registered Horizon sources and the local route serves its
+latest finalized PostgreSQL snapshot.
 
 The goal of this guide is to make the contributor path clear without pretending that more backend functionality exists than is actually present.
 
@@ -11,15 +13,14 @@ The current repository supports:
 - a Next.js web app for the marketing and documentation experience
 - `GET /api/v1/stellar/latest-ledger`
 - a multi-Horizon latest-ledger connector and reconciliation module
-- unit and route integration tests
-- CI for lint, typecheck, tests, integration tests, and production build
+- PostgreSQL migrations, transactional audit repositories, and an idempotent background worker
+- unit, route integration, and real PostgreSQL tests
+- CI for lint, typecheck, tests, database tests, migration validation, and production build
 
 The following are not yet implemented in this checkout:
 
-- a background ingest worker
-- a reusable metric-agnostic reconciliation engine with persisted methodology state
-- database migrations and seed scripts
-- a production API layer backed by Postgres
+- supply, DEX, and anchor-reserve metric workers
+- authentication, rate limiting, streams, and production deployment operations
 
 If you are working on backend pieces, treat the sections below as the target architecture and keep the implementation honest about what is currently available.
 
@@ -35,7 +36,8 @@ INGEST → RECONCILE → SERVE
 - RECONCILE: compare observations, apply methodology rules, and record discrepancies.
 - SERVE: expose verified outputs through the web experience and future API surfaces.
 
-The latest-ledger endpoint implements a narrow version of all three stages in the request lifecycle. Durable background ingestion, shared methodology configuration, and database-backed serving remain planned.
+The latest-ledger slice implements all three stages with PostgreSQL between background ingestion and serving.
+Public requests do not perform upstream collection.
 
 ## 3. Prerequisites
 
@@ -43,7 +45,7 @@ Before contributing, install the following:
 
 - Node.js 22.13 or newer (the repository pins Node 22 in [.nvmrc](.nvmrc))
 - npm 10 or newer
-- Docker Desktop or another local Docker runtime will be needed when Postgres persistence is implemented
+- Docker Desktop or another local Docker runtime for PostgreSQL development and database tests
 
 ## 4. Initial setup
 
@@ -73,7 +75,8 @@ Before contributing, install the following:
    cp .env.example .env.local
    ```
 
-5. Review the environment values in [.env.local](.env.local). At least one HTTP or HTTPS Horizon URL is required to call the latest-ledger endpoint.
+5. Review the database and worker values in [.env.local](.env.local), then follow [docs/worker.md](docs/worker.md)
+   to migrate PostgreSQL and register a Horizon source.
 
 ## 5. Local development workflow
 
@@ -87,15 +90,18 @@ npm run dev
 
 Then open http://localhost:3000.
 
-### 5.2 Exercise the implemented API
+### 5.2 Run ingestion and exercise the implemented API
 
-With `STELLAR_HORIZON_URLS` configured and the development server running:
+Run a one-shot worker, start the development server, then query the persisted snapshot:
 
 ```bash
+npm run worker:once
+npm run dev
 curl http://localhost:3000/api/v1/stellar/latest-ledger
 ```
 
-Database and background-worker commands will be documented when those implementations land. Do not rely on `db:*` or `ingest:*` scripts until they exist in `package.json`.
+Use `npm run worker:continuous` for the long-running process. Database commands and lease behavior are documented
+in [docs/database.md](docs/database.md) and [docs/worker.md](docs/worker.md).
 
 ## 6. Tests and quality checks
 

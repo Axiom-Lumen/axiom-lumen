@@ -69,11 +69,12 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
       sourceUrl: 'https://horizon.example',
       ledgerSequence: 123,
       closedAt: '2026-07-12T12:00:00.000Z',
+      rawPayload: payload._embedded.records[0],
     })
     expect(result.observations[0].retrievedAt).toEqual(expect.any(String))
   })
 
-  it('uses one injected retrieval timestamp for the complete cycle', async () => {
+  it('uses one injected completion timestamp for the complete cycle output', async () => {
     const cycleTime = new Date('2026-08-09T14:15:16.000Z')
     const fetchImpl = vi.fn(async (url: string | URL | Request) =>
       String(url).endsWith('/')
@@ -88,6 +89,29 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
 
     expect(result.retrieved_at).toBe(cycleTime.toISOString())
     expect(result.observations[0]?.retrievedAt).toBe(cycleTime.toISOString())
+  })
+
+  it('records retrieval completion after all upstream work finishes', async () => {
+    const times = [
+      new Date('2026-08-09T14:15:16.000Z'),
+      new Date('2026-08-09T14:15:18.000Z'),
+    ]
+    let clockCalls = 0
+    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
+      String(url).endsWith('/')
+        ? Response.json({ network_passphrase: PUBLIC_NETWORK_PASSPHRASE })
+        : Response.json(payload),
+    )
+
+    const result = await fetchLatestLedgersFromHorizonSources({
+      sources,
+      fetchImpl,
+      clock: () => new Date(times[clockCalls++]!),
+    })
+
+    expect(clockCalls).toBe(2)
+    expect(result.retrieved_at).toBe(times[1]?.toISOString())
+    expect(result.observations[0]?.retrievedAt).toBe(times[1]?.toISOString())
   })
 
   it('records non-200 responses as source errors', async () => {
@@ -150,6 +174,17 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
     ).rejects.toThrow(/duplicate Horizon source ID/)
   })
 
+  it('applies endpoint security policy to database-discovered sources before retrieval', async () => {
+    const fetchImpl = vi.fn()
+    await expect(
+      fetchLatestLedgersFromHorizonSources({
+        sources: [{ id: 'database-source', url: 'http://127.0.0.1:8000' }],
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/not allowed/)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it('records empty ledger records as source errors', async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const target = String(url)
@@ -202,6 +237,20 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
 
     expect(result.observations).toEqual([])
     expect(result.source_errors[0]).toMatchObject({ code: 'request_aborted' })
+  })
+
+  it('propagates worker cancellation instead of recording a source failure', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')))
+        }),
+    )
+    const pending = fetchLatestLedgersFromHorizonSources({ sources, fetchImpl, signal: controller.signal })
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('excludes sources whose reported network passphrase does not match', async () => {
