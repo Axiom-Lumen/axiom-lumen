@@ -200,6 +200,11 @@ The generated production OpenAPI 3.1 contract is available at
 `npm run openapi:check` to detect drift. The production paths include implemented routes only; see the
 [OpenAPI workflow](./docs/openapi.md).
 
+The confidence artifact on the homepage, documentation, and methodology pages fetches the persisted supply API
+on the server and validates the response before rendering it as live. Set `AXIOM_DEFAULT_ASSET` to a canonical
+`CODE:ISSUER` watched by the worker; it defaults to Public Network USDC. Empty, stale, unavailable, and invalid
+responses are explicitly labeled and are never presented as current verified data.
+
 ---
 
 ## 4. Local Development

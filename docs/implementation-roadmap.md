@@ -532,11 +532,12 @@ Acceptance:
 - Every documented implemented route has a contract test.
 - Planned endpoints are clearly marked or excluded from the production spec.
 
-### [ ] WEB-01 — Wire the confidence artifact
+### [x] WEB-01 — Wire the confidence artifact
 
 Replace `any` with the shared response type and runtime validation. Fetch the real supply endpoint with clear
 loading, empty, stale, degraded, and unavailable states. Keep illustrative output visually and semantically
-distinct from live data.
+distinct from live data. A missing snapshot (`404`) uses the labeled illustrative fallback; validated stale or
+unavailable responses (`503`) retain their real payload but are explicitly labeled as not current.
 
 ### [ ] WEB-02 — Make the homepage strip truthful and live
 
