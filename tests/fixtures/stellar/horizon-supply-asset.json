@@ -1,0 +1,14 @@
+{
+  "asset_type": "credit_alphanum4",
+  "asset_code": "USDC",
+  "asset_issuer": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "paging_token": "USDC-GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "balances": {
+    "authorized": "700.0000000",
+    "authorized_to_maintain_liabilities": "100.0000000",
+    "unauthorized": "25.0000000"
+  },
+  "claimable_balances_amount": "50.0000000",
+  "liquidity_pools_amount": "75.0000000",
+  "contracts_amount": "50.0000000"
+}

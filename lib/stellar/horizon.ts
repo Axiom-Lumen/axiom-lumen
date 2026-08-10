@@ -89,7 +89,7 @@ function isRestrictedHostname(hostname: string) {
   return /^fe[89ab]/.test(normalized)
 }
 
-function assertEndpointAllowed(url: URL, policy: HorizonEndpointPolicy) {
+export function assertHorizonEndpointAllowed(url: URL, policy: HorizonEndpointPolicy) {
   if (url.username || url.password) throw new Error(`Horizon URL must not contain credentials: ${url.toString()}`)
   const hostname = url.hostname.toLowerCase()
   if (isRestrictedHostname(hostname)) throw new Error(`Horizon host is not allowed: ${hostname}`)
@@ -127,7 +127,7 @@ export function parseHorizonSources(
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error(`Horizon URL must use http or https: ${trimmed}`)
     }
-    assertEndpointAllowed(parsed, policy)
+    assertHorizonEndpointAllowed(parsed, policy)
 
     parsed.hash = ''
     parsed.search = ''
@@ -167,7 +167,7 @@ function assertFetchOptions({ sources, timeoutMs, maxResponseBytes, endpointPoli
     if (!['http:', 'https:'].includes(url.protocol)) {
       throw new Error(`Horizon URL must use http or https: ${source.url}`)
     }
-    assertEndpointAllowed(url, endpointPolicy)
+    assertHorizonEndpointAllowed(url, endpointPolicy)
     if (sourceIds.has(source.id)) throw new Error(`duplicate Horizon source ID: ${source.id}`)
     if (sourceUrls.has(source.url)) throw new Error(`duplicate Horizon source URL: ${source.url}`)
     sourceIds.add(source.id)
@@ -205,12 +205,12 @@ export function parseRetryAfter(value: string | null, now: string) {
   return Number.isFinite(target) && Number.isFinite(baseline) ? Math.max(0, target - baseline) : undefined
 }
 
-class ResponseTooLargeError extends Error {}
+export class HorizonResponseTooLargeError extends Error {}
 
-async function readBoundedJson(response: Response, maxResponseBytes: number): Promise<unknown> {
+export async function readBoundedHorizonJson(response: Response, maxResponseBytes: number): Promise<unknown> {
   const declaredLength = Number(response.headers.get('content-length'))
   if (Number.isFinite(declaredLength) && declaredLength > maxResponseBytes) {
-    throw new ResponseTooLargeError(`response exceeded ${maxResponseBytes} bytes`)
+    throw new HorizonResponseTooLargeError(`response exceeded ${maxResponseBytes} bytes`)
   }
   if (!response.body) return JSON.parse(await response.text()) as unknown
 
@@ -225,7 +225,7 @@ async function readBoundedJson(response: Response, maxResponseBytes: number): Pr
       bytesRead += value.byteLength
       if (bytesRead > maxResponseBytes) {
         await reader.cancel()
-        throw new ResponseTooLargeError(`response exceeded ${maxResponseBytes} bytes`)
+        throw new HorizonResponseTooLargeError(`response exceeded ${maxResponseBytes} bytes`)
       }
       text += decoder.decode(value, { stream: true })
     }
@@ -282,15 +282,15 @@ async function fetchHorizonRootMetadata(
     if (failure) return { sourceError: failure }
 
     try {
-      const payload = horizonRootPayloadSchema.parse(await readBoundedJson(response, maxResponseBytes))
+      const payload = horizonRootPayloadSchema.parse(await readBoundedHorizonJson(response, maxResponseBytes))
       return { networkPassphrase: payload.network_passphrase }
     } catch (error) {
       return {
         sourceError: sourceError({
           source,
-          code: error instanceof ResponseTooLargeError ? 'response_too_large' : 'malformed_payload',
+          code: error instanceof HorizonResponseTooLargeError ? 'response_too_large' : 'malformed_payload',
           message:
-            error instanceof ResponseTooLargeError
+            error instanceof HorizonResponseTooLargeError
               ? `Horizon root response exceeded ${maxResponseBytes} bytes`
               : 'Horizon root response did not match the expected schema',
           retrievedAt,
@@ -337,14 +337,14 @@ async function fetchHorizonLatestLedger(
 
     let payload: z.infer<typeof horizonLedgerPayloadSchema>
     try {
-      payload = horizonLedgerPayloadSchema.parse(await readBoundedJson(response, maxResponseBytes))
+      payload = horizonLedgerPayloadSchema.parse(await readBoundedHorizonJson(response, maxResponseBytes))
     } catch (error) {
       return {
         sourceError: sourceError({
           source,
-          code: error instanceof ResponseTooLargeError ? 'response_too_large' : 'malformed_payload',
+          code: error instanceof HorizonResponseTooLargeError ? 'response_too_large' : 'malformed_payload',
           message:
-            error instanceof ResponseTooLargeError
+            error instanceof HorizonResponseTooLargeError
               ? `Horizon ledger response exceeded ${maxResponseBytes} bytes`
               : 'Horizon response did not match the expected latest-ledger schema',
           retrievedAt,
