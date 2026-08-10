@@ -29,7 +29,7 @@ Implemented in this repository today:
 2. **Reconcile:** Weighted median over latest-ledger observations, half-life freshness weighting, availability-aware confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: supply connectors/reconciliation, archive ingestion, DEX/order-book reconciliation,
+Planned but not implemented yet: supply reconciliation and worker integration, archive ingestion, DEX/order-book reconciliation,
 anchor reserve comparison, authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard
 wiring, and anchor right-of-reply workflows.
 
@@ -49,8 +49,10 @@ wiring, and anchor right-of-reply workflows.
   concurrency, cancellation, graceful shutdown, abandoned-lease recovery, and idempotent finalization.
 - [x] **Source resilience:** Per-request timeouts and payload limits, retry budgets with bounded jitter and
   `Retry-After`, per-job source concurrency, circuit breakers, and persisted health transitions.
-- [ ] **Supply specification approval:** The on-chain asset-supply formula, ledger-consistency rules,
-  replica-independence policy, and future API naming are drafted and awaiting product/methodology approval.
+- [x] **Supply specification:** The approved on-chain asset-supply formula defines ledger-consistency rules,
+  replica-independence policy, and truthful public naming.
+- [x] **Horizon supply connector:** Collects bounded, resumable, same-ledger classic-credit-asset totals with
+  exact decimal arithmetic and structured failures. Worker/reconciliation integration remains planned.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.

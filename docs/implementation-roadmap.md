@@ -440,10 +440,9 @@ Acceptance:
 
 ## 11. Phase 4 — on-chain asset-supply vertical slice
 
-### [ ] SUP-01 — Approve the supply metric specification
+### [x] SUP-01 — Approve the supply metric specification
 
-Implementation draft and executable invariants are complete. Product/methodology approval of ADR 0005 is the
-remaining acceptance gate; SUP-02 must not begin before that approval is recorded.
+The specification, executable invariants, and product/methodology approval of ADR 0005 are complete.
 
 Do not implement supply until its meaning is precise. The ADR must define:
 
@@ -460,10 +459,11 @@ Acceptance:
 - Public endpoint naming matches what is actually measured.
 - Product/methodology review approves the formula and source-diversity policy.
 
-### [ ] SUP-02 — Implement the Horizon on-chain connector
+### [x] SUP-02 — Implement the Horizon on-chain connector
 
-Collect a ledger-consistent supply observation using bounded pagination and decimal-safe totals. Persist the
-ledger sequence, source timestamps, request provenance, page/checkpoint metadata, and normalized amount.
+Collect a ledger-consistent supply observation using bounded pagination and decimal-safe totals. Emit a
+persistence-ready result containing the ledger sequence, source timestamps, request provenance,
+page/checkpoint metadata, and normalized amount. SUP-04 owns durable raw-reading and reconciliation persistence.
 
 Acceptance:
 

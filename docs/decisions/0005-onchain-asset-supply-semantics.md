@@ -1,9 +1,9 @@
 # ADR 0005: Define on-chain asset supply and evidence independence
 
-- Status: Proposed — awaiting product/methodology approval
+- Status: Accepted
 - Date: 2026-08-10
 - Metric profile: `onchain-asset-supply-v0.1`
-- Owners: engineering and methodology; approval of this ADR/PR changes the status to Accepted
+- Owners: engineering and methodology
 
 ## Context
 

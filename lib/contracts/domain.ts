@@ -213,6 +213,7 @@ export const rawObservationSchema = z.discriminatedUnion('metric', [
 export type RawObservation = z.infer<typeof rawObservationSchema>
 
 export const sourceErrorCodeSchema = z.enum([
+  'invalid_asset',
   'invalid_configuration',
   'request_failed',
   'request_aborted',
@@ -223,6 +224,11 @@ export const sourceErrorCodeSchema = z.enum([
   'empty_records',
   'empty_ledger_records',
   'network_mismatch',
+  'issuer_not_found',
+  'asset_not_found',
+  'partial_scan',
+  'ledger_changed',
+  'duplicate_record',
   'stale_observation',
   'excluded_source',
 ])
