@@ -11,6 +11,7 @@ import {
   type PersistCompletedCycleInput,
 } from '../../lib/db/repositories'
 import * as schema from '../../lib/db/schema'
+import { queryLatestSupplyReadModel } from '../../lib/db/supply-read-model'
 import { computeEvidenceSha256 } from '../../lib/evidence/json'
 import type { ClaimedCycle, DiscoveredIngestJob } from '../../lib/db/scheduler-repository'
 import { createSupplyJobHandler } from '../../lib/worker/supply-job'
@@ -336,6 +337,80 @@ describeWithDatabase('transactional persistence repositories', () => {
       expect(await repositories.persistCompletedCycle(batch)).toEqual({ status: 'inserted', cycleId: lease.id })
       expect(await repositories.persistCompletedCycle(replay)).toEqual({ status: 'duplicate', cycleId: lease.id })
 
+      const databaseClient = { pool, db: drizzle({ client: pool, schema }) }
+      const readModel = await queryLatestSupplyReadModel(
+        databaseClient,
+        job.asset,
+        new Date('2026-08-10T12:00:05.000Z'),
+      )
+      expect(readModel).toMatchObject({
+        stale: false,
+        snapshot: {
+          metric: 'circulating_supply',
+          subject: { kind: 'asset', asset: job.asset },
+          status: 'degraded',
+          value: { kind: 'amount' },
+          sourcesConfigured: 2,
+          sourcesUsable: 2,
+          contributions: [
+            expect.objectContaining({ sourceId: 'source-a' }),
+            expect.objectContaining({ sourceId: 'source-archive' }),
+          ],
+          discrepancies: [],
+        },
+      })
+      expect((await queryLatestSupplyReadModel(
+        databaseClient,
+        job.asset,
+        new Date('2026-08-10T12:01:55.000Z'),
+      ))?.stale).toBe(false)
+      expect((await queryLatestSupplyReadModel(
+        databaseClient,
+        job.asset,
+        new Date('2026-08-10T12:01:55.001Z'),
+      ))?.stale).toBe(true)
+
+      await pool.query(`
+        UPDATE discrepancies
+        SET publication_state = 'approved_public', publication_updated_at = last_observed_at
+        WHERE metric = 'circulating_supply' AND subject_key = $1
+      `, [subjectKey])
+      const publicReadModel = await queryLatestSupplyReadModel(
+        databaseClient,
+        job.asset,
+        new Date('2026-08-10T12:00:05.000Z'),
+      )
+      expect(publicReadModel?.snapshot.discrepancies).toHaveLength(1)
+      const publicDiscrepancy = publicReadModel?.snapshot.discrepancies[0]
+      expect(publicDiscrepancy).toMatchObject({
+        sourceId: 'source-archive',
+        publicationState: 'approved_public',
+        observedValue: { kind: 'amount' },
+        referenceValue: { kind: 'amount' },
+        details: {
+          kind: 'supply_comparison',
+          observedLedgerSequence: 500,
+          referenceLedgerSequence: 500,
+          componentDifferences: [expect.objectContaining({ component: 'authorized_trustlines' })],
+        },
+      })
+      if (publicDiscrepancy?.details?.kind !== 'supply_comparison') {
+        throw new Error('expected supply discrepancy details')
+      }
+      expect(publicDiscrepancy.observedValue.value.toString()).toBe('1001')
+      expect(publicDiscrepancy.referenceValue.value.toString()).toBe('1000')
+      expect(publicDiscrepancy.details.componentDifferences.map((difference) => ({
+        component: difference.component,
+        observed: difference.observed.toString(),
+        reference: difference.reference.toString(),
+        absoluteDelta: difference.absoluteDelta.toString(),
+      }))).toEqual([{
+        component: 'authorized_trustlines',
+        observed: '701',
+        reference: '700',
+        absoluteDelta: '1',
+      }])
+
       const counts = await pool.query(`
         SELECT
           (SELECT count(*)::int FROM ingest_cycles) AS cycles,
@@ -360,6 +435,59 @@ describeWithDatabase('transactional persistence repositories', () => {
           }),
         }),
       ]))
+    } finally {
+      await pool.end()
+    }
+  })
+
+  it('reads completed supply cycles only and rejects snapshots missing their evidence context', async () => {
+    const pool = await createDatabase()
+    try {
+      const issuer = `G${'B'.repeat(55)}`
+      const assetId = `EURC:${issuer}`
+      const subjectKey = `public:${assetId}`
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+        VALUES ('asset-eurc', 'public', 'credit', 'EURC', $1, $2)
+      `, [issuer, assetId])
+      await pool.query(`
+        INSERT INTO ingest_cycles
+          (id, metric, subject_key, methodology_version, idempotency_key, status, scheduled_at, started_at)
+        VALUES
+          ('cycle-incomplete-supply', 'circulating_supply', $1, 'onchain-asset-supply-v0.1',
+           'incomplete-supply-cycle', 'running', '2026-08-10T12:00:00Z', '2026-08-10T12:00:00Z')
+      `, [subjectKey])
+      await pool.query(`
+        INSERT INTO reconciliation_snapshots
+          (id, cycle_id, metric, subject_key, status, subject, value, confidence,
+           confidence_formula_version, confidence_components, confidence_caps_applied, source_errors,
+           sources_configured, sources_responded, sources_usable, sources_agreeing, sources_excluded,
+           methodology_version, as_of)
+        VALUES
+          ('snapshot-incomplete-supply', 'cycle-incomplete-supply', 'circulating_supply', $1, 'degraded',
+           $2, '{"kind":"amount","value":"100"}', 0.6, 'onchain-asset-supply-confidence-v0.1',
+           '{"agreement":1,"freshness":1,"availability":1,"spread":1}', '[]', '[]',
+           1, 1, 1, 1, 0, 'onchain-asset-supply-v0.1', '2026-08-10T12:00:05Z')
+      `, [subjectKey, JSON.stringify({ kind: 'asset', asset: { kind: 'credit', code: 'EURC', issuer } })])
+      const databaseClient = { pool, db: drizzle({ client: pool, schema }) }
+      const asset = { kind: 'credit' as const, code: 'EURC', issuer }
+
+      expect(await queryLatestSupplyReadModel(
+        databaseClient,
+        asset,
+        new Date('2026-08-10T12:00:05.000Z'),
+      )).toBeNull()
+
+      await pool.query(`
+        UPDATE ingest_cycles
+        SET status = 'completed', completed_at = '2026-08-10T12:00:05Z'
+        WHERE id = 'cycle-incomplete-supply'
+      `)
+      await expect(queryLatestSupplyReadModel(
+        databaseClient,
+        asset,
+        new Date('2026-08-10T12:00:05.000Z'),
+      )).rejects.toThrow('contribution count does not match usable-source count')
     } finally {
       await pool.end()
     }
