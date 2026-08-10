@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { SOURCE_CLASS_IDS } from '../../config/methodology'
+import {
+  SOURCE_CLASS_IDS,
+  SUPPLY_METHODOLOGY_VERSION,
+} from '../../config/methodology'
 import { StellarAmount, parseStellarAmount } from '../stellar/amount'
 
 export const identifierSchema = z.string().min(1).max(128).regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/)
@@ -151,6 +154,90 @@ export const stellarAmountSchema = z.union([
   }),
 ])
 
+export const supplyComponentsSchema = z.object({
+  authorized_trustlines: stellarAmountSchema,
+  maintain_liabilities_trustlines: stellarAmountSchema,
+  unauthorized_trustlines: stellarAmountSchema,
+  claimable_balances: stellarAmountSchema,
+  liquidity_pools: stellarAmountSchema,
+  contract_balances: stellarAmountSchema,
+}).strict()
+
+export const supplyDerivationFamilySchema = z.enum([
+  'horizon_asset_aggregate',
+  'history_archive_state_replay',
+])
+
+const horizonSupplyCheckpointEvidenceSchema = z.object({
+  kind: z.literal('horizon_asset_page'),
+  ledgerSequence: z.number().int().safe().positive(),
+  terminalCursor: z.string().min(1),
+  pagesScanned: z.number().int().safe().positive(),
+  recordsScanned: z.literal(1),
+}).strict()
+
+const archiveSupplyCheckpointEvidenceSchema = z.object({
+  kind: z.literal('history_archive_replay'),
+  ledgerSequence: z.number().int().safe().positive(),
+  ledgerHash: z.string().regex(/^[0-9a-f]{64}$/),
+  trustedLedgerHash: z.string().regex(/^[0-9a-f]{64}$/),
+  bucketListHash: z.string().regex(/^[0-9a-f]{64}$/),
+  historyArchiveStateSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  trustedArtifactSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  trustProvenance: z.object({
+    manifestId: identifierSchema,
+    source: z.string().url(),
+    verificationMethod: z.enum(['trusted_manifest_signature', 'stellar_core_extra_verification']),
+    verificationEvidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    verifiedAt: utcTimestampSchema,
+  }).strict(),
+  replayStartLedger: z.number().int().safe().positive(),
+  replayEndLedger: z.number().int().safe().positive(),
+}).strict().superRefine((checkpoint, context) => {
+  if (checkpoint.replayStartLedger > checkpoint.replayEndLedger) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['replayStartLedger'],
+      message: 'archive replay cannot start after it ends',
+    })
+  }
+  if (checkpoint.replayEndLedger !== checkpoint.ledgerSequence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['replayEndLedger'],
+      message: 'archive replay must end at the observation ledger',
+    })
+  }
+  if (checkpoint.trustedLedgerHash !== checkpoint.ledgerHash) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['trustedLedgerHash'],
+      message: 'trusted checkpoint hash must match the replayed ledger hash',
+    })
+  }
+})
+
+export const supplyDerivationSchema = z.discriminatedUnion('family', [
+  z.object({
+    family: z.literal('horizon_asset_aggregate'),
+    connectorVersion: z.string().min(1).max(100),
+    evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    software: z.object({ name: z.literal('stellar-horizon'), version: z.string().min(1).max(100).nullable() }).strict(),
+    checkpoint: horizonSupplyCheckpointEvidenceSchema,
+  }).strict(),
+  z.object({
+    family: z.literal('history_archive_state_replay'),
+    connectorVersion: z.string().min(1).max(100),
+    evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    software: z.object({
+      name: z.string().min(1).max(100),
+      version: z.string().min(1).max(100),
+      stellarCoreVersion: z.string().min(1).max(100),
+    }).strict(),
+    checkpoint: archiveSupplyCheckpointEvidenceSchema,
+  }).strict(),
+])
+
 const observationBaseSchema = z.object({
   observationId: identifierSchema,
   cycleId: identifierSchema,
@@ -164,13 +251,62 @@ export const latestLedgerObservationSchema = observationBaseSchema
   })
   .strict()
 
-export const circulatingSupplyObservationSchema = observationBaseSchema
+const circulatingSupplyObservationObjectSchema = observationBaseSchema
   .extend({
     metric: z.literal('circulating_supply'),
-    asset: assetIdSchema,
+    asset: creditAssetSchema,
     amount: stellarAmountSchema,
+    components: supplyComponentsSchema,
+    ledgerSequence: z.number().int().safe().positive(),
+    methodologyVersion: z.literal(SUPPLY_METHODOLOGY_VERSION),
+    derivation: supplyDerivationSchema,
   })
   .strict()
+
+function validateCirculatingSupplyObservation(
+  observation: z.infer<typeof circulatingSupplyObservationObjectSchema>,
+  context: z.RefinementCtx,
+) {
+    if (observation.provenance.sourceTimestamp === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['provenance', 'sourceTimestamp'],
+        message: 'supply observation requires a closed-ledger source timestamp',
+      })
+    }
+    if (observation.derivation.checkpoint.ledgerSequence !== observation.ledgerSequence) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['derivation', 'checkpoint', 'ledgerSequence'],
+        message: 'derivation checkpoint must match the observation ledger',
+      })
+    }
+    const components = Object.values(observation.components) as StellarAmount[]
+    const total = components.reduce((sum, component) => sum.add(component), StellarAmount.fromStroops(0n))
+    if (!total.equals(observation.amount)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['amount'],
+        message: 'supply amount must equal the exact component total',
+      })
+    }
+    const source = observation.provenance.source
+    if (
+      (observation.derivation.family === 'horizon_asset_aggregate' &&
+        (source.adapter !== 'horizon' || source.sourceClass !== 'canonical_ledger')) ||
+      (observation.derivation.family === 'history_archive_state_replay' &&
+        (source.adapter !== 'archive' || source.sourceClass !== 'archive'))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['derivation', 'family'],
+        message: 'supply derivation family does not match its source identity',
+      })
+    }
+}
+
+export const circulatingSupplyObservationSchema = circulatingSupplyObservationObjectSchema
+  .superRefine(validateCirculatingSupplyObservation)
 
 export const orderBookDepthObservationSchema = observationBaseSchema
   .extend({
@@ -205,11 +341,14 @@ export const anchorReservesObservationSchema = observationBaseSchema
 
 export const rawObservationSchema = z.discriminatedUnion('metric', [
   latestLedgerObservationSchema,
-  circulatingSupplyObservationSchema,
+  circulatingSupplyObservationObjectSchema,
   orderBookDepthObservationSchema,
   trustlineCountObservationSchema,
   anchorReservesObservationSchema,
 ])
+  .superRefine((observation, context) => {
+    if (observation.metric === 'circulating_supply') validateCirculatingSupplyObservation(observation, context)
+  })
 export type RawObservation = z.infer<typeof rawObservationSchema>
 
 export const sourceErrorCodeSchema = z.enum([
@@ -229,6 +368,9 @@ export const sourceErrorCodeSchema = z.enum([
   'partial_scan',
   'ledger_changed',
   'duplicate_record',
+  'checkpoint_mismatch',
+  'artifact_integrity_mismatch',
+  'total_mismatch',
   'stale_observation',
   'excluded_source',
 ])

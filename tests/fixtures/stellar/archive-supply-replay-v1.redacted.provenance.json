@@ -1,0 +1,11 @@
+{
+  "fixture": "archive-supply-replay-v1.redacted.json",
+  "capture_type": "recorded_replay_tool_output",
+  "captured_at": "2026-08-10T12:00:01Z",
+  "artifact_sha256": "b742669c897c3f0ebedc1ef30dc34bb876539bc2de3b2968258239e59e65be98",
+  "redactions": [
+    "asset.issuer",
+    "derivation.replay_tool.name"
+  ],
+  "redaction_policy": "Identifiers only; ledger, component, total, and integrity fields are preserved from the capture."
+}
