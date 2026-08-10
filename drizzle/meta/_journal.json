@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786348667716,
+      "tag": "0000_flippant_magma",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786349414256,
+      "tag": "0001_outgoing_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786349420174,
+      "tag": "0002_dat02_append_only",
+      "breakpoints": true
+    }
+  ]
+}

@@ -38,6 +38,8 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 - [x] **Latest-ledger Horizon connector:** Reads latest ledger records from configured Horizon endpoints.
 - [x] **Latest-ledger reconciliation:** Weighted median, freshness decay, availability-aware confidence, status classification, discrepancies, and source errors.
 - [x] **Local API route:** `GET /api/v1/stellar/latest-ledger`.
+- [x] **Persistence foundation:** PostgreSQL schema, versioned Drizzle migrations, transactional cycle
+  repositories, content-hashed evidence, and database-enforced append-only audit history.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
 
@@ -47,7 +49,8 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 - [ ] **Supply API:** Planned; no `GET /v1/supply/{asset}` implementation yet.
 - [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
-- [ ] **Persistence/audit log:** Planned; no database schema or append-only discrepancy store yet.
+- [ ] **Worker/API persistence wiring:** Repositories and audit enforcement exist, but scheduler writes and public
+  persisted reads begin under ING-01 and the metric-specific API phases.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
 - [ ] **Right-of-reply tooling:** Described in product documentation, but not implemented in code.
@@ -170,6 +173,9 @@ npm test
 npm run test:integration
 npm run build
 ```
+
+PostgreSQL schema development, migration commands, isolated database tests, and the strict separation between
+runtime and migration credentials are documented in [docs/database.md](./docs/database.md).
 
 ---
 
