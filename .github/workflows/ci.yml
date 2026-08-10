@@ -22,6 +22,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: axiom
+          POSTGRES_PASSWORD: axiom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiom -d postgres"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,6 +61,14 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:integration
+
+      - name: Validate migration metadata
+        run: npm run db:check
+
+      - name: Run PostgreSQL migration tests
+        run: npm run test:database
+        env:
+          DATABASE_TEST_ADMIN_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
 
       - name: Build
         run: npm run build

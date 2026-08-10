@@ -379,7 +379,7 @@ Acceptance:
 
 ## 10. Phase 3 — persistence and background execution
 
-### [ ] DAT-01 — Select the persistence layer and create migrations
+### [x] DAT-01 — Select the persistence layer and create migrations
 
 Use PostgreSQL as required by the existing target architecture. Record an ADR for the migration/query tool;
 Drizzle with a PostgreSQL driver is a reasonable default for this TypeScript codebase, but the choice must be
@@ -400,7 +400,7 @@ Acceptance:
 - Foreign keys, unique idempotency keys, checks, UTC timestamps, and query indexes are explicit.
 - Production migrations are never run implicitly by a web request.
 
-### [ ] DAT-02 — Implement repositories and audit invariants
+### [x] DAT-02 — Implement repositories and audit invariants
 
 Use transaction boundaries to store a completed cycle, its readings, snapshot, and discrepancy events
 atomically. Raw payloads should be content-hashed; sensitive fields should be minimized or encrypted.
