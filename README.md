@@ -195,6 +195,11 @@ Shared cursor pagination defaults to 25 and is capped at 100 for future list end
 routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route
 has an explicit sunset policy. See [ADR 0006](./docs/decisions/0006-public-http-api-policy.md).
 
+The generated production OpenAPI 3.1 contract is available at
+[`openapi/openapi.json`](./openapi/openapi.json). Run `npm run openapi:generate` after public contract changes and
+`npm run openapi:check` to detect drift. The production paths include implemented routes only; see the
+[OpenAPI workflow](./docs/openapi.md).
+
 ---
 
 ## 4. Local Development
@@ -229,6 +234,10 @@ npm run test:integration
 npm run test:database
 npm run build
 ```
+
+Production builds use Next.js's supported webpack builder. This avoids Turbopack's internal CSS worker port
+binding, which is unavailable in restricted build environments; local development continues to use the default
+Next.js development builder.
 
 PostgreSQL schema development, migration commands, isolated database tests, and the strict separation between
 runtime and migration credentials are documented in [docs/database.md](./docs/database.md).

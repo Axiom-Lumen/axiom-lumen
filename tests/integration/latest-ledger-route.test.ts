@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiErrorResponseSchema } from '../../lib/contracts'
 import { latestLedgerResponseSchema, type LatestLedgerReconciliationResult } from '../../lib/reconcile/latest-ledger'
+import { expectOpenApiResponse } from '../helpers/openapi-response'
 
 const readModel = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('../../lib/db/latest-ledger-read-model', () => ({ loadLatestLedgerReadModel: readModel.load }))
 
 import { GET, OPTIONS, POST } from '../../app/api/v1/stellar/latest-ledger/route'
+
+const OPENAPI_PATH = '/api/v1/stellar/latest-ledger'
 
 const finalizedSnapshot: LatestLedgerReconciliationResult = latestLedgerResponseSchema.parse({
   metric: 'latest_ledger',
@@ -42,6 +45,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     const response = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger', {
       headers: { 'X-Request-ID': 'req_latest_1' },
     }))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(200)
@@ -59,6 +63,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     readModel.load.mockResolvedValue(null)
 
     const response = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger'))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(404)
@@ -75,6 +80,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     const response = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger'))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(503)
@@ -93,6 +99,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     const response = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger', {
       headers: { 'If-None-Match': etag.replace(/^W\//, '') },
     }))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
 
     expect(response.status).toBe(304)
     expect(await response.text()).toBe('')
@@ -101,12 +108,14 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
 
   it('rejects query parameters and invalid request IDs', async () => {
     const invalidQuery = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger?limit=10'))
+    await expectOpenApiResponse(invalidQuery.clone(), OPENAPI_PATH, 'get')
     expect(invalidQuery.status).toBe(400)
     expect((await invalidQuery.json()).error.code).toBe('invalid_query_parameter')
 
     const invalidRequestId = await GET(new Request('https://axiom.example/api/v1/stellar/latest-ledger', {
       headers: { 'X-Request-ID': 'contains spaces' },
     }))
+    await expectOpenApiResponse(invalidRequestId.clone(), OPENAPI_PATH, 'get')
     expect(invalidRequestId.status).toBe(400)
     expect((await invalidRequestId.json()).error.code).toBe('invalid_request_id')
     expect(readModel.load).not.toHaveBeenCalled()
@@ -117,6 +126,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
       method: 'OPTIONS',
       headers: { 'X-Request-ID': 'req_options' },
     }))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'options')
 
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe('*')
@@ -131,6 +141,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
       method: 'OPTIONS',
       headers: { 'X-Request-ID': 'invalid request id' },
     }))
+    await expectOpenApiResponse(invalidPreflight.clone(), OPENAPI_PATH, 'options')
     expect(invalidPreflight.status).toBe(400)
     expect((await invalidPreflight.json()).error.code).toBe('invalid_request_id')
 

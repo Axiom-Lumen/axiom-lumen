@@ -1,0 +1,2187 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Axiom Lumen Public API",
+    "version": "1.0.0",
+    "description": "Persisted Stellar reconciliation snapshots. The production specification includes implemented routes only.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current origin"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Ledger",
+      "description": "Latest closed-ledger reconciliation"
+    },
+    {
+      "name": "Supply",
+      "description": "Classic credit-asset on-chain supply reconciliation"
+    }
+  ],
+  "paths": {
+    "/api/v1/stellar/latest-ledger": {
+      "get": {
+        "operationId": "getLatestLedger",
+        "tags": [
+          "Ledger"
+        ],
+        "summary": "Get the latest finalized Public Network ledger snapshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current verified or degraded latest-ledger snapshot",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LatestLedgerResponse"
+                },
+                "examples": {
+                  "verified": {
+                    "$ref": "#/components/examples/LatestVerified"
+                  },
+                  "degraded": {
+                    "$ref": "#/components/examples/LatestDegraded"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation matches If-None-Match",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request header or query parameter",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  },
+                  "invalidQueryParameter": {
+                    "$ref": "#/components/examples/InvalidQueryParameter"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No finalized snapshot exists",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "missing": {
+                    "$ref": "#/components/examples/LatestMissingSnapshot"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Persisted metric state or read storage is unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LatestLedgerResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "unavailable": {
+                    "$ref": "#/components/examples/LatestUnavailable"
+                  },
+                  "readUnavailable": {
+                    "$ref": "#/components/examples/LatestReadUnavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "latestLedgerOptions",
+        "summary": "Inspect public read-only CORS policy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "CORS preflight accepted",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/supply/{asset}": {
+      "get": {
+        "operationId": "getSupply",
+        "tags": [
+          "Supply"
+        ],
+        "summary": "Get the latest finalized Public Network supply snapshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Asset"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current verified or degraded on-chain supply snapshot",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationSnapshot"
+                },
+                "examples": {
+                  "verified": {
+                    "$ref": "#/components/examples/SupplyVerified"
+                  },
+                  "degraded": {
+                    "$ref": "#/components/examples/SupplyDegraded"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation matches If-None-Match",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid asset, request header, or query parameter",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidAsset": {
+                    "$ref": "#/components/examples/InvalidAsset"
+                  },
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  },
+                  "invalidQueryParameter": {
+                    "$ref": "#/components/examples/InvalidQueryParameter"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No finalized snapshot exists for the asset",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "missing": {
+                    "$ref": "#/components/examples/SupplyMissingSnapshot"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Persisted metric state, evidence freshness, or read storage is unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReconciliationSnapshot"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "unavailable": {
+                    "$ref": "#/components/examples/SupplyUnavailable"
+                  },
+                  "readUnavailable": {
+                    "$ref": "#/components/examples/SupplyReadUnavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "supplyOptions",
+        "summary": "Inspect public read-only CORS policy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "CORS preflight accepted",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LatestLedgerResponse": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "const": "latest_ledger"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "confidence_formula_version": {
+            "type": "string",
+            "const": "latest-ledger-confidence-v0.2"
+          },
+          "confidence_components": {
+            "type": "object",
+            "properties": {
+              "agreement": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "freshness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "availability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "diversity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "spread": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "agreement",
+              "freshness",
+              "availability",
+              "diversity",
+              "spread"
+            ],
+            "additionalProperties": false
+          },
+          "confidence_caps_applied": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "sources_configured": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sources_responded": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sources_usable": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sources_agreeing": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sources_excluded": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "sourceUrl": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "ledgerSequence": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "exclusiveMinimum": 0
+                },
+                "closedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "retrievedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "baseWeight": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "sourceClass": {
+                  "type": "string",
+                  "enum": [
+                    "canonical_ledger",
+                    "archive",
+                    "dex",
+                    "anchor_self_reported",
+                    "third_party_oracle"
+                  ]
+                },
+                "upstreamId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ageSeconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "effectiveWeight": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "agrees": {
+                  "type": "boolean"
+                },
+                "ledgerDelta": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "sourceId",
+                "sourceUrl",
+                "ledgerSequence",
+                "closedAt",
+                "retrievedAt",
+                "ageSeconds",
+                "effectiveWeight",
+                "agrees",
+                "ledgerDelta"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "discrepancies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "source_url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "observed_value": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "exclusiveMinimum": 0
+                },
+                "delta_ledgers": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warning",
+                    "critical"
+                  ]
+                },
+                "closed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "retrieved_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "source",
+                "source_url",
+                "observed_value",
+                "delta_ledgers",
+                "severity",
+                "closed_at",
+                "retrieved_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "source_errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sourceId": {
+                  "type": "string"
+                },
+                "sourceUrl": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "retrievedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "status": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 599
+                }
+              },
+              "required": [
+                "sourceId",
+                "sourceUrl",
+                "code",
+                "message",
+                "retrievedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "methodology_version": {
+            "type": "string",
+            "const": "latest-ledger-v0.2"
+          }
+        },
+        "required": [
+          "metric",
+          "value",
+          "status",
+          "confidence",
+          "confidence_formula_version",
+          "confidence_components",
+          "confidence_caps_applied",
+          "sources_configured",
+          "sources_responded",
+          "sources_usable",
+          "sources_agreeing",
+          "sources_excluded",
+          "observations",
+          "discrepancies",
+          "source_errors",
+          "as_of",
+          "methodology_version"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationSnapshot": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "latest_ledger",
+              "onchain_asset_supply",
+              "order_book_depth",
+              "trustline_count",
+              "anchor_reserves"
+            ]
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "network"
+                  },
+                  "network": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "testnet",
+                      "futurenet",
+                      "standalone"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "network"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "asset"
+                  },
+                  "asset": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "asset"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "pair"
+                  },
+                  "base": {
+                    "type": "string"
+                  },
+                  "counter": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "base",
+                  "counter"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "ledger"
+                      },
+                      "value": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "amount"
+                      },
+                      "value": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "depth"
+                      },
+                      "value": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                      },
+                      "side": {
+                        "type": "string",
+                        "enum": [
+                          "bid",
+                          "ask"
+                        ]
+                      },
+                      "price_band_basis_points": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value",
+                      "side",
+                      "price_band_basis_points"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "count"
+                      },
+                      "value": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "confidence_formula_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "confidence_components": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "confidence_caps_applied": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "sources_configured": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sources_responded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sources_usable": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sources_agreeing": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sources_excluded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contributions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "observation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "source_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "source_class": {
+                  "type": "string",
+                  "enum": [
+                    "canonical_ledger",
+                    "archive",
+                    "dex",
+                    "anchor_self_reported",
+                    "third_party_oracle"
+                  ]
+                },
+                "age_seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "effective_weight": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "agrees": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "observation_id",
+                "source_id",
+                "source_class",
+                "age_seconds",
+                "effective_weight",
+                "agrees"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "discrepancies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "source_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warning",
+                    "critical"
+                  ]
+                },
+                "lifecycle_state": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "resolved"
+                  ]
+                },
+                "publication_state": {
+                  "type": "string",
+                  "const": "approved_public"
+                },
+                "consecutive_cycles": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "observed_value": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "ledger"
+                        },
+                        "value": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "amount"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "depth"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        },
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "bid",
+                            "ask"
+                          ]
+                        },
+                        "price_band_basis_points": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "side",
+                        "price_band_basis_points"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "count"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "reference_value": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "ledger"
+                        },
+                        "value": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "amount"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "depth"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        },
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "bid",
+                            "ask"
+                          ]
+                        },
+                        "price_band_basis_points": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "side",
+                        "price_band_basis_points"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "count"
+                        },
+                        "value": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "details": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "supply_comparison"
+                    },
+                    "observed_ledger_sequence": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "exclusiveMinimum": 0
+                    },
+                    "reference_ledger_sequence": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "exclusiveMinimum": 0
+                    },
+                    "observed_source_timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "reference_source_timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "component_differences": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "component": {
+                            "type": "string",
+                            "enum": [
+                              "authorized_trustlines",
+                              "maintain_liabilities_trustlines",
+                              "unauthorized_trustlines",
+                              "claimable_balances",
+                              "liquidity_pools",
+                              "contract_balances"
+                            ]
+                          },
+                          "observed": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                          },
+                          "reference": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                          },
+                          "absolute_delta": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                          }
+                        },
+                        "required": [
+                          "component",
+                          "observed",
+                          "reference",
+                          "absolute_delta"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 6
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "observed_ledger_sequence",
+                    "reference_ledger_sequence",
+                    "observed_source_timestamp",
+                    "reference_source_timestamp",
+                    "component_differences"
+                  ],
+                  "additionalProperties": false
+                },
+                "first_observed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "last_observed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "source_id",
+                "severity",
+                "lifecycle_state",
+                "publication_state",
+                "consecutive_cycles",
+                "observed_value",
+                "reference_value",
+                "first_observed_at",
+                "last_observed_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "source_errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source_url": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "invalid_asset",
+                    "invalid_configuration",
+                    "request_failed",
+                    "request_aborted",
+                    "non_200_response",
+                    "redirect_rejected",
+                    "response_too_large",
+                    "malformed_payload",
+                    "empty_records",
+                    "empty_ledger_records",
+                    "network_mismatch",
+                    "issuer_not_found",
+                    "asset_not_found",
+                    "partial_scan",
+                    "ledger_changed",
+                    "duplicate_record",
+                    "checkpoint_mismatch",
+                    "artifact_integrity_mismatch",
+                    "total_mismatch",
+                    "stale_observation",
+                    "excluded_source"
+                  ]
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "configuration",
+                    "transport",
+                    "http",
+                    "payload",
+                    "network",
+                    "freshness",
+                    "policy"
+                  ]
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "occurred_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "http_status": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 599
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "source_id",
+                "source_url",
+                "code",
+                "category",
+                "message",
+                "occurred_at",
+                "retryable"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "methodology_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+          },
+          "api_version": {
+            "type": "string",
+            "const": "v1"
+          }
+        },
+        "required": [
+          "metric",
+          "subject",
+          "status",
+          "value",
+          "confidence",
+          "confidence_formula_version",
+          "confidence_components",
+          "confidence_caps_applied",
+          "sources_configured",
+          "sources_responded",
+          "sources_usable",
+          "sources_agreeing",
+          "sources_excluded",
+          "contributions",
+          "discrepancies",
+          "source_errors",
+          "as_of",
+          "methodology_version",
+          "request_id",
+          "api_version"
+        ],
+        "additionalProperties": false
+      },
+      "ApiErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "api_version": {
+            "type": "string",
+            "const": "v1"
+          }
+        },
+        "required": [
+          "error",
+          "request_id",
+          "as_of",
+          "api_version"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "AuthenticationError": {
+        "description": "Reserved authentication failure response for future authenticated operations",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          },
+          "Access-Control-Allow-Origin": {
+            "$ref": "#/components/headers/CorsOrigin"
+          },
+          "Access-Control-Expose-Headers": {
+            "$ref": "#/components/headers/CorsExposeHeaders"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/Vary"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "authentication": {
+                "$ref": "#/components/examples/AuthenticationError"
+              }
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "description": "Reserved quota-exceeded response for future rate-limited operations",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          },
+          "Access-Control-Allow-Origin": {
+            "$ref": "#/components/headers/CorsOrigin"
+          },
+          "Access-Control-Expose-Headers": {
+            "$ref": "#/components/headers/CorsExposeHeaders"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/Vary"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "rateLimit": {
+                "$ref": "#/components/examples/RateLimitError"
+              }
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "Asset": {
+        "name": "asset",
+        "in": "path",
+        "required": true,
+        "description": "Canonical classic credit asset identifier CODE:ISSUER",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,12}:G[A-Z2-7]{55}$"
+        },
+        "example": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional caller correlation identifier; generated when absent",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+        }
+      },
+      "IfNoneMatch": {
+        "name": "If-None-Match",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "headers": {
+      "XRequestId": {
+        "description": "Request correlation identifier",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CacheControl": {
+        "description": "Private snapshot caching or no-store",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ETag": {
+        "description": "Weak complete-representation validator",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CorsOrigin": {
+        "description": "Public read-only origin policy",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "*"
+          ]
+        }
+      },
+      "CorsExposeHeaders": {
+        "description": "Response headers available to browsers",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CorsAllowHeaders": {
+        "description": "Headers accepted by CORS requests",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CorsAllowMethods": {
+        "description": "Methods accepted by CORS requests",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "GET, OPTIONS"
+          ]
+        }
+      },
+      "CorsMaxAge": {
+        "description": "Preflight cache lifetime in seconds",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "86400"
+          ]
+        }
+      },
+      "Vary": {
+        "description": "Cache representation varies by request identifier",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "X-Request-ID"
+          ]
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds until a quota-limited request may be retried",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "examples": {
+      "LatestVerified": {
+        "summary": "Verified latest ledger",
+        "value": {
+          "metric": "latest_ledger",
+          "value": 58000000,
+          "status": "verified",
+          "confidence": 0.96,
+          "confidence_formula_version": "latest-ledger-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 1,
+            "diversity": 1,
+            "spread": 1
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 2,
+          "sources_usable": 2,
+          "sources_agreeing": 2,
+          "sources_excluded": 0,
+          "observations": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "latest-ledger-v0.2"
+        }
+      },
+      "LatestDegraded": {
+        "summary": "Degraded latest ledger",
+        "value": {
+          "metric": "latest_ledger",
+          "value": 58000000,
+          "status": "degraded",
+          "confidence": 0.6,
+          "confidence_formula_version": "latest-ledger-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 0.5,
+            "diversity": 1,
+            "spread": 1
+          },
+          "confidence_caps_applied": [
+            "single_source"
+          ],
+          "sources_configured": 2,
+          "sources_responded": 1,
+          "sources_usable": 1,
+          "sources_agreeing": 1,
+          "sources_excluded": 0,
+          "observations": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "latest-ledger-v0.2"
+        }
+      },
+      "LatestUnavailable": {
+        "summary": "Unavailable latest ledger",
+        "value": {
+          "metric": "latest_ledger",
+          "value": null,
+          "status": "unavailable",
+          "confidence": 0,
+          "confidence_formula_version": "latest-ledger-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 0,
+            "freshness": 0,
+            "availability": 0,
+            "diversity": 0,
+            "spread": 0
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 0,
+          "sources_usable": 0,
+          "sources_agreeing": 0,
+          "sources_excluded": 2,
+          "observations": [],
+          "discrepancies": [],
+          "source_errors": [
+            {
+              "sourceId": "configuration",
+              "sourceUrl": "",
+              "code": "request_failed",
+              "message": "No current source evidence is usable",
+              "retrievedAt": "2026-08-10T12:00:00.000Z"
+            }
+          ],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "latest-ledger-v0.2"
+        }
+      },
+      "SupplyVerified": {
+        "summary": "Verified supply",
+        "value": {
+          "metric": "onchain_asset_supply",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "verified",
+          "value": {
+            "kind": "amount",
+            "value": "1000"
+          },
+          "confidence": 0.95,
+          "confidence_formula_version": "onchain-asset-supply-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 1,
+            "spread": 1
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 2,
+          "sources_usable": 2,
+          "sources_agreeing": 2,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "onchain-asset-supply-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "SupplyDegraded": {
+        "summary": "Degraded supply",
+        "value": {
+          "metric": "onchain_asset_supply",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "degraded",
+          "value": {
+            "kind": "amount",
+            "value": "1000"
+          },
+          "confidence": 0.6,
+          "confidence_formula_version": "onchain-asset-supply-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 0.5,
+            "spread": 1
+          },
+          "confidence_caps_applied": [
+            "single_source"
+          ],
+          "sources_configured": 2,
+          "sources_responded": 1,
+          "sources_usable": 1,
+          "sources_agreeing": 1,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "onchain-asset-supply-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "SupplyUnavailable": {
+        "summary": "Unavailable or stale supply",
+        "value": {
+          "metric": "onchain_asset_supply",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "unavailable",
+          "value": null,
+          "confidence": 0,
+          "confidence_formula_version": "onchain-asset-supply-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 0,
+            "freshness": 0,
+            "availability": 0,
+            "spread": 0
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 0,
+          "sources_usable": 0,
+          "sources_agreeing": 0,
+          "sources_excluded": 2,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [
+            {
+              "source_id": null,
+              "source_url": null,
+              "code": "stale_observation",
+              "category": "freshness",
+              "message": "Latest finalized supply evidence exceeds 120 seconds",
+              "occurred_at": "2026-08-10T12:00:00.000Z",
+              "retryable": false
+            }
+          ],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "onchain-asset-supply-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "InvalidRequestId": {
+        "summary": "Invalid request identifier",
+        "value": {
+          "error": {
+            "code": "invalid_request_id",
+            "message": "X-Request-ID must be a valid identifier of at most 128 characters"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "InvalidQueryParameter": {
+        "summary": "Unsupported query parameter",
+        "value": {
+          "error": {
+            "code": "invalid_query_parameter",
+            "message": "Unsupported query parameter: limit"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "InvalidAsset": {
+        "summary": "Invalid supply asset",
+        "value": {
+          "error": {
+            "code": "invalid_asset",
+            "message": "Asset must be a canonical CODE:ISSUER credit-asset identifier"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "LatestMissingSnapshot": {
+        "summary": "No finalized latest-ledger snapshot",
+        "value": {
+          "error": {
+            "code": "latest_ledger_snapshot_not_found",
+            "message": "No finalized latest-ledger snapshot is available"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "SupplyMissingSnapshot": {
+        "summary": "No finalized supply snapshot",
+        "value": {
+          "error": {
+            "code": "supply_snapshot_not_found",
+            "message": "No finalized supply snapshot is available"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "LatestReadUnavailable": {
+        "summary": "Latest-ledger read storage unavailable",
+        "value": {
+          "error": {
+            "code": "latest_ledger_read_unavailable",
+            "message": "The latest-ledger read model is temporarily unavailable"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "SupplyReadUnavailable": {
+        "summary": "Supply read storage unavailable",
+        "value": {
+          "error": {
+            "code": "supply_read_unavailable",
+            "message": "The supply read model is temporarily unavailable"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "AuthenticationError": {
+        "summary": "Reserved example for future authenticated operations; no production path currently references it",
+        "value": {
+          "error": {
+            "code": "authentication_required",
+            "message": "A valid API credential is required"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "RateLimitError": {
+        "summary": "Reserved example for future quota enforcement; no production path currently references it",
+        "value": {
+          "error": {
+            "code": "rate_limit_exceeded",
+            "message": "The request quota has been exceeded"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      }
+    }
+  }
+}

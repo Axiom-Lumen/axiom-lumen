@@ -5,6 +5,7 @@ import {
   reconciliationSnapshotSchema,
 } from '../../lib/contracts'
 import type { SupplyReadModel } from '../../lib/db/supply-read-model'
+import { expectOpenApiResponse } from '../helpers/openapi-response'
 
 const readModel = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('../../lib/db/supply-read-model', () => ({ loadLatestSupplyReadModel: readModel.load }))
@@ -13,6 +14,7 @@ import { GET, OPTIONS, POST } from '../../app/api/v1/supply/[asset]/route'
 
 const ISSUER = `G${'A'.repeat(55)}`
 const ASSET = `USDC:${ISSUER}`
+const OPENAPI_PATH = '/api/v1/supply/{asset}'
 
 function finalizedSnapshot(status: 'verified' | 'degraded' | 'unavailable' = 'verified'): SupplyReadModel['snapshot'] {
   return reconciliationSnapshotSchema.parse({
@@ -85,6 +87,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false, freshForSeconds: 110 })
 
     const response = await request(ASSET, { headers: { 'X-Request-ID': 'req_supply_1' } })
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(200)
@@ -110,6 +113,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('degraded'), stale: false, freshForSeconds: 110 })
 
     const response = await request()
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(200)
@@ -120,6 +124,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('unavailable'), stale: false, freshForSeconds: 110 })
 
     const response = await request()
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(503)
@@ -132,6 +137,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: true, freshForSeconds: 0 })
 
     const response = await request()
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(503)
@@ -157,6 +163,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     readModel.load.mockResolvedValue(null)
 
     const response = await request()
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(404)
@@ -169,6 +176,7 @@ describe('GET /api/v1/supply/{asset}', () => {
 
   it.each(['native', 'usdc:not-an-issuer', `usdc:${ISSUER}`, 'USDC'])('rejects malformed or unsupported asset %s', async (asset) => {
     const response = await request(asset)
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(400)
@@ -182,6 +190,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     const response = await request()
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
 
     expect(response.status).toBe(503)
@@ -207,6 +216,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     const response = await request(ASSET, {
       headers: { 'If-None-Match': etag, 'X-Request-ID': 'req_supply_a' },
     })
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
 
     expect(response.status).toBe(304)
     expect(await response.text()).toBe('')
@@ -226,20 +236,23 @@ describe('GET /api/v1/supply/{asset}', () => {
 
   it('rejects query parameters and invalid request IDs before reading storage', async () => {
     const invalidQuery = await request(ASSET, undefined, '?cursor=unexpected')
+    await expectOpenApiResponse(invalidQuery.clone(), OPENAPI_PATH, 'get')
     expect(invalidQuery.status).toBe(400)
     expect((await invalidQuery.json()).error.code).toBe('invalid_query_parameter')
 
     const invalidRequestId = await request(ASSET, { headers: { 'X-Request-ID': 'contains spaces' } })
+    await expectOpenApiResponse(invalidRequestId.clone(), OPENAPI_PATH, 'get')
     expect(invalidRequestId.status).toBe(400)
     expect((await invalidRequestId.json()).error.code).toBe('invalid_request_id')
     expect(readModel.load).not.toHaveBeenCalled()
   })
 
-  it('answers CORS preflight with the standardized policy', () => {
+  it('answers CORS preflight with the standardized policy', async () => {
     const response = OPTIONS(new Request(`https://axiom.example/api/v1/supply/${ASSET}`, {
       method: 'OPTIONS',
       headers: { 'X-Request-ID': 'req_supply_options' },
     }))
+    await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'options')
 
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe('*')
@@ -253,6 +266,7 @@ describe('GET /api/v1/supply/{asset}', () => {
       method: 'OPTIONS',
       headers: { 'X-Request-ID': 'invalid request id' },
     }))
+    await expectOpenApiResponse(invalidPreflight.clone(), OPENAPI_PATH, 'options')
     expect(invalidPreflight.status).toBe(400)
     expect((await invalidPreflight.json()).error.code).toBe('invalid_request_id')
     expect(invalidPreflight.headers.get('access-control-allow-methods')).toBe('GET, OPTIONS')
