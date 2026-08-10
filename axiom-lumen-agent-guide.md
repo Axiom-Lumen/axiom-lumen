@@ -103,7 +103,7 @@ Every metric endpoint must return this shape (fields are not optional):
 
 ```json
 {
-  "metric": "circulating_supply",
+  "metric": "onchain_asset_supply",
   "asset": "USDC:GA5Z...",
   "value": "48213092.44",
   "confidence": 0.94,

@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 const plannedEndpoints = [
   {
     method: 'GET',
-    path: '/v1/supply/{asset}',
-    name: 'Circulating supply',
-    desc: 'Planned: cross-verified circulating supply for Stellar assets with per-source readings.',
+    path: '/api/v1/supply/{asset}',
+    name: 'On-chain asset supply',
+    desc: 'Planned: ledger-consistent credit-asset supply with explicit scope and per-source derivations.',
   },
   {
     method: 'GET',

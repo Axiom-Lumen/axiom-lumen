@@ -44,8 +44,8 @@ dependencies are complete and doing so does not create a second implementation o
   discrepancy events are implemented for the latest-ledger slice.
 - Per-source retry budgets, bounded backoff, circuit breakers, concurrency/response limits, and durable health
   projections are implemented for the latest-ledger worker.
-- Supply, trustline, DEX depth, anchor reserve, authentication, rate limiting, streaming, and operational
-  status surfaces remain planned.
+- Supply connectors/reconciliation, trustline, DEX depth, anchor reserve, authentication, rate limiting,
+  streaming, and operational status surfaces remain planned.
 - Several broader product surfaces remain static or planned; current status is maintained in the README and this
   roadmap rather than the historical issue backlog.
 - `tsconfig.tsbuildinfo` is tracked even though it is generated build output.
@@ -438,9 +438,12 @@ Acceptance:
 - Retry behavior is deterministic under a fake clock/random source.
 - Health records distinguish unreachable, rejected, malformed, stale, network-mismatched, and healthy states.
 
-## 11. Phase 4 — circulating-supply vertical slice
+## 11. Phase 4 — on-chain asset-supply vertical slice
 
 ### [ ] SUP-01 — Approve the supply metric specification
+
+Implementation draft and executable invariants are complete. Product/methodology approval of ADR 0005 is the
+remaining acceptance gate; SUP-02 must not begin before that approval is recorded.
 
 Do not implement supply until its meaning is precise. The ADR must define:
 

@@ -20,6 +20,11 @@ misspelled fields cannot silently enter reconciliation.
 - Transport and validation failures use `SourceError`; they are not discrepancies.
 - Observations are discriminated by metric so a supply amount cannot be consumed as a ledger sequence.
 
+The internal supply discriminator remains `circulating_supply` for domain/database compatibility. Public v1
+serialization maps it to `onchain_asset_supply`, the scope-accurate ID approved by ADR 0005. The canonical
+future endpoint is `/api/v1/supply/{asset}` and supports classic credit assets only under
+`onchain-asset-supply-v0.1`; native XLM requires a separate profile.
+
 ## Asset identifiers
 
 Assets are either:

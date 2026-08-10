@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   METHODOLOGY_VERSION,
   SOURCE_CLASS_IDS,
+  SUPPLY_COMPONENT_IDS,
+  SUPPLY_METHODOLOGY_VERSION,
   methodologyConfig,
+  supplyMethodologyConfig,
   validateMethodologyConfig,
+  validateSupplyMethodologyConfig,
 } from '../../config/methodology'
 
 describe('methodology v1.5 configuration', () => {
@@ -89,5 +93,36 @@ describe('methodology v1.5 configuration', () => {
     expect(Object.isFrozen(methodologyConfig)).toBe(true)
     expect(Object.isFrozen(methodologyConfig.sourceClasses)).toBe(true)
     expect(Object.isFrozen(methodologyConfig.metrics.latestLedger.confidence)).toBe(true)
+  })
+
+  it('defines the complete on-chain asset-supply v0.1 scope', () => {
+    expect(SUPPLY_METHODOLOGY_VERSION).toBe('onchain-asset-supply-v0.1')
+    expect(supplyMethodologyConfig).toMatchObject({
+      domainMetricId: 'circulating_supply',
+      publicMetricId: 'onchain_asset_supply',
+      publicLabel: 'On-chain asset supply',
+      canonicalPath: '/api/v1/supply/{asset}',
+      supportedAssetKinds: ['credit'],
+      amountDecimals: 7,
+      comparisonToleranceStroops: 0,
+      minimumIndependentDerivations: 2,
+      horizonReplicasAreIndependent: false,
+      nativeAssetPolicy: 'unsupported_requires_native_specific_profile',
+    })
+    expect(supplyMethodologyConfig.includedComponents).toEqual(SUPPLY_COMPONENT_IDS)
+    expect(Object.isFrozen(supplyMethodologyConfig)).toBe(true)
+    expect(Object.isFrozen(supplyMethodologyConfig.includedComponents)).toBe(true)
+  })
+
+  it('rejects partial supply formulas and replica inflation', () => {
+    const partial = structuredClone(supplyMethodologyConfig)
+    partial.includedComponents = partial.includedComponents.slice(0, -1)
+    expect(() => validateSupplyMethodologyConfig(partial)).toThrow(/every ledger container exactly once/)
+
+    const replicaInflation = {
+      ...structuredClone(supplyMethodologyConfig),
+      horizonReplicasAreIndependent: true,
+    } as unknown as Parameters<typeof validateSupplyMethodologyConfig>[0]
+    expect(() => validateSupplyMethodologyConfig(replicaInflation)).toThrow(/replicas/)
   })
 })

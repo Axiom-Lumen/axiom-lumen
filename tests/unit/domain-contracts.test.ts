@@ -220,6 +220,26 @@ describe('API contracts', () => {
     expect(serializePublicReconciliationSnapshot(snapshot, 'req_2').discrepancies).toEqual([])
   })
 
+  it('uses the scope-accurate public metric ID for supply snapshots', () => {
+    const supplySnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      metric: 'circulating_supply',
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: { kind: 'amount', value: '1000' },
+      discrepancies: [],
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+    })
+    const publicSupply = serializePublicReconciliationSnapshot(supplySnapshot, 'req_supply')
+
+    expect(publicSupply).toMatchObject({
+      metric: 'onchain_asset_supply',
+      subject: { kind: 'asset', asset: `USDC:${ISSUER}` },
+      value: { kind: 'amount', value: '1000' },
+      methodology_version: 'onchain-asset-supply-v0.1',
+    })
+    expect(() => apiReconciliationSnapshotSchema.parse({ ...publicSupply, metric: 'circulating_supply' })).toThrow()
+  })
+
   it('serializes bigint counts and amounts as strings', () => {
     const countSnapshot = reconciliationSnapshotSchema.parse({
       ...snapshotInput(),

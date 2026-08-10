@@ -1,18 +1,26 @@
 import { z } from 'zod'
 import {
   type MetricValue,
+  type MetricId,
   type MetricSubject,
   type ReconciliationSnapshot,
   formatAssetId,
   httpUrlSchema,
   identifierSchema,
-  metricIdSchema,
   networkIdSchema,
   parseAssetId,
   sourceClassSchema,
   sourceErrorCodeSchema,
   utcTimestampSchema,
 } from './domain'
+
+const apiMetricIdSchema = z.enum([
+  'latest_ledger',
+  'onchain_asset_supply',
+  'order_book_depth',
+  'trustline_count',
+  'anchor_reserves',
+])
 
 const apiAssetIdSchema = z.string().superRefine((value, context) => {
   try {
@@ -110,7 +118,7 @@ const apiDiscrepancySchema = z
 
 export const apiReconciliationSnapshotSchema = z
   .object({
-    metric: metricIdSchema,
+    metric: apiMetricIdSchema,
     subject: apiMetricSubjectSchema,
     status: z.enum(['verified', 'degraded', 'unavailable']),
     value: apiMetricValueSchema.nullable(),
@@ -138,14 +146,14 @@ export const apiReconciliationSnapshotSchema = z
   .superRefine((snapshot, context) => {
     const expectedValueKind = {
       latest_ledger: 'ledger',
-      circulating_supply: 'amount',
+      onchain_asset_supply: 'amount',
       order_book_depth: 'depth',
       trustline_count: 'count',
       anchor_reserves: 'amount',
     }[snapshot.metric]
     const expectedSubjectKind = {
       latest_ledger: 'network',
-      circulating_supply: 'asset',
+      onchain_asset_supply: 'asset',
       order_book_depth: 'pair',
       trustline_count: 'asset',
       anchor_reserves: 'asset',
@@ -244,13 +252,17 @@ function serializeMetricSubject(subject: MetricSubject): z.infer<typeof apiMetri
   }
 }
 
+function serializeMetricId(metric: MetricId): z.infer<typeof apiMetricIdSchema> {
+  return metric === 'circulating_supply' ? 'onchain_asset_supply' : metric
+}
+
 /** The only domain camelCase → public snake_case adapter; non-public discrepancies are omitted. */
 export function serializePublicReconciliationSnapshot(
   snapshot: ReconciliationSnapshot,
   requestId: string,
 ): ApiReconciliationSnapshot {
   return apiReconciliationSnapshotSchema.parse({
-    metric: snapshot.metric,
+    metric: serializeMetricId(snapshot.metric),
     subject: serializeMetricSubject(snapshot.subject),
     status: snapshot.status,
     value: snapshot.value ? serializeMetricValue(snapshot.value) : null,
