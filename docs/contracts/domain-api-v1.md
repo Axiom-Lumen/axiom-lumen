@@ -114,6 +114,10 @@ explicit: a deprecated route must emit `Deprecation`, `Sunset`, and a successor 
 deprecated. Full rationale and status mapping are in
 [`ADR 0006`](../decisions/0006-public-http-api-policy.md).
 
+The generated OpenAPI 3.1 artifact derives its response components from these runtime schemas. Its examples are
+parsed here before generation, and CI rejects any artifact that differs from deterministic regeneration. Planned
+operations are absent from production `paths`; see the [OpenAPI workflow](../openapi.md).
+
 ## API compatibility
 
 `tests/fixtures/contracts/reconciliation-snapshot-v1.json` is the initial serialized compatibility fixture.

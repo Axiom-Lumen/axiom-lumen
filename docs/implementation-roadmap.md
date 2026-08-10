@@ -521,7 +521,7 @@ Acceptance:
 - Route tests assert headers as well as bodies.
 - Internal exception details and secrets never appear in responses.
 
-### [ ] API-03 — Publish OpenAPI 3.1 and enforce contract parity
+### [x] API-03 — Publish OpenAPI 3.1 and enforce contract parity
 
 Generate or validate the specification from shared runtime schemas. Include examples for verified, degraded,
 unavailable, validation error, authentication error, and rate limit responses.
