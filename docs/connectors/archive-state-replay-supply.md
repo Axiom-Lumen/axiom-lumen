@@ -47,8 +47,8 @@ This makes Horizon and a verified archive replay comparable at the same ledger w
 to masquerade as independent derivations. `assessSupplyEvidence` exposes the resulting status ceiling: exact
 asset, network, cycle, ledger, close-time, total, and component-vector agreement across Horizon and archive
 derivations is verification-eligible, while replicas, incompatible scopes, or disagreement are capped at
-degraded. The adapters perform no weighted reconciliation; SUP-04 owns the final
-status, confidence, discrepancies, and persistence.
+degraded. The adapters perform no weighted reconciliation; the SUP-04 worker pipeline owns the final status,
+confidence, discrepancies, and persistence.
 
 Anchor-published values are intentionally unsupported here. They remain contextual, cannot satisfy the second
 independent derivation requirement, and require ANC-01's verified `stellar.toml` discovery before ingestion.

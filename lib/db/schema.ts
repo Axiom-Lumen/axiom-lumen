@@ -227,6 +227,8 @@ export const scheduledCycleLeases = pgTable(
     subjectKey: text('subject_key').notNull(),
     methodologyVersion: text('methodology_version').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
+    jobDefinition: jsonb('job_definition').$type<Record<string, unknown>>(),
+    jobDefinitionSha256: text('job_definition_sha256'),
     scheduledAt: utcTimestamp('scheduled_at').notNull(),
     status: ingestCycleStatusEnum('status').notNull().default('pending'),
     leaseOwner: text('lease_owner'),
@@ -253,6 +255,11 @@ export const scheduledCycleLeases = pgTable(
     check(
       'scheduled_cycle_leases_counts_check',
       sql`${table.leaseToken} >= 0 AND ${table.attemptCount} >= 0`,
+    ),
+    check(
+      'scheduled_cycle_leases_job_definition_check',
+      sql`(${table.jobDefinition} IS NULL AND ${table.jobDefinitionSha256} IS NULL) OR
+          (${table.jobDefinition} IS NOT NULL AND ${table.jobDefinitionSha256} ~ '^[0-9a-f]{64}$')`,
     ),
     check(
       'scheduled_cycle_leases_ownership_check',

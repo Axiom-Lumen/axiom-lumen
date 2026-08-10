@@ -189,6 +189,52 @@ describeWithDatabase('scheduler leases', () => {
           networkPassphrase: 'Public Global Stellar Network ; September 2015',
         }],
       }])
+      const canonicalAsset = `USDC:G${'A'.repeat(55)}`
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+        VALUES ('asset-usdc', 'public', 'credit', 'USDC', $1, $2)
+      `, [`G${'A'.repeat(55)}`, canonicalAsset])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = '{"supply":{"enabled":true,"assetIds":["asset-usdc"]}}'
+        WHERE id = 'source-a'
+      `)
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, source_class, adapter, url, config)
+        VALUES (
+          'archive-a', 'public', 'archive', 'archive', 'https://archive.example/usdc.json',
+          '{"supply":{"enabled":true,"assetIds":["asset-usdc"],"trustedCheckpoints":{"asset-usdc":{"ledgerSequence":500}}}}'
+        )
+      `)
+      expect(await repository.discoverSupplyJobs('onchain-asset-supply-v0.1')).toEqual([{
+        metric: 'circulating_supply',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'onchain-asset-supply-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [
+          expect.objectContaining({ id: 'archive-a', adapter: 'archive', trustedCheckpoint: { ledgerSequence: 500 } }),
+          expect.objectContaining({ id: 'source-a', adapter: 'horizon' }),
+        ],
+      }])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = '{"supply":{"enabled":true,"assetIds":"asset-usdc"}}'
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverSupplyJobs('onchain-asset-supply-v0.1')).toEqual([{
+        metric: 'circulating_supply',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'onchain-asset-supply-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [
+          expect.objectContaining({ id: 'archive-a', adapter: 'archive' }),
+          expect.objectContaining({
+            id: 'source-a',
+            adapter: 'horizon',
+            configurationError: 'Supply source configuration is malformed',
+          }),
+        ],
+      }])
       await pool.query(`
         INSERT INTO ingest_cycles
           (id, metric, subject_key, methodology_version, idempotency_key, status, scheduled_at, started_at, completed_at)

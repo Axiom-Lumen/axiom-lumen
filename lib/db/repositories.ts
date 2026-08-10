@@ -4,6 +4,8 @@ import {
   persistedDiscrepancyStateSchema,
   reconciliationSnapshotSchema,
   sourceIdentitySchema,
+  formatAssetId,
+  networkIdSchema,
   type PersistedDiscrepancyState,
   type ReconciliationSnapshot,
   type SourceIdentity,
@@ -71,6 +73,12 @@ function normalizeJsonObject(value: unknown, redactSensitive = false): Record<st
     throw new Error('value must normalize to a JSON object')
   }
   return normalized
+}
+
+function canonicalDatabaseTimestamp(value: string) {
+  const parsed = new Date(value)
+  if (!Number.isFinite(parsed.getTime())) throw new Error('database returned an invalid timestamp')
+  return parsed.toISOString()
 }
 
 export function computePayloadSha256(value: unknown) {
@@ -184,6 +192,14 @@ function assertSnapshotMatchesCycle(snapshot: ReconciliationSnapshot, cycle: Com
     throw new Error('snapshot methodologyVersion must match the completed cycle')
   }
   if (snapshot.asOf !== cycle.completedAt) throw new Error('snapshot asOf must match the completed cycle timestamp')
+  if (
+    cycle.metric === 'circulating_supply' &&
+    (
+      snapshot.subject.kind !== 'asset' ||
+      !cycle.subjectKey.endsWith(`:${formatAssetId(snapshot.subject.asset)}`) ||
+      !networkIdSchema.safeParse(cycle.subjectKey.split(':', 1)[0]).success
+    )
+  ) throw new Error('supply snapshot asset must match the completed cycle subject')
 }
 
 function sameCycleIdentity(existing: typeof ingestCycles.$inferSelect, requested: CompletedCycleRecord) {
@@ -213,6 +229,10 @@ export function createPersistenceRepositories(client: DatabaseClient) {
         if (input.cycle.metric === 'latest_ledger' && identity.network.id !== input.cycle.subjectKey) {
           throw new Error(`reading ${reading.id} source network does not match the cycle subject`)
         }
+        if (
+          input.cycle.metric === 'circulating_supply' &&
+          identity.network.id !== input.cycle.subjectKey.split(':', 1)[0]
+        ) throw new Error(`reading ${reading.id} source network does not match the supply cycle subject`)
         return [reading.id, identity]
       }))
       const states = Object.values(input.discrepancyStates).map((state) => persistedDiscrepancyStateSchema.parse(state))
@@ -529,11 +549,11 @@ export function createPersistenceRepositories(client: DatabaseClient) {
             replyReviewState: row.replyReviewState,
             consecutiveCycles: row.consecutiveCycles,
             consecutiveAboveInfoCycles: row.consecutiveAboveInfoCycles,
-            firstObservedAt: row.firstObservedAt,
-            lastObservedAt: row.lastObservedAt,
+            firstObservedAt: canonicalDatabaseTimestamp(row.firstObservedAt),
+            lastObservedAt: canonicalDatabaseTimestamp(row.lastObservedAt),
             lastFinalizedCycleId: row.lastFinalizedCycleId,
-            lastFinalizedCycleAt: row.lastFinalizedCycleAt,
-            publicationUpdatedAt: row.publicationUpdatedAt,
+            lastFinalizedCycleAt: canonicalDatabaseTimestamp(row.lastFinalizedCycleAt),
+            publicationUpdatedAt: canonicalDatabaseTimestamp(row.publicationUpdatedAt),
           }),
         ]),
       )

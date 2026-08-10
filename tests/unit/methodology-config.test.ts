@@ -108,8 +108,22 @@ describe('methodology v1.5 configuration', () => {
       minimumIndependentDerivations: 2,
       horizonReplicasAreIndependent: false,
       nativeAssetPolicy: 'unsupported_requires_native_specific_profile',
+      freshnessHalfLifeSeconds: 30,
+      maximumObservationAgeSeconds: 120,
     })
     expect(supplyMethodologyConfig.includedComponents).toEqual(SUPPLY_COMPONENT_IDS)
+    expect(supplyMethodologyConfig.sourceClassBaseWeights).toEqual({
+      canonical_ledger: 1,
+      archive: 0.9,
+      dex: 0.85,
+      anchor_self_reported: 0.5,
+      third_party_oracle: 0.4,
+    })
+    expect(supplyMethodologyConfig.confidence).toMatchObject({
+      formulaVersion: 'onchain-asset-supply-confidence-v0.1',
+      verifiedThreshold: 0.9,
+      sameDerivationCap: 0.7,
+    })
     expect(Object.isFrozen(supplyMethodologyConfig)).toBe(true)
     expect(Object.isFrozen(supplyMethodologyConfig.includedComponents)).toBe(true)
   })

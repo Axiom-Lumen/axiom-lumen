@@ -100,7 +100,20 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(5)
+      expect(migrationRows.rows[0]?.count).toBe(6)
+
+      const leaseSnapshotColumns = await pool.query<{ column_name: string; data_type: string }>(
+        `SELECT column_name, data_type
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'scheduled_cycle_leases'
+           AND column_name IN ('job_definition', 'job_definition_sha256')
+         ORDER BY column_name`,
+      )
+      expect(leaseSnapshotColumns.rows).toEqual([
+        { column_name: 'job_definition', data_type: 'jsonb' },
+        { column_name: 'job_definition_sha256', data_type: 'text' },
+      ])
 
       const utcColumns = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count

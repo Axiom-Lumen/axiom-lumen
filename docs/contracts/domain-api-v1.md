@@ -28,8 +28,15 @@ future endpoint is `/api/v1/supply/{asset}` and supports classic credit assets o
 Supply observations additionally require the closed ledger, all six exact component amounts, methodology
 version, evidence digest, connector/software versions, and a typed derivation checkpoint. Archive checkpoints
 also retain the independently trusted artifact digest and manifest identity, source, verification method,
-verification-proof digest, and verification time. Horizon aggregates and history-archive state replays use distinct derivation families bound
-to their permitted source identity; changing only a Horizon hostname does not create independent evidence.
+verification-proof digest, and verification time. Horizon aggregates and history-archive state replays use
+distinct derivation families bound to their permitted source identity; changing only a Horizon hostname does not
+create independent evidence.
+
+Supply reconciliation persists the same immutable cycle boundary as latest-ledger reconciliation. Its durable
+subject key is `network:CODE:ISSUER`, preventing cross-network asset collisions. Successful but stale connector
+results remain raw readings for audit purposes while being excluded from snapshot contributions and current
+values. Public supply discrepancies carry both ledger/timestamp identities and exact per-component differences,
+so an offsetting component change remains explainable even when the aggregate totals match.
 
 ## Asset identifiers
 

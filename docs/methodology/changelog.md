@@ -11,6 +11,11 @@ parameters, tolerance bands, confidence formulas, or severity thresholds require
 - Required two genuinely independent derivations for verified status; Horizon replicas improve availability but
   do not add source diversity.
 - Standardized the future public label and metric ID as “On-chain asset supply” / `onchain_asset_supply`.
+- Added the `onchain-asset-supply-confidence-v0.1` formula, a 30-second freshness half-life, and a hard
+  120-second maximum age that excludes old readings from current values without deleting their evidence.
+- Pinned all five source-class base weights inside this methodology version so later global weight changes cannot
+  alter replayed supply results.
+- Added exact component-level discrepancy context for aggregate and offsetting-component mismatches.
 
 This independently versioned metric profile does not alter the v1.5 latest-ledger weights, confidence formula,
 or discrepancy policy. Decision record: [`0005-onchain-asset-supply-semantics.md`](../decisions/0005-onchain-asset-supply-semantics.md)

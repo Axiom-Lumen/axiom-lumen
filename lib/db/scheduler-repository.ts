@@ -1,23 +1,52 @@
 import { and, asc, eq, lte, sql } from 'drizzle-orm'
-import type { MetricId } from '../contracts/domain'
+import { z } from 'zod'
+import {
+  creditAssetSchema,
+  formatAssetId,
+  formatNetworkAssetKey,
+  networkIdSchema,
+  type MetricId,
+} from '../contracts/domain'
 import { serializeWorkerError } from '../worker/errors'
 import type { DatabaseClient } from './client'
-import { ingestCycles, networks, scheduledCycleLeases, sourceDefinitions } from './schema'
+import { assets, ingestCycles, networks, scheduledCycleLeases, sourceDefinitions } from './schema'
 
-export interface DiscoveredIngestJob {
-  metric: 'latest_ledger'
-  subjectKey: string
-  methodologyVersion: string
-  sources: Array<{
-    id: string
-    url: string
-    sourceClass: typeof sourceDefinitions.$inferSelect.sourceClass
-    adapter: typeof sourceDefinitions.$inferSelect.adapter
-    upstreamId: string | null
-    networkId: string
-    networkPassphrase: string
-  }>
-}
+const supplySourceConfigSchema = z.object({
+  enabled: z.literal(true),
+  assetIds: z.array(z.string().min(1)).min(1),
+  trustedCheckpoints: z.record(z.unknown()).optional(),
+}).strict()
+
+const discoveredSourceSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().url(),
+  sourceClass: z.enum(['canonical_ledger', 'archive', 'dex', 'anchor_self_reported', 'third_party_oracle']),
+  adapter: z.enum(['horizon', 'archive', 'sdex', 'anchor', 'oracle']),
+  upstreamId: z.string().min(1).nullable(),
+  networkId: networkIdSchema,
+  networkPassphrase: z.string().min(1),
+  trustedCheckpoint: z.unknown().optional(),
+  configurationError: z.string().min(1).max(500).optional(),
+}).strict()
+type DiscoveredSource = z.infer<typeof discoveredSourceSchema>
+
+export const discoveredIngestJobSchema = z.discriminatedUnion('metric', [
+  z.object({
+    metric: z.literal('latest_ledger'),
+    subjectKey: z.string().min(1),
+    methodologyVersion: z.string().min(1),
+    sources: z.array(discoveredSourceSchema).min(1),
+  }).strict(),
+  z.object({
+    metric: z.literal('circulating_supply'),
+    subjectKey: z.string().min(1),
+    methodologyVersion: z.string().min(1),
+    asset: creditAssetSchema,
+    sources: z.array(discoveredSourceSchema).min(1),
+  }).strict(),
+])
+
+export type DiscoveredIngestJob = z.infer<typeof discoveredIngestJobSchema>
 
 export interface ScheduledCycleInput {
   id: string
@@ -26,6 +55,8 @@ export interface ScheduledCycleInput {
   methodologyVersion: string
   idempotencyKey: string
   scheduledAt: string
+  jobDefinition?: unknown
+  jobDefinitionSha256?: string
 }
 
 export interface ClaimedCycle extends ScheduledCycleInput {
@@ -33,6 +64,10 @@ export interface ClaimedCycle extends ScheduledCycleInput {
   leaseToken: number
   leaseExpiresAt: string
   attemptCount: number
+}
+
+export function parseDiscoveredIngestJob(input: unknown): DiscoveredIngestJob {
+  return discoveredIngestJobSchema.parse(input)
 }
 
 function expiresAt(now: string, leaseDurationMs: number) {
@@ -62,7 +97,7 @@ export function createSchedulerRepository(client: DatabaseClient) {
         .where(eq(sourceDefinitions.enabled, true))
         .orderBy(asc(networks.id), asc(sourceDefinitions.id))
 
-      const jobs = new Map<string, DiscoveredIngestJob>()
+      const jobs = new Map<string, Extract<DiscoveredIngestJob, { metric: 'latest_ledger' }>>()
       for (const source of rows) {
         if (source.adapter !== 'horizon') continue
         let job = jobs.get(source.networkId)
@@ -75,15 +110,100 @@ export function createSchedulerRepository(client: DatabaseClient) {
           }
           jobs.set(source.networkId, job)
         }
-        job.sources.push(source)
+        job.sources.push(discoveredSourceSchema.parse(source))
       }
       return [...jobs.values()]
+    },
+
+    async discoverSupplyJobs(methodologyVersion: string): Promise<DiscoveredIngestJob[]> {
+      const [sourceRows, assetRows] = await Promise.all([
+        db
+          .select({
+            id: sourceDefinitions.id,
+            url: sourceDefinitions.url,
+            sourceClass: sourceDefinitions.sourceClass,
+            adapter: sourceDefinitions.adapter,
+            upstreamId: sourceDefinitions.upstreamId,
+            networkId: networks.id,
+            networkPassphrase: networks.passphrase,
+            config: sourceDefinitions.config,
+          })
+          .from(sourceDefinitions)
+          .innerJoin(networks, eq(networks.id, sourceDefinitions.networkId))
+          .where(eq(sourceDefinitions.enabled, true))
+          .orderBy(asc(networks.id), asc(sourceDefinitions.id)),
+        db
+          .select({
+            id: assets.id,
+            networkId: assets.networkId,
+            code: assets.code,
+            issuer: assets.issuer,
+            canonicalId: assets.canonicalId,
+          })
+          .from(assets)
+          .where(eq(assets.type, 'credit'))
+          .orderBy(asc(assets.networkId), asc(assets.canonicalId)),
+      ])
+
+      const jobs: DiscoveredIngestJob[] = []
+      for (const asset of assetRows) {
+        const networkId = networkIdSchema.parse(asset.networkId)
+        const parsedAsset = creditAssetSchema.safeParse({ kind: 'credit', code: asset.code, issuer: asset.issuer })
+        if (!parsedAsset.success || formatAssetId(parsedAsset.data) !== asset.canonicalId) {
+          throw new Error(`configured supply asset ${asset.id} has an invalid canonical identity`)
+        }
+        const eligibleSources = sourceRows.flatMap((source): DiscoveredSource[] => {
+          if (!['horizon', 'archive'].includes(source.adapter) || source.networkId !== asset.networkId) return []
+          const rawSupplyConfig = source.config.supply
+          if (!rawSupplyConfig || typeof rawSupplyConfig !== 'object' || Array.isArray(rawSupplyConfig)) return []
+          const rawConfig = rawSupplyConfig as Record<string, unknown>
+          if (rawConfig.enabled !== true) return []
+          const routingIds = Array.isArray(rawConfig.assetIds) && rawConfig.assetIds.every((id) => typeof id === 'string')
+            ? rawConfig.assetIds as string[]
+            : null
+          if (routingIds && !routingIds.includes(asset.id)) return []
+          const supplyConfig = supplySourceConfigSchema.safeParse(rawSupplyConfig)
+          if (!supplyConfig.success) return [{
+            id: source.id,
+            url: source.url,
+            sourceClass: source.sourceClass,
+            adapter: source.adapter,
+            upstreamId: source.upstreamId,
+            networkId: networkIdSchema.parse(source.networkId),
+            networkPassphrase: source.networkPassphrase,
+            configurationError: 'Supply source configuration is malformed',
+          }]
+          const trustedCheckpoint = supplyConfig.data.trustedCheckpoints?.[asset.id]
+          return [{
+            id: source.id,
+            url: source.url,
+            sourceClass: source.sourceClass,
+            adapter: source.adapter,
+            upstreamId: source.upstreamId,
+            networkId: networkIdSchema.parse(source.networkId),
+            networkPassphrase: source.networkPassphrase,
+            ...(trustedCheckpoint === undefined ? {} : { trustedCheckpoint }),
+          }]
+        })
+        if (eligibleSources.length === 0) continue
+        jobs.push({
+          metric: 'circulating_supply',
+          subjectKey: formatNetworkAssetKey(networkId, parsedAsset.data),
+          methodologyVersion,
+          asset: parsedAsset.data,
+          sources: eligibleSources,
+        })
+      }
+      return jobs
     },
 
     async ensureScheduledCycle(input: ScheduledCycleInput) {
       const inserted = await db
         .insert(scheduledCycleLeases)
-        .values(input)
+        .values({
+          ...input,
+          jobDefinition: input.jobDefinition as Record<string, unknown> | undefined,
+        })
         .onConflictDoNothing()
         .returning({ id: scheduledCycleLeases.id })
       return inserted.length === 1
@@ -135,6 +255,8 @@ export function createSchedulerRepository(client: DatabaseClient) {
           leaseToken: row.leaseToken,
           leaseExpiresAt: row.leaseExpiresAt,
           attemptCount: row.attemptCount,
+          ...(row.jobDefinition === null ? {} : { jobDefinition: row.jobDefinition }),
+          ...(row.jobDefinitionSha256 === null ? {} : { jobDefinitionSha256: row.jobDefinitionSha256 }),
         }
       })
     },
