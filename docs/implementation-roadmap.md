@@ -497,7 +497,7 @@ Acceptance:
 
 ## 12. Phase 5 — stable API and first live UI
 
-### [ ] API-01 — Implement `GET /api/v1/supply/{asset}`
+### [x] API-01 — Implement `GET /api/v1/supply/{asset}`
 
 Read the latest completed persisted snapshot and return the mandatory contract: metric, asset, decimal-string
 value, status, confidence with components/version, source counts/context, discrepancies, UTC `as_of`, and

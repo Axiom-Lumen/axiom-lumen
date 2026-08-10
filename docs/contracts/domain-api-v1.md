@@ -94,6 +94,12 @@ Discrepancies follow methodology v1.5 and keep three independent dimensions:
 The public serializer is fail closed: it emits only discrepancies whose publication state is
 `approved_public`. Schema validity alone never authorizes publication.
 
+`GET /api/v1/supply/{asset}` is the first route using this shared v1 serializer. It accepts canonical classic
+credit assets on the Public Network and reads finalized database evidence only. When a contribution's persisted
+age plus time elapsed since finalization exceeds the supply methodology's 120-second currentness bound, the
+snapshot is serialized as `unavailable` with a null value and an explicit `stale_observation` source error; its
+original `as_of` remains visible.
+
 ## API compatibility
 
 `tests/fixtures/contracts/reconciliation-snapshot-v1.json` is the initial serialized compatibility fixture.

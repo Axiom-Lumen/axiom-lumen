@@ -4,7 +4,8 @@ DAT-01 introduces PostgreSQL schema and migration tooling. DAT-02 adds the trans
 database-enforced immutable audit records. ING-01 adds durable scheduler leases, worker writes, and a persisted
 latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections. SUP-04 reuses the
 same atomic boundary for supply evidence, reconciliation snapshots, and discrepancy events, and pins each newly
-scheduled lease to a digested job-definition snapshot.
+scheduled lease to a digested job-definition snapshot. API-01 reconstructs the public supply response exclusively
+from that finalized snapshot, its immutable contribution readings, and approved discrepancy state.
 
 ## Configuration
 

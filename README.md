@@ -53,20 +53,21 @@ wiring, and anchor right-of-reply workflows.
 - [x] **Supply specification:** The approved on-chain asset-supply formula defines ledger-consistency rules,
   replica-independence policy, and truthful public naming.
 - [x] **Horizon supply connector:** Collects bounded, resumable, same-ledger classic-credit-asset totals with
-  exact decimal arithmetic and structured failures. Worker/reconciliation integration remains planned.
+  exact decimal arithmetic and structured failures.
 - [x] **Independent supply evidence:** Validates recorded history-archive state-replay artifacts against trusted
   checkpoint metadata and normalizes them with Horizon readings through one raw observation contract.
 - [x] **Persisted supply reconciliation:** Discovers explicitly configured credit assets, runs Horizon and
   independently trusted archive derivations, excludes stale evidence, and atomically stores raw readings,
   snapshots, source health, discrepancies, and events with idempotent cycle replay.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
+- [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
+  credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
 
 ### Mocked, static, planned, or missing
 
 - [ ] **Homepage reconciliation strip:** Clearly labeled illustrative UI, not wired to the API.
-- [ ] **Supply API:** Planned; no `GET /api/v1/supply/{asset}` implementation yet.
 - [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
@@ -159,6 +160,24 @@ A single usable source can return a value, but it is always `degraded` and confi
 
 This endpoint reads the latest finalized persisted snapshot. It never fans out to Horizon or waits for a live
 collection cycle. If no finalized snapshot exists, it returns `503 unavailable`.
+
+### `GET /api/v1/supply/{asset}`
+
+Provide the canonical classic credit-asset identifier as `CODE:ISSUER` (URL-encoded when required):
+
+```bash
+curl "http://localhost:3000/api/v1/supply/USDC:G..."
+```
+
+The route returns the shared v1 snapshot contract with `onchain_asset_supply`, a decimal-string amount,
+confidence components and caps, source counts and contributions, approved-public discrepancies, structured
+source errors, UTC `as_of`, and `onchain-asset-supply-v0.1`. It reads PostgreSQL only. Missing snapshots return
+`404`; malformed or native assets return `400`; persisted unavailable or expired snapshots return `503`.
+
+The endpoint is currently pinned to the Public Network. Once the age already recorded for any contributing
+observation plus elapsed time exceeds 120 seconds, the response becomes explicitly `unavailable`, clears its
+current value/contributions, and records a `stale_observation` error while preserving the original snapshot
+`as_of`.
 
 ---
 
