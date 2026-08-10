@@ -1,20 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { PageHero, DocSection, CodePanel, K, S } from '@/components/site'
+import { PageHero, DocSection, CodePanel, ConfidenceJson, K, S } from '@/components/site'
 
 export const metadata: Metadata = {
   title: 'API documentation',
   description:
-    'Implemented and planned API surfaces for Axiom Lumen, including the current latest-ledger reconciliation endpoint.',
+    'Implemented and planned API surfaces for Axiom Lumen, including persisted latest-ledger and supply reconciliation endpoints.',
 }
 
 const plannedEndpoints = [
-  {
-    method: 'GET',
-    path: '/api/v1/supply/{asset}',
-    name: 'On-chain asset supply',
-    desc: 'Planned: ledger-consistent credit-asset supply with explicit scope and per-source derivations.',
-  },
   {
     method: 'GET',
     path: '/v1/depth/{pair}',
@@ -39,13 +33,13 @@ export default function DocsPage() {
   return (
     <main>
       <PageHero
-        docCode="AL-API-02 · API STATUS"
+        docCode="AL-API-03 · API STATUS"
         kicker="Developer documentation"
-        title="One implemented endpoint. A broader API still planned."
+        title="Two implemented endpoints. One machine-readable contract."
       >
-        The current repository implements a local latest-ledger reconciliation endpoint for
-        multiple Stellar Horizon sources. Authenticated hosted APIs, paid tiers, WebSocket streams,
-        and asset-supply endpoints remain planned work.
+        The current API serves persisted latest-ledger and on-chain credit-asset supply snapshots.
+        Authenticated hosted APIs, paid tiers, WebSocket streams, and additional metrics remain
+        planned work.
       </PageHero>
 
       <DocSection num="01" label="Implemented" title="Latest ledger reconciliation." wide>
@@ -110,7 +104,28 @@ export default function DocsPage() {
         </div>
       </DocSection>
 
-      <DocSection num="02" label="Semantics" title="Status, confidence, and source visibility.">
+      <DocSection num="02" label="Supply" title="On-chain credit-asset supply." wide>
+        <div className="grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="max-w-[560px]">
+            <p className="mb-4 text-[15px] leading-relaxed text-muted">
+              Supply reads the latest finalized reconciliation snapshot from persistence. The
+              canonical path parameter is a classic Stellar credit asset in{' '}
+              <code className="font-mono text-[13px] text-cyan">CODE:ISSUER</code> form.
+            </p>
+            <p className="mb-8 text-[15px] leading-relaxed text-muted">
+              The artifact shown here is fetched from the same endpoint and validated against the
+              shared runtime response schema. Its label distinguishes verified, degraded, stale,
+              unavailable, and illustrative fallback states.
+            </p>
+            <CodePanel label="Local request">
+              <code>{'curl "http://localhost:3000/api/v1/supply/USDC:<issuer>"'}</code>
+            </CodePanel>
+          </div>
+          <ConfidenceJson />
+        </div>
+      </DocSection>
+
+      <DocSection num="03" label="Semantics" title="Status, confidence, and source visibility.">
         <div className="flex max-w-[640px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
           <p>
             <K>verified</K> means at least two usable Horizon sources agreed without source errors
@@ -134,7 +149,7 @@ export default function DocsPage() {
         </div>
       </DocSection>
 
-      <DocSection num="03" label="Planned" title="Target v1 API surfaces." wide>
+      <DocSection num="04" label="Planned" title="Target v1 API surfaces." wide>
         <div className="border-t-2 border-line">
           {plannedEndpoints.map((ep) => (
             <div
