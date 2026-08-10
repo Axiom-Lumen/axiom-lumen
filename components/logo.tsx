@@ -9,7 +9,7 @@ export function Logo({ small = false }: { small?: boolean }) {
       <img
         src="/header-logo.png"
         alt="Axiom Lumen Logo"
-        className={small ? "h-6 w-auto object-contain ml-[-30px] -mt-1" : "h-10 w-auto object-contain ml-[-30px] -mt-1"}
+        className={small ? "h-6 w-auto object-contain -ml-3 -mt-1" : "h-10 w-auto object-contain ml-[-30px] -mt-1"}
       />
     </div>
   )
