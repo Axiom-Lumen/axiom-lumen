@@ -6,7 +6,9 @@
 
 Axiom Lumen is being built as a verification and intelligence layer for the Stellar ecosystem. The long-term product goal is to aggregate on-chain and off-chain data, cross-check it with published methodology, and return confidence-scored outputs with source context.
 
-This repository currently contains a Next.js presentation surface plus one real backend vertical slice: multiple Stellar Horizon sources can be queried for their latest closed ledger, normalized, reconciled, scored, and returned through a local API route.
+This repository currently contains a Next.js presentation surface plus one durable backend vertical slice: a
+background worker collects latest-ledger observations from registered Stellar Horizon sources, reconciles and
+persists them, and a local API route serves the latest finalized snapshot.
 
 ---
 
@@ -22,11 +24,13 @@ with timestamps          with freshness scoring       with source context
 
 Implemented in this repository today:
 
-1. **Ingest:** Latest-ledger reads from configured Horizon REST endpoints.
+1. **Ingest:** An idempotent leased worker reads registered Horizon REST endpoints with bounded concurrency.
 2. **Reconcile:** Weighted median over latest-ledger observations, half-life freshness weighting, availability-aware confidence, status classification, and discrepancy reporting.
-3. **Serve:** Local Next.js API route for latest-ledger reconciliation.
+3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/order-book reconciliation, anchor reserve comparison, persistence, authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard wiring, and anchor right-of-reply workflows.
+Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/order-book reconciliation,
+anchor reserve comparison, authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard
+wiring, and anchor right-of-reply workflows.
 
 ---
 
@@ -40,6 +44,9 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 - [x] **Local API route:** `GET /api/v1/stellar/latest-ledger`.
 - [x] **Persistence foundation:** PostgreSQL schema, versioned Drizzle migrations, transactional cycle
   repositories, content-hashed evidence, and database-enforced append-only audit history.
+- [x] **Background ingestion:** Database source discovery, deterministic cycles, leases/heartbeats, bounded
+  concurrency, cancellation, graceful shutdown, abandoned-lease recovery, and idempotent finalization.
+- [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
 
@@ -49,8 +56,6 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 - [ ] **Supply API:** Planned; no `GET /v1/supply/{asset}` implementation yet.
 - [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
-- [ ] **Worker/API persistence wiring:** Repositories and audit enforcement exist, but scheduler writes and public
-  persisted reads begin under ING-01 and the metric-specific API phases.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
 - [ ] **Right-of-reply tooling:** Described in product documentation, but not implemented in code.
@@ -61,23 +66,25 @@ Planned but not implemented yet: supply reconciliation, archive ingestion, DEX/o
 
 ### `GET /api/v1/stellar/latest-ledger`
 
-Configure at least one Horizon endpoint with `STELLAR_HORIZON_URLS`. The value accepts comma-separated Horizon base URLs; whitespace is trimmed and duplicate endpoints are ignored.
+Register at least one enabled Public Network Horizon source in PostgreSQL and run the ingestion worker. See
+[the worker guide](./docs/worker.md) for migrations, source registration, and commands.
 
 > This diagnostic route is pinned to the Stellar Public Network. Testnet, futurenet, standalone, and
 > network-mismatched endpoints are excluded before their ledger values are requested.
 >
 > The connector validates each Horizon root endpoint's network passphrase before requesting ledgers. Mismatched sources are excluded and reported in `source_errors`.
 
-For local mainnet development, use the public Stellar Horizon endpoint:
+Run one collection cycle before starting or querying the web process:
 
 ```bash
-STELLAR_HORIZON_URLS="https://horizon.stellar.org" npm run dev
+npm run worker:once
+npm run dev
 ```
 
-Additional endpoints may be supplied, but each must report the Public Network passphrase.
-Optional `STELLAR_HORIZON_ALLOWED_HOSTS` and `STELLAR_HORIZON_DENIED_HOSTS` comma-separated lists constrain
-configured hostnames. Redirects, credential-bearing URLs, and local/private literal hosts are rejected, and
-Horizon response bodies are size-bounded and schema-validated.
+Additional database sources may be registered, but each must report the configured network passphrase. Optional
+`STELLAR_HORIZON_ALLOWED_HOSTS` and `STELLAR_HORIZON_DENIED_HOSTS` lists constrain discovered hostnames.
+Redirects, credential-bearing URLs, local/private literal hosts, oversized bodies, and malformed payloads are
+rejected by the worker.
 
 Then request the local endpoint:
 
@@ -117,7 +124,7 @@ Response fields include:
 
 Field semantics:
 
-- `sources_configured`: normalized Horizon endpoints accepted from `STELLAR_HORIZON_URLS` after trimming and deduplication.
+- `sources_configured`: enabled sources discovered for the snapshot's network and metric.
 - `sources_responded`: sources that returned a usable observation or an HTTP/application-level error response; request failures and aborts are not counted as responded.
 - `sources_usable`: responded sources with valid latest-ledger observations used in reconciliation.
 - `sources_agreeing`: usable sources within one ledger of the reconciled value.
@@ -137,8 +144,8 @@ Field semantics:
 
 A single usable source can return a value, but it is always `degraded` and confidence-capped so it is not presented as fully verified.
 
-This endpoint is a live, request-time diagnostic profile. It does not read or return a persisted production
-snapshot; that contract will be introduced with the persistence and ingestion roadmap items.
+This endpoint reads the latest finalized persisted snapshot. It never fans out to Horizon or waits for a live
+collection cycle. If no finalized snapshot exists, it returns `503 unavailable`.
 
 ---
 
@@ -171,11 +178,14 @@ npm run lint
 npm run typecheck
 npm test
 npm run test:integration
+npm run test:database
 npm run build
 ```
 
 PostgreSQL schema development, migration commands, isolated database tests, and the strict separation between
 runtime and migration credentials are documented in [docs/database.md](./docs/database.md).
+Worker source setup, one-shot/continuous execution, configuration, and lease recovery are documented in
+[docs/worker.md](./docs/worker.md).
 
 ---
 

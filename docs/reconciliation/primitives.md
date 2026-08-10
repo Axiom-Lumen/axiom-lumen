@@ -42,8 +42,8 @@ converting them to JavaScript numbers.
 
 ## Compatibility
 
-The `GET /api/v1/stellar/latest-ledger` diagnostic profile delegates its complete reconciliation cycle to the
-shared orchestrator. Agreement, spread, and versioned confidence are documented in
+The latest-ledger worker delegates its complete reconciliation cycle to the shared orchestrator; the public route
+serves the resulting finalized snapshot without contacting an upstream. Agreement, spread, and versioned confidence are documented in
 [`confidence.md`](./confidence.md). Stateful severity, lifecycle, amendments, and publication safeguards are
 documented in [`discrepancy-state.md`](./discrepancy-state.md).
 The complete deterministic cycle composition is documented in [`orchestrator.md`](./orchestrator.md).

@@ -144,10 +144,11 @@ export function parseHorizonSources(
   return Array.from(deduped.values())
 }
 
-function assertFetchOptions({ sources, timeoutMs, maxResponseBytes }: {
+function assertFetchOptions({ sources, timeoutMs, maxResponseBytes, endpointPolicy }: {
   sources: readonly HorizonSource[]
   timeoutMs: number
   maxResponseBytes: number
+  endpointPolicy: HorizonEndpointPolicy
 }) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeoutMs must be greater than zero')
   if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes <= 0) {
@@ -155,7 +156,18 @@ function assertFetchOptions({ sources, timeoutMs, maxResponseBytes }: {
   }
   const sourceIds = new Set<string>()
   const sourceUrls = new Set<string>()
+  if (sources.length > MAX_HORIZON_SOURCES) throw new Error(`at most ${MAX_HORIZON_SOURCES} Horizon sources are supported`)
   for (const source of sources) {
+    let url: URL
+    try {
+      url = new URL(source.url)
+    } catch {
+      throw new Error(`Invalid Horizon URL: ${source.url}`)
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error(`Horizon URL must use http or https: ${source.url}`)
+    }
+    assertEndpointAllowed(url, endpointPolicy)
     if (sourceIds.has(source.id)) throw new Error(`duplicate Horizon source ID: ${source.id}`)
     if (sourceUrls.has(source.url)) throw new Error(`duplicate Horizon source URL: ${source.url}`)
     sourceIds.add(source.id)
@@ -234,11 +246,12 @@ function responseFailure(source: HorizonSource, response: Response, retrievedAt:
 
 async function fetchHorizonRootMetadata(
   source: HorizonSource,
-  { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt }: {
+  { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt, signal }: {
     fetchImpl: FetchLike
     timeoutMs: number
     maxResponseBytes: number
     retrievedAt: string
+    signal?: AbortSignal
   },
 ): Promise<{ networkPassphrase?: string; sourceError?: LatestLedgerSourceError }> {
   const controller = new AbortController()
@@ -246,7 +259,7 @@ async function fetchHorizonRootMetadata(
 
   try {
     const response = await fetchImpl(`${source.url}/`, {
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       headers: { accept: 'application/json' },
       redirect: 'error',
     })
@@ -270,6 +283,7 @@ async function fetchHorizonRootMetadata(
       }
     }
   } catch (error) {
+    if (signal?.aborted) throw error
     const isAbort = error instanceof Error && error.name === 'AbortError'
     return {
       sourceError: sourceError({
@@ -286,11 +300,12 @@ async function fetchHorizonRootMetadata(
 
 async function fetchHorizonLatestLedger(
   source: HorizonSource,
-  { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt }: {
+  { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt, signal }: {
     fetchImpl: FetchLike
     timeoutMs: number
     maxResponseBytes: number
     retrievedAt: string
+    signal?: AbortSignal
   },
 ): Promise<{ observation?: LatestLedgerObservation; sourceError?: LatestLedgerSourceError }> {
   const controller = new AbortController()
@@ -298,7 +313,7 @@ async function fetchHorizonLatestLedger(
 
   try {
     const response = await fetchImpl(`${source.url}/ledgers?order=desc&limit=1`, {
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       headers: { accept: 'application/json' },
       redirect: 'error',
     })
@@ -353,9 +368,11 @@ async function fetchHorizonLatestLedger(
         ledgerSequence: numericSequence,
         closedAt: new Date(closedAtMs).toISOString(),
         retrievedAt,
+        rawPayload: record,
       },
     }
   } catch (error) {
+    if (signal?.aborted) throw error
     const isAbort = error instanceof Error && error.name === 'AbortError'
     return {
       sourceError: sourceError({
@@ -377,6 +394,8 @@ export async function fetchLatestLedgersFromHorizonSources({
   maxResponseBytes = DEFAULT_HORIZON_MAX_RESPONSE_BYTES,
   expectedNetworkPassphrase = PUBLIC_NETWORK_PASSPHRASE,
   clock = () => new Date(),
+  signal,
+  endpointPolicy = {},
 }: {
   sources: HorizonSource[]
   fetchImpl?: FetchLike
@@ -384,13 +403,16 @@ export async function fetchLatestLedgersFromHorizonSources({
   maxResponseBytes?: number
   expectedNetworkPassphrase?: string
   clock?: () => Date
+  signal?: AbortSignal
+  endpointPolicy?: HorizonEndpointPolicy
 }): Promise<HorizonLatestLedgerFetchResult> {
-  assertFetchOptions({ sources, timeoutMs, maxResponseBytes })
+  assertFetchOptions({ sources, timeoutMs, maxResponseBytes, endpointPolicy })
   if (!expectedNetworkPassphrase.trim()) throw new Error('expectedNetworkPassphrase must not be empty')
   const now = clock()
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error('clock must return a valid Date')
   const retrievedAt = now.toISOString()
-  const requestOptions = { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt }
+  if (signal?.aborted) throw signal.reason
+  const requestOptions = { fetchImpl, timeoutMs, maxResponseBytes, retrievedAt, signal }
   const rootMetadataResults = await Promise.all(
     sources.map((source) => fetchHorizonRootMetadata(source, requestOptions)),
   )
@@ -421,13 +443,18 @@ export async function fetchLatestLedgersFromHorizonSources({
   )
   const observations = ledgerResults.flatMap((result) => (result.observation ? [result.observation] : []))
   const ledgerErrors = ledgerResults.flatMap((result) => (result.sourceError ? [result.sourceError] : []))
+  const completedAtValue = clock()
+  if (!(completedAtValue instanceof Date) || !Number.isFinite(completedAtValue.getTime())) {
+    throw new Error('clock must return a valid Date')
+  }
+  const completedAt = completedAtValue.toISOString()
 
   return {
-    observations,
-    source_errors: [...sourceErrors, ...ledgerErrors],
+    observations: observations.map((observation) => ({ ...observation, retrievedAt: completedAt })),
+    source_errors: [...sourceErrors, ...ledgerErrors].map((error) => ({ ...error, retrievedAt: completedAt })),
     sources_configured: sources.length,
     sources_excluded: sourceErrors.filter((error) => error.code === 'network_mismatch').length,
-    retrieved_at: retrievedAt,
+    retrieved_at: completedAt,
     network_passphrase: expectedNetworkPassphrase,
   }
 }

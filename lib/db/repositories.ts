@@ -3,8 +3,10 @@ import { and, asc, eq, lt } from 'drizzle-orm'
 import {
   persistedDiscrepancyStateSchema,
   reconciliationSnapshotSchema,
+  sourceIdentitySchema,
   type PersistedDiscrepancyState,
   type ReconciliationSnapshot,
+  type SourceIdentity,
 } from '../contracts/domain'
 import type { DiscrepancyAmendmentEvent, DiscrepancyMeasurementEvent } from '../reconcile/discrepancy-state'
 import { StellarAmount } from '../stellar/amount'
@@ -101,6 +103,7 @@ export interface RawReadingRecord {
   observationId: string
   attemptId: string
   sourceId: string
+  sourceIdentity: SourceIdentity | unknown
   normalizedValue: unknown
   rawPayload: unknown
   sourceTimestamp?: string | null
@@ -134,6 +137,7 @@ export interface StoredRawReading {
   sourceId: string
   metric: typeof rawReadings.$inferSelect.metric
   subjectKey: string
+  sourceIdentity: SourceIdentity
   normalizedValue: unknown
   rawPayload: unknown
   payloadSha256: string
@@ -176,9 +180,7 @@ function sameCycleIdentity(existing: typeof ingestCycles.$inferSelect, requested
     existing.subjectKey === requested.subjectKey &&
     existing.methodologyVersion === requested.methodologyVersion &&
     existing.status === 'completed' &&
-    Date.parse(existing.scheduledAt) === Date.parse(requested.scheduledAt) &&
-    Date.parse(existing.startedAt ?? '') === Date.parse(requested.startedAt) &&
-    Date.parse(existing.completedAt ?? '') === Date.parse(requested.completedAt)
+    Date.parse(existing.scheduledAt) === Date.parse(requested.scheduledAt)
   )
 }
 
@@ -190,6 +192,16 @@ export function createPersistenceRepositories(client: DatabaseClient) {
     async persistCompletedCycle(input: PersistCompletedCycleInput) {
       const snapshot = reconciliationSnapshotSchema.parse(input.snapshot)
       assertSnapshotMatchesCycle(snapshot, input.cycle)
+      const sourceIdentityByReadingId = new Map(input.readings.map((reading) => {
+        const identity = sourceIdentitySchema.parse(reading.sourceIdentity)
+        if (identity.id !== reading.sourceId) {
+          throw new Error(`reading ${reading.id} source identity does not match its source ID`)
+        }
+        if (input.cycle.metric === 'latest_ledger' && identity.network.id !== input.cycle.subjectKey) {
+          throw new Error(`reading ${reading.id} source network does not match the cycle subject`)
+        }
+        return [reading.id, identity]
+      }))
       const states = Object.values(input.discrepancyStates).map((state) => persistedDiscrepancyStateSchema.parse(state))
       const stateById = new Map(states.map((state) => [state.discrepancyId, state]))
       for (const event of input.events) {
@@ -244,6 +256,7 @@ export function createPersistenceRepositories(client: DatabaseClient) {
                 sourceId: reading.sourceId,
                 metric: input.cycle.metric,
                 subjectKey: input.cycle.subjectKey,
+                sourceIdentity: normalizeJsonObject(sourceIdentityByReadingId.get(reading.id)),
                 normalizedValue: normalizeJsonObject(reading.normalizedValue),
                 rawPayload: sanitizedPayload,
                 payloadSha256: computePayloadSha256(sanitizedPayload),
@@ -421,7 +434,7 @@ export function createPersistenceRepositories(client: DatabaseClient) {
     },
 
     async getRawReadings(cycleId: string): Promise<StoredRawReading[]> {
-      return db
+      const rows = await db
         .select({
           id: rawReadings.id,
           observationId: rawReadings.observationId,
@@ -430,6 +443,7 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           sourceId: rawReadings.sourceId,
           metric: rawReadings.metric,
           subjectKey: rawReadings.subjectKey,
+          sourceIdentity: rawReadings.sourceIdentity,
           normalizedValue: rawReadings.normalizedValue,
           rawPayload: rawReadings.rawPayload,
           payloadSha256: rawReadings.payloadSha256,
@@ -439,6 +453,7 @@ export function createPersistenceRepositories(client: DatabaseClient) {
         .from(rawReadings)
         .where(eq(rawReadings.cycleId, cycleId))
         .orderBy(asc(rawReadings.retrievedAt), asc(rawReadings.id))
+      return rows.map((row) => ({ ...row, sourceIdentity: sourceIdentitySchema.parse(row.sourceIdentity) }))
     },
 
     async getDiscrepancyEventChain(discrepancyId: string): Promise<StoredDiscrepancyEvent[]> {
@@ -456,6 +471,36 @@ export function createPersistenceRepositories(client: DatabaseClient) {
         .from(discrepancyEvents)
         .where(eq(discrepancyEvents.discrepancyId, discrepancyId))
         .orderBy(asc(discrepancyEvents.occurredAt), asc(discrepancyEvents.id))
+    },
+
+    async getDiscrepancyStates(metric: typeof discrepancies.$inferSelect.metric, subjectKey: string) {
+      const rows = await db
+        .select()
+        .from(discrepancies)
+        .where(and(eq(discrepancies.metric, metric), eq(discrepancies.subjectKey, subjectKey)))
+        .orderBy(asc(discrepancies.sourceId))
+      return Object.fromEntries(
+        rows.map((row) => [
+          row.sourceId,
+          persistedDiscrepancyStateSchema.parse({
+            discrepancyId: row.id,
+            sourceId: row.sourceId,
+            methodologyVersion: row.methodologyVersion,
+            namedParty: row.namedParty,
+            severity: row.severity,
+            lifecycleState: row.lifecycleState,
+            publicationState: row.publicationState,
+            replyReviewState: row.replyReviewState,
+            consecutiveCycles: row.consecutiveCycles,
+            consecutiveAboveInfoCycles: row.consecutiveAboveInfoCycles,
+            firstObservedAt: row.firstObservedAt,
+            lastObservedAt: row.lastObservedAt,
+            lastFinalizedCycleId: row.lastFinalizedCycleId,
+            lastFinalizedCycleAt: row.lastFinalizedCycleAt,
+            publicationUpdatedAt: row.publicationUpdatedAt,
+          }),
+        ]),
+      )
     },
 
     async enqueueNotification(notification: NotificationRecord) {

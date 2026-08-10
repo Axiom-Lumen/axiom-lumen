@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { SOURCE_CLASS_IDS, methodologyConfig, type SourceClassId } from '../../config/methodology'
 import {
@@ -6,11 +7,17 @@ import {
   networkIdentitySchema,
   sourceErrorCodeSchema,
   type NetworkIdentity,
+  type PersistedDiscrepancyState,
   type SourceError,
   type SourceIdentity,
 } from '../contracts/domain'
 import { classifySafeIntegerDeviationBand } from './discrepancy-state'
-import { reconcileMetric, type MetricReconciliationProfile, type ReconciliationMethodologyConfig } from './orchestrator'
+import {
+  reconcileMetric,
+  type MetricReconciliationProfile,
+  type ReconcileMetricResult,
+  type ReconciliationMethodologyConfig,
+} from './orchestrator'
 import { computeWeightFromAge } from './staleness'
 
 const latestLedgerMethodology = methodologyConfig.metrics.latestLedger
@@ -38,6 +45,7 @@ export interface LatestLedgerObservation {
   baseWeight?: number
   sourceClass?: SourceClassId
   upstreamId?: string
+  rawPayload?: unknown
 }
 
 export interface LatestLedgerSourceError {
@@ -292,20 +300,24 @@ const profile: MetricReconciliationProfile<DomainLatestLedgerObservation, number
   getUpstreamId: (observation) => observation.upstreamId ?? observation.provenance.source.id,
 }
 
-/**
- * Runs the latest-ledger-v0.2 direct diagnostic profile through the shared orchestrator and then preserves the
- * established route response. It is intentionally not the persisted v1 snapshot serializer.
- */
-export function reconcileLatestLedger({
+export interface LatestLedgerDomainReconciliationInput extends LatestLedgerReconciliationInput {
+  cycleId: string
+  snapshotId: string
+  priorDiscrepancyStates?: Readonly<Record<string, PersistedDiscrepancyState | unknown>>
+}
+
+export function reconcileLatestLedgerDomain({
+  cycleId,
+  snapshotId,
   observations,
   sourceErrors = [],
   sourcesConfigured,
-  sourcesExcluded = 0,
   asOf = new Date(),
   halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
   expectedSourceClasses = [latestLedgerMethodology.sourceClass],
   network: networkInput = PUBLIC_NETWORK,
-}: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
+  priorDiscrepancyStates = {},
+}: LatestLedgerDomainReconciliationInput): ReconcileMetricResult {
   const network = networkIdentitySchema.parse(networkInput)
   const configuredCount = Number.isSafeInteger(sourcesConfigured) ? Math.max(0, sourcesConfigured) : 0
   const identities = new Map<string, SourceIdentity>()
@@ -325,11 +337,9 @@ export function reconcileLatestLedger({
     while (identities.has(sourceId)) sourceId = `${sourceId}_placeholder`
     identities.set(sourceId, sourceIdentity(sourceId, `https://${sourceId}.invalid`, network))
   }
-
   const asOfValue = new Date(asOf)
-  const cycleId = `latest-ledger:${asOfValue.toISOString()}`
   const domainObservations = observations.map((observation) => ({
-    observationId: observation.sourceId,
+    observationId: `observation_${createHash('sha256').update(`${cycleId}:${observation.sourceId}`).digest('hex')}`,
     cycleId,
     metric: 'latest_ledger' as const,
     ledgerSequence: observation.ledgerSequence,
@@ -341,16 +351,47 @@ export function reconcileLatestLedger({
     },
     ...(observation.upstreamId ? { upstreamId: observation.upstreamId } : {}),
   }))
-  const result = reconcileMetric({
-    snapshotId: `diagnostic:${asOfValue.toISOString()}`,
+  return reconcileMetric({
+    snapshotId,
     cycleId,
     subject: { kind: 'network', network },
     configuredSources: [...identities.values()],
     observations: domainObservations,
     sourceErrors: sourceErrors.map(toDomainSourceError),
+    priorDiscrepancyStates,
     clock: () => new Date(asOfValue),
     methodology: methodology(halfLifeSeconds, expectedSourceClasses),
     profile,
+  })
+}
+
+/**
+ * Runs the latest-ledger-v0.2 direct diagnostic profile through the shared orchestrator and then preserves the
+ * established route response. It is intentionally not the persisted v1 snapshot serializer.
+ */
+export function reconcileLatestLedger({
+  observations,
+  sourceErrors = [],
+  sourcesConfigured,
+  sourcesExcluded = 0,
+  asOf = new Date(),
+  halfLifeSeconds = DEFAULT_HORIZON_HALF_LIFE_SECONDS,
+  expectedSourceClasses = [latestLedgerMethodology.sourceClass],
+  network: networkInput = PUBLIC_NETWORK,
+}: LatestLedgerReconciliationInput): LatestLedgerReconciliationResult {
+  const asOfValue = new Date(asOf)
+  const cycleId = `latest-ledger:${asOfValue.toISOString()}`
+  const result = reconcileLatestLedgerDomain({
+    cycleId,
+    snapshotId: `diagnostic:${asOfValue.toISOString()}`,
+    observations,
+    sourceErrors,
+    sourcesConfigured,
+    sourcesExcluded,
+    asOf: asOfValue,
+    halfLifeSeconds,
+    expectedSourceClasses,
+    network: networkInput,
   })
 
   const reference = result.snapshot.value?.kind === 'ledger' ? result.snapshot.value.value : null
@@ -359,8 +400,9 @@ export function reconcileLatestLedger({
     const contribution = contributions.get(observation.sourceId)
     if (!contribution || reference === null) return []
     const ledgerDelta = observation.ledgerSequence - reference
+    const { rawPayload: _rawPayload, ...publicObservation } = observation
     return [{
-      ...observation,
+      ...publicObservation,
       ageSeconds: contribution.ageSeconds,
       effectiveWeight: contribution.effectiveWeight,
       agrees: contribution.agrees,

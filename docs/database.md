@@ -1,7 +1,8 @@
 # Database development and migrations
 
 DAT-01 introduces PostgreSQL schema and migration tooling. DAT-02 adds the transactional repository boundary and
-database-enforced immutable audit records; it does not yet change public API read paths or add the scheduler.
+database-enforced immutable audit records. ING-01 adds durable scheduler leases, worker writes, and a persisted
+latest-ledger read path.
 
 ## Configuration
 
@@ -41,6 +42,9 @@ Run migration integration tests:
 DATABASE_TEST_ADMIN_URL=postgresql://axiom:axiom@127.0.0.1:55432/postgres npm run test:database
 ```
 
+Worker setup, source registration, lease behavior, and one-shot/continuous commands are documented in
+[worker.md](./worker.md).
+
 Stop the service with `docker compose -f compose.database.yml down`. Add `-v` only when intentionally discarding
 the local database volume.
 
@@ -62,6 +66,11 @@ Raw payloads are canonicalized and recursively replace common credential-bearing
 headers, cookies, API keys, tokens, and passwords before hashing and storage. The SHA-256 digest therefore
 verifies the exact sanitized evidence retained in the database without deriving a digest from discarded secrets.
 Connectors must still avoid putting unrelated personal or secret data into evidence.
+
+Every raw reading stores a validated copy of its complete source identity. API reconstruction uses that immutable
+evidence rather than the mutable source registry, preserving the endpoint and source class observed at collection
+time. The ING-01 migration backfills existing readings from their referenced source/network rows before making
+the identity field mandatory.
 
 The following evidence tables reject `UPDATE`, `DELETE`, and `TRUNCATE` through PostgreSQL triggers, even if an
 application role is accidentally granted those privileges: retrieval attempts, raw readings, source-health samples,

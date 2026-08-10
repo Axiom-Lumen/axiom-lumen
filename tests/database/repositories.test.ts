@@ -103,6 +103,13 @@ function cycleBatch(label: string, completedAt: string): PersistCompletedCycleIn
         observationId,
         attemptId,
         sourceId: 'source-a',
+        sourceIdentity: {
+          id: 'source-a',
+          sourceClass: 'canonical_ledger',
+          adapter: 'horizon',
+          url: 'https://horizon.example',
+          network: { id: 'public', passphrase: 'Public Global Stellar Network ; September 2015' },
+        },
         normalizedValue: { kind: 'ledger', value: label === 'one' ? 100 : 101 },
         rawPayload,
         retrievedAt: completedAt,
@@ -211,8 +218,15 @@ describeWithDatabase('transactional persistence repositories', () => {
       expect(await repositories.persistCompletedCycle(batch)).toEqual({ status: 'inserted', cycleId: 'cycle-one' })
       expect(await repositories.persistCompletedCycle(batch)).toEqual({ status: 'duplicate', cycleId: 'cycle-one' })
 
+      const overlappingRetry = cycleBatch('one', '2026-08-10T10:00:05.000Z')
+      overlappingRetry.cycle.scheduledAt = batch.cycle.scheduledAt
+      expect(await repositories.persistCompletedCycle(overlappingRetry)).toEqual({
+        status: 'duplicate',
+        cycleId: 'cycle-one',
+      })
+
       const divergentRetry = cycleBatch('one', '2026-08-10T10:00:00.000Z')
-      divergentRetry.cycle.subjectKey = 'different-subject'
+      divergentRetry.cycle.scheduledAt = '2026-08-10T09:59:00.000Z'
       await expect(repositories.persistCompletedCycle(divergentRetry)).rejects.toThrow(
         'was reused with different cycle parameters',
       )
@@ -222,6 +236,11 @@ describeWithDatabase('transactional persistence repositories', () => {
       expect(readings[0]?.rawPayload).toMatchObject({
         Authorization: '[REDACTED]',
         nested: { api_key: '[REDACTED]' },
+      })
+      expect(readings[0]?.sourceIdentity).toMatchObject({
+        id: 'source-a',
+        url: 'https://horizon.example',
+        network: { id: 'public' },
       })
       expect(readings[0]?.payloadSha256).toBe(computePayloadSha256(readings[0]?.rawPayload))
       expect(readings[0]?.payloadSha256).not.toBe(computePayloadSha256(batch.readings[0]?.rawPayload))

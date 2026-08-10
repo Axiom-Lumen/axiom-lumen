@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
@@ -35,6 +36,13 @@ async function applyMigrations(pool: Pool) {
     migrationsSchema: 'drizzle',
     migrationsTable: '__axiom_lumen_migrations',
   })
+}
+
+async function applySqlMigration(pool: Pool, filename: string) {
+  const sql = await readFile(new URL(`../../drizzle/${filename}`, import.meta.url), 'utf8')
+  for (const statement of sql.split('--> statement-breakpoint').map((value) => value.trim()).filter(Boolean)) {
+    await pool.query(statement)
+  }
 }
 
 describeWithDatabase('PostgreSQL forward migrations', () => {
@@ -83,6 +91,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'raw_readings',
         'reconciliation_snapshots',
         'retrieval_attempts',
+        'scheduled_cycle_leases',
         'snapshot_contributions',
         'source_credential_references',
         'source_definitions',
@@ -90,7 +99,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(3)
+      expect(migrationRows.rows[0]?.count).toBe(4)
 
       const utcColumns = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
@@ -123,6 +132,9 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'discrepancies_open_source_subject_uidx',
           'discrepancy_events_discrepancy_occurred_idx',
           'notifications_idempotency_uidx',
+          'scheduled_cycle_leases_idempotency_uidx',
+          'scheduled_cycle_leases_active_subject_uidx',
+          'scheduled_cycle_leases_expiry_idx',
         ]),
       )
 
@@ -152,9 +164,10 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         pool.query(`
           INSERT INTO raw_readings
             (id, observation_id, cycle_id, attempt_id, source_id, metric, subject_key,
-             normalized_value, raw_payload, payload_sha256, retrieved_at)
+             source_identity, normalized_value, raw_payload, payload_sha256, retrieved_at)
           VALUES
             ('reading-invalid', 'obs-invalid', 'cycle-b', 'attempt-a', 'source-a', 'latest_ledger', 'public',
+             '{"id":"source-a","sourceClass":"canonical_ledger","adapter":"horizon","url":"https://a.example","network":{"id":"public","passphrase":"public-passphrase"}}',
              '{"kind":"ledger","value":1}', '{}', repeat('a', 64), now())
         `),
       ).rejects.toMatchObject({ code: '23503' })
@@ -191,12 +204,55 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         ['latest-ledger-profile', { methodology: 'latest-ledger-v0.2' }, '2026-08-10T00:00:00.000Z'],
       )
 
-      await applyMigrations(pool)
+      await applySqlMigration(pool, '0000_flippant_magma.sql')
+      await applySqlMigration(pool, '0001_outgoing_jazinda.sql')
+      await applySqlMigration(pool, '0002_dat02_append_only.sql')
+      await pool.query(`
+        INSERT INTO networks (id, passphrase, display_name)
+        VALUES ('public', 'Public Global Stellar Network ; September 2015', 'Public')
+      `)
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, source_class, adapter, url)
+        VALUES ('source-prior', 'public', 'canonical_ledger', 'horizon', 'https://prior.example')
+      `)
+      await pool.query(`
+        INSERT INTO ingest_cycles
+          (id, metric, subject_key, methodology_version, idempotency_key, status, scheduled_at, started_at)
+        VALUES ('cycle-prior', 'latest_ledger', 'public', 'latest-ledger-v0.2', 'prior-idem', 'running', now(), now())
+      `)
+      await pool.query(`
+        INSERT INTO retrieval_attempts
+          (id, cycle_id, source_id, attempt_number, outcome, started_at, completed_at)
+        VALUES ('attempt-prior', 'cycle-prior', 'source-prior', 1, 'success', now(), now())
+      `)
+      await pool.query(`
+        INSERT INTO raw_readings
+          (id, observation_id, cycle_id, attempt_id, source_id, metric, subject_key,
+           normalized_value, raw_payload, payload_sha256, retrieved_at)
+        VALUES ('reading-prior', 'observation-prior', 'cycle-prior', 'attempt-prior', 'source-prior',
+                'latest_ledger', 'public', '{"kind":"ledger","value":1}', '{}', repeat('a', 64), now())
+      `)
+
+      await applySqlMigration(pool, '0003_military_argent.sql')
 
       const legacy = await pool.query('SELECT key, value FROM legacy_runtime_metadata')
       expect(legacy.rows).toEqual([
         { key: 'latest-ledger-profile', value: { methodology: 'latest-ledger-v0.2' } },
       ])
+      const backfilled = await pool.query(`SELECT source_identity FROM raw_readings WHERE id = 'reading-prior'`)
+      expect(backfilled.rows[0]?.source_identity).toEqual({
+        id: 'source-prior',
+        sourceClass: 'canonical_ledger',
+        adapter: 'horizon',
+        url: 'https://prior.example',
+        network: {
+          id: 'public',
+          passphrase: 'Public Global Stellar Network ; September 2015',
+        },
+      })
+      await expect(
+        pool.query(`UPDATE raw_readings SET source_identity = '{}' WHERE id = 'reading-prior'`),
+      ).rejects.toMatchObject({ code: '55000' })
       const snapshotTable = await pool.query("SELECT to_regclass('public.reconciliation_snapshots') AS table_name")
       expect(snapshotTable.rows[0]?.table_name).toBe('reconciliation_snapshots')
     } finally {
