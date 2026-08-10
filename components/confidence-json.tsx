@@ -107,7 +107,7 @@ export function DataArtifactEmpty({
 
 export function ConfidenceJson() {
   const illustrativeData = {
-    metric: "circulating_supply",
+    metric: "onchain_asset_supply",
     asset: `${DEFAULT_ASSET}:GA5Z...`,
     value: "48213092.44",
     confidence: 0.95,

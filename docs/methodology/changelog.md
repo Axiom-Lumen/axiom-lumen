@@ -3,6 +3,18 @@
 The public methodology is versioned independently from application releases. Changes to weights, freshness
 parameters, tolerance bands, confidence formulas, or severity thresholds require a new methodology version.
 
+## onchain-asset-supply-v0.1 — 2026-08-10
+
+- Defined credit-asset supply as the exact sum of authorized, maintain-liabilities, and unauthorized trustline
+  balances plus claimable-balance, liquidity-pool, and Stellar Asset Contract balances at one closed ledger.
+- Excluded native XLM, contract tokens, economic-free-float claims, and issuer-affiliation heuristics.
+- Required two genuinely independent derivations for verified status; Horizon replicas improve availability but
+  do not add source diversity.
+- Standardized the future public label and metric ID as “On-chain asset supply” / `onchain_asset_supply`.
+
+This independently versioned metric profile does not alter the v1.5 latest-ledger weights, confidence formula,
+or discrepancy policy. Decision record: [`0005-onchain-asset-supply-semantics.md`](../decisions/0005-onchain-asset-supply-semantics.md)
+
 ## v1.5 — 2026-08-09
 
 - Published the five-component confidence formula with auditable agreement, freshness, availability,

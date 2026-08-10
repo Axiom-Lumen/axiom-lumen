@@ -18,7 +18,7 @@ export function ReconciliationStrip() {
               aria-hidden="true"
               className="inline-block size-1.5 rounded-full bg-dim"
             />
-            Illustrative reconciliation — USDC circulating supply
+            Illustrative reconciliation — USDC on-chain asset supply
           </span>
           <span>example snapshot · not live</span>
         </div>
