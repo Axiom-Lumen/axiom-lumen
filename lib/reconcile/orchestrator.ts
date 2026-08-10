@@ -90,7 +90,7 @@ interface WeightedObservation<TObservation, TValue> {
 }
 
 const EXCLUSION_CODES = new Set(['network_mismatch', 'excluded_source'])
-const NO_RESPONSE_CODES = new Set(['request_failed', 'request_aborted'])
+const NO_RESPONSE_CODES = new Set(['request_failed', 'request_aborted', 'invalid_configuration', 'excluded_source'])
 
 function compareText(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0

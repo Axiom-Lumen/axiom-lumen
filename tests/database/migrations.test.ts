@@ -96,10 +96,11 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'source_credential_references',
         'source_definitions',
         'source_health_samples',
+        'source_health_states',
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(4)
+      expect(migrationRows.rows[0]?.count).toBe(5)
 
       const utcColumns = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
@@ -135,6 +136,8 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'scheduled_cycle_leases_idempotency_uidx',
           'scheduled_cycle_leases_active_subject_uidx',
           'scheduled_cycle_leases_expiry_idx',
+          'source_health_states_state_idx',
+          'source_health_states_circuit_idx',
         ]),
       )
 
@@ -147,6 +150,11 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         INSERT INTO source_definitions (id, network_id, source_class, adapter, url)
         VALUES ('source-a', 'public', 'canonical_ledger', 'horizon', 'https://a.example')
       `)
+      await expect(pool.query(`
+        INSERT INTO source_health_states
+          (source_id, state, consecutive_failures, circuit_state, last_observed_at)
+        VALUES ('source-a', 'healthy', 1, 'closed', now())
+      `)).rejects.toMatchObject({ code: '23514' })
       await pool.query(`
         INSERT INTO ingest_cycles
           (id, metric, subject_key, methodology_version, idempotency_key, status, scheduled_at, started_at)

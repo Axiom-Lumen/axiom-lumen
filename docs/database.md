@@ -2,7 +2,7 @@
 
 DAT-01 introduces PostgreSQL schema and migration tooling. DAT-02 adds the transactional repository boundary and
 database-enforced immutable audit records. ING-01 adds durable scheduler leases, worker writes, and a persisted
-latest-ledger read path.
+latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections.
 
 ## Configuration
 
@@ -76,7 +76,9 @@ The following evidence tables reject `UPDATE`, `DELETE`, and `TRUNCATE` through 
 application role is accidentally granted those privileges: retrieval attempts, raw readings, source-health samples,
 snapshots, snapshot contributions, discrepancy events, anchor replies, reviews, and corrections. Resolution,
 correction, and retraction are linked new events; they never overwrite the original. Projection tables such as
-`discrepancies` remain mutable because their complete history is represented by immutable events.
+`discrepancies` and `source_health_states` remain mutable because their history is represented by immutable
+events or source-health samples. Health projection updates use `last_observed_at` ordering so a delayed older
+cycle cannot overwrite newer circuit state.
 
 Audit events and referenced evidence have indefinite retention by default. Any future retention policy must be a
 reviewed forward migration that preserves evidence referenced by unresolved discrepancies; ordinary application

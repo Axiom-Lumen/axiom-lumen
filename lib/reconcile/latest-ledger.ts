@@ -55,6 +55,7 @@ export interface LatestLedgerSourceError {
   message: string
   retrievedAt: string
   status?: number
+  retryAfterMs?: number
 }
 
 export interface WeightedLatestLedgerObservation extends LatestLedgerObservation {
@@ -238,8 +239,8 @@ function toDomainSourceError(error: LatestLedgerSourceError): SourceError {
     retryable:
       code === 'request_failed' ||
       code === 'request_aborted' ||
-      code === 'response_too_large' ||
-      (code === 'non_200_response' && (error.status ?? 0) >= 500),
+      (code === 'non_200_response' &&
+        ([408, 425, 429].includes(error.status ?? 0) || (error.status ?? 0) >= 500)),
   }
 }
 
@@ -436,7 +437,7 @@ export function reconcileLatestLedger({
     sources_excluded: Math.max(result.snapshot.sourcesExcluded, Math.max(0, sourcesExcluded)),
     observations: weightedObservations,
     discrepancies,
-    source_errors: sourceErrors,
+    source_errors: sourceErrors.map(({ retryAfterMs: _retryAfterMs, ...error }) => error),
     as_of: result.snapshot.asOf,
     methodology_version: LATEST_LEDGER_METHODOLOGY_VERSION,
   })

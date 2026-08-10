@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PUBLIC_NETWORK_PASSPHRASE,
   fetchLatestLedgersFromHorizonSources,
+  parseRetryAfter,
   parseHorizonSources,
 } from '../../lib/stellar/horizon'
 
@@ -32,6 +33,14 @@ describe('parseHorizonSources', () => {
     expect(() => parseHorizonSources('https://other.example', { allowedHosts: ['horizon.example'] })).toThrow(
       /allow list/,
     )
+  })
+})
+
+describe('parseRetryAfter', () => {
+  it('supports delta seconds and HTTP dates deterministically', () => {
+    expect(parseRetryAfter('3', '2026-08-10T10:00:00.000Z')).toBe(3_000)
+    expect(parseRetryAfter('Mon, 10 Aug 2026 10:00:05 GMT', '2026-08-10T10:00:00.000Z')).toBe(5_000)
+    expect(parseRetryAfter('invalid', '2026-08-10T10:00:00.000Z')).toBeUndefined()
   })
 })
 
@@ -120,6 +129,13 @@ describe('fetchLatestLedgersFromHorizonSources', () => {
 
     expect(result.observations).toEqual([])
     expect(result.source_errors[0]).toMatchObject({ code: 'non_200_response', status: 502 })
+  })
+
+  it('captures Retry-After metadata from transient HTTP failures', async () => {
+    const fetchImpl = vi.fn(async () => new Response('busy', { status: 429, headers: { 'retry-after': '2' } }))
+    const result = await fetchLatestLedgersFromHorizonSources({ sources, fetchImpl })
+
+    expect(result.source_errors[0]).toMatchObject({ code: 'non_200_response', status: 429, retryAfterMs: 2_000 })
   })
 
   it('records malformed JSON payloads as source errors', async () => {

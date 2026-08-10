@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkerConfig } from '../../lib/worker/config'
+import { parseSourceResilienceConfig, parseWorkerConfig } from '../../lib/worker/config'
 import { serializeWorkerError } from '../../lib/worker/errors'
 
 describe('worker configuration', () => {
@@ -25,6 +25,37 @@ describe('worker configuration', () => {
     expect(() => parseWorkerConfig({ WORKER_CONCURRENCY: '0', SECRET: 'do-not-log' })).toThrow(
       'WORKER_CONCURRENCY must be a positive integer',
     )
+  })
+
+  it('parses source retry, circuit, concurrency, and connector limits', () => {
+    expect(parseSourceResilienceConfig({
+      SOURCE_RETRY_MAX_ATTEMPTS: '4',
+      SOURCE_RETRY_BASE_DELAY_MS: '100',
+      SOURCE_RETRY_MAX_DELAY_MS: '2000',
+      SOURCE_RETRY_JITTER_RATIO: '0.1',
+      SOURCE_CONCURRENCY: '2',
+      SOURCE_CIRCUIT_FAILURE_THRESHOLD: '5',
+      SOURCE_CIRCUIT_COOLDOWN_MS: '30000',
+      HORIZON_TIMEOUT_MS: '4000',
+      HORIZON_MAX_RESPONSE_BYTES: '500000',
+    })).toEqual({
+      maxAttempts: 4,
+      baseDelayMs: 100,
+      maxDelayMs: 2000,
+      jitterRatio: 0.1,
+      concurrency: 2,
+      circuitFailureThreshold: 5,
+      circuitCooldownMs: 30000,
+      timeoutMs: 4000,
+      maxResponseBytes: 500000,
+    })
+  })
+
+  it('rejects a retry ceiling below the initial backoff', () => {
+    expect(() => parseSourceResilienceConfig({
+      SOURCE_RETRY_BASE_DELAY_MS: '500',
+      SOURCE_RETRY_MAX_DELAY_MS: '100',
+    })).toThrow('maxDelayMs must be at least baseDelayMs')
   })
 })
 

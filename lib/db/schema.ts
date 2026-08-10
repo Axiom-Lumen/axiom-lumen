@@ -53,6 +53,7 @@ export const sourceHealthStateEnum = pgEnum('source_health_state', [
   'stale',
   'network_mismatched',
 ])
+export const sourceCircuitStateEnum = pgEnum('source_circuit_state', ['closed', 'open'])
 export const discrepancySeverityEnum = pgEnum('discrepancy_severity', ['info', 'warning', 'critical'])
 export const discrepancyLifecycleEnum = pgEnum('discrepancy_lifecycle', ['open', 'resolved'])
 export const discrepancyPublicationEnum = pgEnum('discrepancy_publication', [
@@ -367,6 +368,39 @@ export const sourceHealthSamples = pgTable(
     uniqueIndex('source_health_samples_cycle_source_uidx').on(table.cycleId, table.sourceId),
     index('source_health_samples_source_observed_idx').on(table.sourceId, table.observedAt),
     check('source_health_samples_latency_check', sql`${table.latencyMs} IS NULL OR ${table.latencyMs} >= 0`),
+  ],
+)
+
+export const sourceHealthStates = pgTable(
+  'source_health_states',
+  {
+    sourceId: text('source_id')
+      .primaryKey()
+      .references(() => sourceDefinitions.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    state: sourceHealthStateEnum('state').notNull(),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    circuitState: sourceCircuitStateEnum('circuit_state').notNull().default('closed'),
+    circuitOpenedAt: utcTimestamp('circuit_opened_at'),
+    nextAttemptAt: utcTimestamp('next_attempt_at'),
+    lastErrorCode: text('last_error_code'),
+    lastObservedAt: utcTimestamp('last_observed_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('source_health_states_state_idx').on(table.state, table.lastObservedAt),
+    index('source_health_states_circuit_idx').on(table.circuitState, table.nextAttemptAt),
+    check('source_health_states_failures_check', sql`${table.consecutiveFailures} >= 0`),
+    check(
+      'source_health_states_circuit_check',
+      sql`(${table.circuitState} = 'closed' AND ${table.circuitOpenedAt} IS NULL) OR
+          (${table.circuitState} = 'open' AND ${table.circuitOpenedAt} IS NOT NULL AND ${table.nextAttemptAt} IS NOT NULL)`,
+    ),
+    check(
+      'source_health_states_healthy_check',
+      sql`${table.state} <> 'healthy' OR
+          (${table.consecutiveFailures} = 0 AND ${table.circuitState} = 'closed' AND
+           ${table.nextAttemptAt} IS NULL AND ${table.lastErrorCode} IS NULL)`,
+    ),
   ],
 )
 

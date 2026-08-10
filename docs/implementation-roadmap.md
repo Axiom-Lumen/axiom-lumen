@@ -42,6 +42,8 @@ dependencies are complete and doing so does not create a second implementation o
 - The severity table, agent guide, and anchor-process copy disagree about thresholds and timing.
 - PostgreSQL persistence, scheduler leases, durable readings/snapshots, source-health samples, and append-only
   discrepancy events are implemented for the latest-ledger slice.
+- Per-source retry budgets, bounded backoff, circuit breakers, concurrency/response limits, and durable health
+  projections are implemented for the latest-ledger worker.
 - Supply, trustline, DEX depth, anchor reserve, authentication, rate limiting, streaming, and operational
   status surfaces remain planned.
 - Several broader product surfaces remain static or planned; current status is maintained in the README and this
@@ -425,7 +427,7 @@ Acceptance:
 - Public routes never wait for a live upstream collection cycle.
 - Local one-shot and continuous worker commands are documented and present in `package.json`.
 
-### [ ] ING-02 — Add resilience and persisted source health
+### [x] ING-02 — Add resilience and persisted source health
 
 Implement per-source timeouts, retry budgets, exponential backoff with jitter, `Retry-After`, circuit breakers,
 concurrency caps, payload limits, and health-state transitions. Do not retry permanent validation failures.
