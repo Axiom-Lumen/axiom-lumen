@@ -6,7 +6,7 @@
 // is the constants file from the previous fix; create it if you haven't yet.
 import { DOC_CODES } from "@/lib/doc-codes";
 import { ArrowLink, ButtonPrimary, Kicker, Wrap } from "../../site";
-import { ReconciliationStrip } from "./reconiclation-strip";
+import { ReconciliationStrip } from './reconciliation-strip'
 
 export function Hero() {
   return (

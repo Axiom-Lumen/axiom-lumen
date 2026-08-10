@@ -539,7 +539,7 @@ loading, empty, stale, degraded, and unavailable states. Keep illustrative outpu
 distinct from live data. A missing snapshot (`404`) uses the labeled illustrative fallback; validated stale or
 unavailable responses (`503`) retain their real payload but are explicitly labeled as not current.
 
-### [ ] WEB-02 — Make the homepage strip truthful and live
+### [x] WEB-02 — Make the homepage strip truthful and live
 
 Prefer rendering the latest persisted snapshot on the server with periodic client refresh. Display per-source
 values only when the metric contract safely exposes them; always include status, confidence, source context,

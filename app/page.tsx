@@ -10,7 +10,6 @@ import {
   ConfidenceJson,
 } from '@/components/site'
 import { Hero } from '@/components/ui/home/hero'
-import { ReconciliationStrip } from '@/components/ui/home/reconiclation-strip'
 import { audiences, pipeline, problems } from '@/lib/home/data'
 
 
