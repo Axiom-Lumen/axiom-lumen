@@ -41,6 +41,7 @@ wiring, and anchor right-of-reply workflows.
 ### Implemented
 
 - [x] **Frontend shell:** Static pages under `/`, `/about`, `/docs`, `/methodology`, `/anchors`, and `/pricing`.
+- [x] **Homepage reconciliation strip:** Server-rendered persisted supply snapshot with validated periodic refresh and explicit failure states.
 - [x] **Latest-ledger Horizon connector:** Reads latest ledger records from configured Horizon endpoints.
 - [x] **Latest-ledger reconciliation:** Weighted median, freshness decay, availability-aware confidence, status classification, discrepancies, and source errors.
 - [x] **Local API route:** `GET /api/v1/stellar/latest-ledger`.
@@ -67,7 +68,6 @@ wiring, and anchor right-of-reply workflows.
 
 ### Mocked, static, planned, or missing
 
-- [ ] **Homepage reconciliation strip:** Clearly labeled illustrative UI, not wired to the API.
 - [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
