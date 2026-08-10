@@ -9,7 +9,7 @@ import type { SupplyReadModel } from '../../lib/db/supply-read-model'
 const readModel = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('../../lib/db/supply-read-model', () => ({ loadLatestSupplyReadModel: readModel.load }))
 
-import { GET } from '../../app/api/v1/supply/[asset]/route'
+import { GET, OPTIONS, POST } from '../../app/api/v1/supply/[asset]/route'
 
 const ISSUER = `G${'A'.repeat(55)}`
 const ASSET = `USDC:${ISSUER}`
@@ -66,8 +66,8 @@ function finalizedSnapshot(status: 'verified' | 'degraded' | 'unavailable' = 've
   })
 }
 
-function request(asset = ASSET) {
-  return GET(new Request(`https://axiom.example/api/v1/supply/${asset}`), {
+function request(asset = ASSET, init?: RequestInit, query = '') {
+  return GET(new Request(`https://axiom.example/api/v1/supply/${asset}${query}`, init), {
     params: Promise.resolve({ asset }),
   })
 }
@@ -82,9 +82,9 @@ describe('GET /api/v1/supply/{asset}', () => {
   it('serves a verified finalized snapshot without synchronous upstream fan-out', async () => {
     const fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy)
-    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false })
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false, freshForSeconds: 110 })
 
-    const response = await request()
+    const response = await request(ASSET, { headers: { 'X-Request-ID': 'req_supply_1' } })
     const body = await response.json()
 
     expect(response.status).toBe(200)
@@ -95,13 +95,19 @@ describe('GET /api/v1/supply/{asset}', () => {
       value: { kind: 'amount', value: '1000' },
       methodology_version: 'onchain-asset-supply-v0.1',
       api_version: 'v1',
+      request_id: 'req_supply_1',
     })
+    expect(response.headers.get('x-request-id')).toBe('req_supply_1')
+    expect(response.headers.get('cache-control')).toBe('private, max-age=15, stale-while-revalidate=45')
+    expect(response.headers.get('vary')).toBe('X-Request-ID')
+    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+    expect(response.headers.get('etag')).toMatch(/^W\/"[A-Za-z0-9_-]+"$/)
     expect(apiReconciliationSnapshotSchema.parse(body)).toEqual(body)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('preserves an explicit degraded state', async () => {
-    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('degraded'), stale: false })
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('degraded'), stale: false, freshForSeconds: 110 })
 
     const response = await request()
     const body = await response.json()
@@ -111,7 +117,7 @@ describe('GET /api/v1/supply/{asset}', () => {
   })
 
   it('returns an explicit unavailable persisted state', async () => {
-    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('unavailable'), stale: false })
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot('unavailable'), stale: false, freshForSeconds: 110 })
 
     const response = await request()
     const body = await response.json()
@@ -119,10 +125,11 @@ describe('GET /api/v1/supply/{asset}', () => {
     expect(response.status).toBe(503)
     expect(body).toMatchObject({ status: 'unavailable', value: null, sources_usable: 0 })
     expect(apiReconciliationSnapshotSchema.parse(body)).toEqual(body)
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
   it('never presents an expired finalized snapshot as current', async () => {
-    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: true })
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: true, freshForSeconds: 0 })
 
     const response = await request()
     const body = await response.json()
@@ -183,5 +190,80 @@ describe('GET /api/v1/supply/{asset}', () => {
       message: 'The supply read model is temporarily unavailable',
     })
     expect(JSON.stringify(body)).not.toContain('secret')
+  })
+
+  it('uses representation ETags and isolates caller-supplied request IDs', async () => {
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false, freshForSeconds: 110 })
+    const first = await request(ASSET, { headers: { 'X-Request-ID': 'req_supply_a' } })
+    const etag = first.headers.get('etag')!
+
+    const differentRequest = await request(ASSET, {
+      headers: { 'If-None-Match': etag, 'X-Request-ID': 'req_supply_b' },
+    })
+    expect(differentRequest.status).toBe(200)
+    expect(differentRequest.headers.get('etag')).not.toBe(etag)
+    expect((await differentRequest.json()).request_id).toBe('req_supply_b')
+
+    const response = await request(ASSET, {
+      headers: { 'If-None-Match': etag, 'X-Request-ID': 'req_supply_a' },
+    })
+
+    expect(response.status).toBe(304)
+    expect(await response.text()).toBe('')
+    expect(response.headers.get('etag')).toBe(etag)
+    expect(response.headers.get('x-request-id')).toBe('req_supply_a')
+  })
+
+  it('never lets cache freshness exceed the remaining evidence lifetime', async () => {
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false, freshForSeconds: 20 })
+    expect((await request()).headers.get('cache-control')).toBe(
+      'private, max-age=15, stale-while-revalidate=5',
+    )
+
+    readModel.load.mockResolvedValue({ snapshot: finalizedSnapshot(), stale: false, freshForSeconds: 0.9 })
+    expect((await request()).headers.get('cache-control')).toBe('private, max-age=0, must-revalidate')
+  })
+
+  it('rejects query parameters and invalid request IDs before reading storage', async () => {
+    const invalidQuery = await request(ASSET, undefined, '?cursor=unexpected')
+    expect(invalidQuery.status).toBe(400)
+    expect((await invalidQuery.json()).error.code).toBe('invalid_query_parameter')
+
+    const invalidRequestId = await request(ASSET, { headers: { 'X-Request-ID': 'contains spaces' } })
+    expect(invalidRequestId.status).toBe(400)
+    expect((await invalidRequestId.json()).error.code).toBe('invalid_request_id')
+    expect(readModel.load).not.toHaveBeenCalled()
+  })
+
+  it('answers CORS preflight with the standardized policy', () => {
+    const response = OPTIONS(new Request(`https://axiom.example/api/v1/supply/${ASSET}`, {
+      method: 'OPTIONS',
+      headers: { 'X-Request-ID': 'req_supply_options' },
+    }))
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+    expect(response.headers.get('access-control-allow-methods')).toBe('GET, OPTIONS')
+    expect(response.headers.get('access-control-allow-headers')).toContain('X-Request-ID')
+    expect(response.headers.get('x-request-id')).toBe('req_supply_options')
+  })
+
+  it('rejects invalid preflight IDs and unsupported methods with shared envelopes', async () => {
+    const invalidPreflight = OPTIONS(new Request(`https://axiom.example/api/v1/supply/${ASSET}`, {
+      method: 'OPTIONS',
+      headers: { 'X-Request-ID': 'invalid request id' },
+    }))
+    expect(invalidPreflight.status).toBe(400)
+    expect((await invalidPreflight.json()).error.code).toBe('invalid_request_id')
+    expect(invalidPreflight.headers.get('access-control-allow-methods')).toBe('GET, OPTIONS')
+
+    const unsupported = POST(new Request(`https://axiom.example/api/v1/supply/${ASSET}`, {
+      method: 'POST',
+      headers: { 'X-Request-ID': 'req_supply_post' },
+    }))
+    expect(unsupported.status).toBe(405)
+    expect(unsupported.headers.get('allow')).toBe('GET, OPTIONS')
+    expect(unsupported.headers.get('x-request-id')).toBe('req_supply_post')
+    expect((await unsupported.json()).error.code).toBe('method_not_allowed')
   })
 })

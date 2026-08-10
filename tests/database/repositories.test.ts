@@ -345,6 +345,7 @@ describeWithDatabase('transactional persistence repositories', () => {
       )
       expect(readModel).toMatchObject({
         stale: false,
+        freshForSeconds: 110,
         snapshot: {
           metric: 'circulating_supply',
           subject: { kind: 'asset', asset: job.asset },
@@ -359,16 +360,16 @@ describeWithDatabase('transactional persistence repositories', () => {
           discrepancies: [],
         },
       })
-      expect((await queryLatestSupplyReadModel(
+      expect(await queryLatestSupplyReadModel(
         databaseClient,
         job.asset,
         new Date('2026-08-10T12:01:55.000Z'),
-      ))?.stale).toBe(false)
-      expect((await queryLatestSupplyReadModel(
+      )).toMatchObject({ stale: false, freshForSeconds: 0 })
+      expect(await queryLatestSupplyReadModel(
         databaseClient,
         job.asset,
         new Date('2026-08-10T12:01:55.001Z'),
-      ))?.stale).toBe(true)
+      )).toMatchObject({ stale: true, freshForSeconds: 0 })
 
       await pool.query(`
         UPDATE discrepancies
