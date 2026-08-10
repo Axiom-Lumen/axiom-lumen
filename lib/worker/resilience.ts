@@ -134,7 +134,15 @@ export async function executeWithRetry<T, TError extends RetryableSourceError>({
 export function sourceHealthState(error: RetryableSourceError | undefined): SourceHealthProjection['state'] {
   if (!error) return 'healthy'
   if (error.code === 'network_mismatch') return 'network_mismatched'
-  if (['malformed_payload', 'empty_ledger_records', 'empty_records', 'response_too_large'].includes(error.code)) {
+  if ([
+    'malformed_payload',
+    'empty_ledger_records',
+    'empty_records',
+    'response_too_large',
+    'checkpoint_mismatch',
+    'artifact_integrity_mismatch',
+    'total_mismatch',
+  ].includes(error.code)) {
     return 'malformed'
   }
   if (error.code === 'stale_observation') return 'stale'

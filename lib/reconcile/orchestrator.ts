@@ -13,6 +13,7 @@ import {
   type RawObservation,
   type ReconciliationSnapshot,
   type SourceIdentity,
+  type DiscrepancyDetails,
 } from '../contracts/domain'
 import { computeAvailabilityScore, computeSourceClassDiversity, computeWeightedAgreement } from './agreement'
 import { computeConfidence, type ConfidenceCoefficients } from './confidence'
@@ -56,10 +57,12 @@ export interface MetricReconciliationProfile<TObservation extends ObservationBas
   deviationBand: (observed: TValue, reference: TValue) => DeviationBand
   spreadDistance: (observed: TValue, reference: TValue) => number
   maximumSpreadDistance: number
+  maximumObservationAgeSeconds?: number
   toMetricValue: (value: TValue) => MetricValue
   isNamedParty?: (observation: TObservation) => boolean
   getUpstreamId?: (observation: TObservation) => string
   createDiscrepancyId?: (observation: TObservation) => string
+  getDiscrepancyDetails?: (observed: TValue, reference: TValue) => DiscrepancyDetails
 }
 
 export interface ReconcileMetricInput<TObservation extends ObservationBase, TValue> {
@@ -196,6 +199,10 @@ export function reconcileMetric<TObservation extends ObservationBase, TValue>({
   if (profile.maximumSpreadDistance <= 0 || !Number.isFinite(profile.maximumSpreadDistance)) {
     throw new Error('profile.maximumSpreadDistance must be finite and greater than zero')
   }
+  if (
+    profile.maximumObservationAgeSeconds !== undefined &&
+    (!Number.isFinite(profile.maximumObservationAgeSeconds) || profile.maximumObservationAgeSeconds <= 0)
+  ) throw new Error('profile.maximumObservationAgeSeconds must be finite and greater than zero')
 
   const now = clock()
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error('clock must return a valid Date')
@@ -279,7 +286,10 @@ export function reconcileMetric<TObservation extends ObservationBase, TValue>({
       effectiveWeight: freshness.effectiveWeight,
     }
   })
-  const usable = weighted.filter((item) => item.effectiveWeight > 0)
+  const usable = weighted.filter((item) =>
+    item.effectiveWeight > 0 &&
+    (profile.maximumObservationAgeSeconds === undefined || item.ageSeconds <= profile.maximumObservationAgeSeconds)
+  )
   const median = computeWeightedMedian(
     usable.map((item) => ({
       id: item.observation.observationId,
@@ -426,6 +436,9 @@ export function reconcileMetric<TObservation extends ObservationBase, TValue>({
       consecutiveCycles: result.state.consecutiveCycles,
       observedValue: profile.toMetricValue(item.value),
       referenceValue: profile.toMetricValue(reference),
+      ...(profile.getDiscrepancyDetails
+        ? { details: profile.getDiscrepancyDetails(item.value, reference) }
+        : {}),
       firstObservedAt: result.state.firstObservedAt,
       lastObservedAt: result.state.lastObservedAt,
     })

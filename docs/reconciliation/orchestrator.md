@@ -12,7 +12,8 @@ will atomically store its snapshot, projected discrepancy state, and append-only
    malformed prior state, and invalid methodology before returning output.
 3. Keep transport, payload, network, freshness, and policy failures separate from numeric disagreement. A source
    with an error cannot contribute a value or confidence weight in that cycle.
-4. Select source timestamps, compute age and half-life effective weight, and exclude zero-weight observations.
+4. Select source timestamps, compute age and half-life effective weight, and exclude zero-weight observations or
+   observations beyond a metric profile's hard maximum age.
 5. Use the injected metric profile for value comparison, agreement boundaries, exact deviation bands, spread
    normalization, domain-value construction, named-party attribution, and upstream identity.
 6. Compute weighted median, weighted agreement, freshness, availability, expected source-class diversity,
@@ -39,6 +40,10 @@ The latest-ledger worker uses this profile boundary and persists the internal sn
 evidence and events. The route adapts the finalized snapshot to the named v0.2 compatibility response. The
 distinction and migration policy are recorded in
 [`ADR 0003`](../decisions/0003-latest-ledger-diagnostic-compatibility.md).
+
+The supply profile compares exact `StellarAmount` totals and all six component amounts at one ledger and close
+time. Derivation family is its independence key, so Horizon replicas cannot satisfy the two-derivation verified
+policy. Its hard age boundary prevents an old successful reading from becoming a current value indefinitely.
 
 ## Golden cases
 

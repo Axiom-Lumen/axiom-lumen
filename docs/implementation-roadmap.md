@@ -484,7 +484,7 @@ Acceptance:
 - Parser and failure tests use recorded, redacted fixtures.
 - No anchor-provided value is mislabeled as canonical ledger state.
 
-### [ ] SUP-04 — Run and persist supply reconciliation
+### [x] SUP-04 — Run and persist supply reconciliation
 
 Register the metric with the worker, shared methodology, persistence repositories, and discrepancy state
 machine.

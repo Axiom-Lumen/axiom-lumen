@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SUPPLY_COMPONENT_IDS } from '../../config/methodology'
 import {
   type MetricValue,
   type MetricId,
@@ -61,6 +62,8 @@ const apiMetricValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('count'), value: z.string().regex(/^(0|[1-9]\d*)$/) }).strict(),
 ])
 
+const apiStellarAmountSchema = z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/)
+
 const apiSourceErrorSchema = z
   .object({
     source_id: identifierSchema.nullable(),
@@ -95,6 +98,24 @@ const apiDiscrepancySchema = z
     consecutive_cycles: z.number().int().nonnegative(),
     observed_value: apiMetricValueSchema,
     reference_value: apiMetricValueSchema,
+    details: z.object({
+      kind: z.literal('supply_comparison'),
+      observed_ledger_sequence: z.number().int().safe().positive(),
+      reference_ledger_sequence: z.number().int().safe().positive(),
+      observed_source_timestamp: utcTimestampSchema,
+      reference_source_timestamp: utcTimestampSchema,
+      component_differences: z.array(z.object({
+        component: z.enum(SUPPLY_COMPONENT_IDS),
+        observed: apiStellarAmountSchema,
+        reference: apiStellarAmountSchema,
+        absolute_delta: apiStellarAmountSchema,
+      }).strict())
+        .max(SUPPLY_COMPONENT_IDS.length)
+        .refine(
+          (differences) => new Set(differences.map((difference) => difference.component)).size === differences.length,
+          { message: 'supply component differences must be unique' },
+        ),
+    }).strict().optional(),
     first_observed_at: utcTimestampSchema,
     last_observed_at: utcTimestampSchema,
   })
@@ -294,6 +315,21 @@ export function serializePublicReconciliationSnapshot(
         consecutive_cycles: discrepancy.consecutiveCycles,
         observed_value: serializeMetricValue(discrepancy.observedValue),
         reference_value: serializeMetricValue(discrepancy.referenceValue),
+        ...(discrepancy.details?.kind === 'supply_comparison' ? {
+          details: {
+            kind: 'supply_comparison' as const,
+            observed_ledger_sequence: discrepancy.details.observedLedgerSequence,
+            reference_ledger_sequence: discrepancy.details.referenceLedgerSequence,
+            observed_source_timestamp: discrepancy.details.observedSourceTimestamp,
+            reference_source_timestamp: discrepancy.details.referenceSourceTimestamp,
+            component_differences: discrepancy.details.componentDifferences.map((difference) => ({
+              component: difference.component,
+              observed: difference.observed.toString(),
+              reference: difference.reference.toString(),
+              absolute_delta: difference.absoluteDelta.toString(),
+            })),
+          },
+        } : {}),
         first_observed_at: discrepancy.firstObservedAt,
         last_observed_at: discrepancy.lastObservedAt,
       })),

@@ -6,9 +6,9 @@
 
 Axiom Lumen is being built as a verification and intelligence layer for the Stellar ecosystem. The long-term product goal is to aggregate on-chain and off-chain data, cross-check it with published methodology, and return confidence-scored outputs with source context.
 
-This repository currently contains a Next.js presentation surface plus one durable backend vertical slice: a
-background worker collects latest-ledger observations from registered Stellar Horizon sources, reconciles and
-persists them, and a local API route serves the latest finalized snapshot.
+This repository currently contains a Next.js presentation surface plus durable latest-ledger and on-chain
+asset-supply pipelines. A background worker collects registered sources, reconciles and persists their evidence,
+and the implemented latest-ledger API serves its latest finalized snapshot.
 
 ---
 
@@ -26,11 +26,12 @@ Implemented in this repository today:
 
 1. **Ingest:** An idempotent leased worker reads registered Horizon REST endpoints with bounded concurrency,
    retries transient failures, and persists source health and circuit state.
-2. **Reconcile:** Weighted median over latest-ledger observations, half-life freshness weighting, availability-aware confidence, status classification, and discrepancy reporting.
+2. **Reconcile:** Metric-specific weighted reconciliation with freshness, availability, source-diversity,
+   confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: supply reconciliation and worker integration, archive ingestion, DEX/order-book reconciliation,
-anchor reserve comparison, authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard
+Planned but not implemented yet: the supply read API, DEX/order-book reconciliation, anchor reserve comparison,
+authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard
 wiring, and anchor right-of-reply workflows.
 
 ---
@@ -55,6 +56,9 @@ wiring, and anchor right-of-reply workflows.
   exact decimal arithmetic and structured failures. Worker/reconciliation integration remains planned.
 - [x] **Independent supply evidence:** Validates recorded history-archive state-replay artifacts against trusted
   checkpoint metadata and normalizes them with Horizon readings through one raw observation contract.
+- [x] **Persisted supply reconciliation:** Discovers explicitly configured credit assets, runs Horizon and
+  independently trusted archive derivations, excludes stale evidence, and atomically stores raw readings,
+  snapshots, source health, discrepancies, and events with idempotent cycle replay.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
@@ -209,7 +213,7 @@ The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](.
   normalized spread. See [the formula and worked example](./docs/reconciliation/confidence.md).
 - Source request failures are not data discrepancies.
 
-The proposed future credit-asset metric is defined as
+The implemented credit-asset reconciliation metric is defined as
 [On-chain asset supply v0.1](./docs/methodology/onchain-asset-supply-v0.1.md). It includes every ledger balance
 container at one closed ledger and deliberately does not claim to measure economic free float or native XLM.
 

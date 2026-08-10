@@ -2,7 +2,9 @@
 
 DAT-01 introduces PostgreSQL schema and migration tooling. DAT-02 adds the transactional repository boundary and
 database-enforced immutable audit records. ING-01 adds durable scheduler leases, worker writes, and a persisted
-latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections.
+latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections. SUP-04 reuses the
+same atomic boundary for supply evidence, reconciliation snapshots, and discrepancy events, and pins each newly
+scheduled lease to a digested job-definition snapshot.
 
 ## Configuration
 
@@ -67,10 +69,11 @@ headers, cookies, API keys, tokens, and passwords before hashing and storage. Th
 verifies the exact sanitized evidence retained in the database without deriving a digest from discarded secrets.
 Connectors must still avoid putting unrelated personal or secret data into evidence.
 
-Every raw reading stores a validated copy of its complete source identity. API reconstruction uses that immutable
-evidence rather than the mutable source registry, preserving the endpoint and source class observed at collection
-time. The ING-01 migration backfills existing readings from their referenced source/network rows before making
-the identity field mandatory.
+Every raw reading stores a validated copy of its complete source identity. A successful supply reading also keeps
+the complete normalized observation—ledger, component vector, total, derivation/checkpoint metadata—and its
+connector evidence. API reconstruction uses immutable evidence rather than the mutable source registry,
+preserving the endpoint and source class observed at collection time. The ING-01 migration backfills existing
+readings from their referenced source/network rows before making the identity field mandatory.
 
 The following evidence tables reject `UPDATE`, `DELETE`, and `TRUNCATE` through PostgreSQL triggers, even if an
 application role is accidentally granted those privileges: retrieval attempts, raw readings, source-health samples,

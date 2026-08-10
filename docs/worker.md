@@ -2,8 +2,9 @@
 
 ING-01 runs collection and reconciliation outside the Next.js request lifecycle. ING-02 adds bounded per-source
 retries, circuit breaking, payload and timeout limits, and durable source-health projections. The worker discovers
-enabled Horizon sources from PostgreSQL, creates one deterministic cycle per metric, network, methodology
-version, and schedule boundary, and commits the complete evidence/snapshot batch atomically.
+enabled sources from PostgreSQL, creates one deterministic cycle per metric, subject, methodology version, and
+schedule boundary, and commits the complete evidence/snapshot batch atomically. Latest-ledger subjects are
+networks; supply subjects are explicitly registered classic credit assets keyed as `network:CODE:ISSUER`.
 
 ## Local setup
 
@@ -27,6 +28,28 @@ VALUES ('stellar-public-horizon', 'public', 'canonical_ledger', 'horizon',
         'https://horizon.stellar.org', 'stellar-public-horizon')
 ON CONFLICT (network_id, url) DO NOTHING;
 ```
+
+Supply discovery is opt-in per source and asset. Register the asset, then enable its durable asset row ID in
+each eligible Horizon/archive source's `config.supply.assetIds`. Archive sources must also carry the externally
+verified checkpoint manifest consumed by the archive adapter:
+
+```sql
+INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+VALUES ('public-usdc', 'public', 'credit', 'USDC', '<issuer>', 'USDC:<issuer>');
+
+UPDATE source_definitions
+SET config = jsonb_set(config, '{supply}',
+  '{"enabled":true,"assetIds":["public-usdc"]}'::jsonb)
+WHERE id = 'stellar-public-horizon';
+
+-- The independent verification pipeline must update the archive URL and
+-- trustedCheckpoints.public-usdc together before the scheduled cycle.
+```
+
+Absent or disabled supply configuration is ignored during discovery. An enabled but malformed supply
+configuration is retained in every otherwise eligible asset job and produces a structured configuration failure,
+so an operator-visible source error cannot disappear through routing. A configured archive source without a valid
+trusted checkpoint is likewise retained and cannot be silently treated as independent evidence.
 
 Run exactly one scheduling/drain pass:
 
@@ -79,7 +102,9 @@ The mutable `source_health_states` projection persists circuit state and the nex
 worker restarts. Every finalized cycle also appends an immutable health sample. States are `healthy`,
 `unreachable`, `rejected`, `malformed`, `stale`, or `network_mismatched`. An observation older than the
 latest-ledger freshness half-life is retained as evidence with decayed reconciliation weight and recorded as
-`stale` health. An open circuit skips network retrieval until its cooldown expires; unrelated sources continue
+`stale` health. Supply evidence older than its hard 120-second maximum is also retained as a raw reading, but is
+excluded from the current snapshot; if no current evidence remains, the snapshot is `unavailable` with a null
+value. An open circuit skips network retrieval until its cooldown expires; unrelated sources continue
 and can still produce a degraded snapshot.
 
 ## Lease and shutdown behavior
@@ -88,8 +113,13 @@ Claims use PostgreSQL row locks with `SKIP LOCKED`, an owner, and a monotonicall
 heartbeat extends ownership while a handler runs. Losing the lease or receiving a shutdown signal cancels the
 connector and returns unfinished work to pending state.
 
+Each new lease stores the fully validated discovered job definition—including source endpoints, network identity,
+asset, and trusted checkpoint—plus its canonical SHA-256 digest. Claims verify that digest and execute the stored
+definition, so registry edits after scheduling cannot change a retry's inputs. Nullable fields remain only for
+leases created before this migration; those legacy leases use the current discovery result.
+
 A partial unique index permits only one pending/running cycle for a metric and subject. This keeps stateful
-discrepancy projection updates ordered for one network while still allowing unrelated subjects to run in
+discrepancy projection updates ordered for one network or asset while still allowing unrelated subjects to run in
 parallel.
 
 The finalized `ingest_cycles.idempotency_key` is the second fence. If a process crashes after committing a cycle

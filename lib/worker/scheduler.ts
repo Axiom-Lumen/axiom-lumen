@@ -6,6 +6,8 @@ import type {
   SchedulerRepository,
   ScheduledCycleInput,
 } from '../db/scheduler-repository'
+import { parseDiscoveredIngestJob } from '../db/scheduler-repository'
+import { computeEvidenceSha256 } from '../evidence/json'
 
 export interface SchedulerOptions {
   workerId: string
@@ -30,6 +32,7 @@ export interface SchedulerDependencies {
   persistenceRepositories: PersistenceRepositories
   handlers: WorkerJobHandlers
   methodologyVersion: string
+  supplyMethodologyVersion?: string
   clock?: () => Date
 }
 
@@ -52,6 +55,7 @@ function scheduledTime(now: Date, intervalSeconds: number) {
 }
 
 export function scheduledCycle(job: DiscoveredIngestJob, at: string): ScheduledCycleInput {
+  const jobDefinition = parseDiscoveredIngestJob(job)
   const idempotencyKey = `${job.metric}:${job.subjectKey}:${job.methodologyVersion}:${at}`
   const digest = createHash('sha256').update(idempotencyKey).digest('hex')
   return {
@@ -61,6 +65,8 @@ export function scheduledCycle(job: DiscoveredIngestJob, at: string): ScheduledC
     methodologyVersion: job.methodologyVersion,
     idempotencyKey,
     scheduledAt: at,
+    jobDefinition,
+    jobDefinitionSha256: computeEvidenceSha256(jobDefinition),
   }
 }
 
@@ -98,7 +104,12 @@ export async function runSchedulerOnce(
   if (!Number.isFinite(now.getTime())) throw new Error('clock must return a valid Date')
   const nowIso = now.toISOString()
   const reaped = await dependencies.schedulerRepository.reapExpiredLeases(nowIso, options.maxAttempts)
-  const jobs = await dependencies.schedulerRepository.discoverLatestLedgerJobs(dependencies.methodologyVersion)
+  const jobs = [
+    ...await dependencies.schedulerRepository.discoverLatestLedgerJobs(dependencies.methodologyVersion),
+    ...(dependencies.supplyMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverSupplyJobs(dependencies.supplyMethodologyVersion)
+      : []),
+  ]
   const jobsByKey = new Map(jobs.map((job) => [`${job.metric}:${job.subjectKey}`, job]))
   const at = scheduledTime(now, options.intervalSeconds)
   let scheduled = 0
@@ -117,7 +128,26 @@ export async function runSchedulerOnce(
       })
       if (!lease) return
       summary.claimed += 1
-      const job = jobsByKey.get(`${lease.metric}:${lease.subjectKey}`)
+      let job: DiscoveredIngestJob | undefined
+      try {
+        if (lease.jobDefinition !== undefined) {
+          if (!lease.jobDefinitionSha256 || computeEvidenceSha256(lease.jobDefinition) !== lease.jobDefinitionSha256) {
+            throw new Error('Scheduled job definition failed its integrity check')
+          }
+          job = parseDiscoveredIngestJob(lease.jobDefinition)
+          if (
+            job.metric !== lease.metric ||
+            job.subjectKey !== lease.subjectKey ||
+            job.methodologyVersion !== lease.methodologyVersion
+          ) throw new Error('Scheduled job definition does not match its lease identity')
+        } else {
+          job = jobsByKey.get(`${lease.metric}:${lease.subjectKey}`)
+        }
+      } catch (error) {
+        await dependencies.schedulerRepository.failLease(lease, clock().toISOString(), error)
+        summary.failed += 1
+        continue
+      }
       const handler = dependencies.handlers[lease.metric]
       if (!job || !handler) {
         await dependencies.schedulerRepository.failLease(lease, clock().toISOString(), new Error('No registered job handler'))

@@ -92,6 +92,13 @@ Required retained provenance:
 At least two eligible derivation families must agree exactly for `verified`. Otherwise a usable value is
 `degraded` and confidence-capped. A report with an incompatible scope or timestamp is excluded, not coerced.
 
+Freshness decays with a 30-second half-life. An observation more than 120 seconds behind cycle finalization is
+retained as immutable raw evidence but cannot contribute a current value; all-stale evidence produces an
+`unavailable` snapshot. Confidence uses the versioned `onchain-asset-supply-confidence-v0.1` formula with
+agreement `0.55`, freshness `0.20`, availability `0.20`, and spread `0.05`. Expected source-class diversity is
+multiplicative. Verified status requires a score of at least `0.90`; single-source, same-derivation, and
+source-error caps are `0.60`, `0.70`, and `0.85` respectively.
+
 ## Worked examples
 
 ### Complete issued-asset total

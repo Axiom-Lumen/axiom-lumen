@@ -77,7 +77,7 @@ export function assessSupplyEvidence(observationInputs: readonly unknown[]): Sup
 }
 
 export type HorizonRawSupplyResult =
-  | { observation: RawSupplyObservation; error?: never }
+  | { observation: RawSupplyObservation; evidence: unknown; error?: never }
   | { observation?: never; error: Extract<HorizonSupplyResult, { error: unknown }>['error'] }
 
 export async function fetchHorizonRawSupplyObservation({
@@ -89,7 +89,15 @@ export async function fetchHorizonRawSupplyObservation({
   identifierSchema.parse(cycleId)
   const result = await fetchHorizonOnchainAssetSupply(options)
   if (result.error) return { error: result.error }
-  return { observation: toHorizonRawSupplyObservation({ observationId, cycleId, observation: result.observation }) }
+  const evidence = {
+    rawPayload: result.observation.rawPayload,
+    requestProvenance: result.observation.requestProvenance,
+    pageMetadata: result.observation.pageMetadata,
+  }
+  return {
+    observation: toHorizonRawSupplyObservation({ observationId, cycleId, observation: result.observation }),
+    evidence,
+  }
 }
 
 export function toHorizonRawSupplyObservation({

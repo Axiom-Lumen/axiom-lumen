@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   SOURCE_CLASS_IDS,
+  SUPPLY_COMPONENT_IDS,
   SUPPLY_METHODOLOGY_VERSION,
 } from '../../config/methodology'
 import { StellarAmount, parseStellarAmount } from '../stellar/amount'
@@ -72,6 +73,10 @@ export function parseAssetId(value: unknown): AssetId {
 
 export function formatAssetId(asset: AssetId) {
   return asset.kind === 'native' ? 'native' : `${asset.code}:${asset.issuer}`
+}
+
+export function formatNetworkAssetKey(networkId: NetworkIdentity['id'], asset: AssetId) {
+  return `${networkIdSchema.parse(networkId)}:${formatAssetId(assetIdSchema.parse(asset))}`
 }
 
 export const tradingPairSchema = z
@@ -591,6 +596,28 @@ export const reconciliationContributionSchema = z
   .strict()
 export type ReconciliationContribution = z.infer<typeof reconciliationContributionSchema>
 
+export const discrepancyDetailsSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('supply_comparison'),
+    observedLedgerSequence: z.number().int().safe().positive(),
+    referenceLedgerSequence: z.number().int().safe().positive(),
+    observedSourceTimestamp: utcTimestampSchema,
+    referenceSourceTimestamp: utcTimestampSchema,
+    componentDifferences: z.array(z.object({
+      component: z.enum(SUPPLY_COMPONENT_IDS),
+      observed: stellarAmountSchema,
+      reference: stellarAmountSchema,
+      absoluteDelta: stellarAmountSchema,
+    }).strict())
+      .max(SUPPLY_COMPONENT_IDS.length)
+      .refine(
+        (differences) => new Set(differences.map((difference) => difference.component)).size === differences.length,
+        { message: 'supply component differences must be unique' },
+      ),
+  }).strict(),
+])
+export type DiscrepancyDetails = z.infer<typeof discrepancyDetailsSchema>
+
 export const discrepancySchema = z
   .object({
     id: identifierSchema,
@@ -601,6 +628,7 @@ export const discrepancySchema = z
     consecutiveCycles: z.number().int().safe().nonnegative(),
     observedValue: metricValueSchema,
     referenceValue: metricValueSchema,
+    details: discrepancyDetailsSchema.optional(),
     firstObservedAt: utcTimestampSchema,
     lastObservedAt: utcTimestampSchema,
   })

@@ -263,6 +263,50 @@ describe('API contracts', () => {
     expect(() => apiReconciliationSnapshotSchema.parse({ ...publicSupply, metric: 'circulating_supply' })).toThrow()
   })
 
+  it('serializes exact supply discrepancy context', () => {
+    const supplySnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      metric: 'circulating_supply',
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: { kind: 'amount', value: '1000' },
+      discrepancies: [{
+        ...snapshotInput().discrepancies[0],
+        observedValue: { kind: 'amount', value: '1000' },
+        referenceValue: { kind: 'amount', value: '1000' },
+        details: {
+          kind: 'supply_comparison',
+          observedLedgerSequence: 501,
+          referenceLedgerSequence: 500,
+          observedSourceTimestamp: '2026-08-09T12:00:01Z',
+          referenceSourceTimestamp: '2026-08-09T12:00:00Z',
+          componentDifferences: [{
+            component: 'contract_balances',
+            observed: '11',
+            reference: '10',
+            absoluteDelta: '1',
+          }],
+        },
+      }],
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+    })
+
+    expect(serializePublicReconciliationSnapshot(supplySnapshot, 'req_supply_details').discrepancies[0]).toMatchObject({
+      observed_value: { kind: 'amount', value: '1000' },
+      reference_value: { kind: 'amount', value: '1000' },
+      details: {
+        kind: 'supply_comparison',
+        observed_ledger_sequence: 501,
+        reference_ledger_sequence: 500,
+        component_differences: [{
+          component: 'contract_balances',
+          observed: '11',
+          reference: '10',
+          absolute_delta: '1',
+        }],
+      },
+    })
+  })
+
   it('serializes bigint counts and amounts as strings', () => {
     const countSnapshot = reconciliationSnapshotSchema.parse({
       ...snapshotInput(),
