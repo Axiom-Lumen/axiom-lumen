@@ -100,6 +100,20 @@ age plus time elapsed since finalization exceeds the supply methodology's 120-se
 snapshot is serialized as `unavailable` with a null value and an explicit `stale_observation` source error; its
 original `as_of` remains visible.
 
+## HTTP policy
+
+The canonical prefix is `/api/v1`; the application does not expose `/v1` as an alias. Snapshot routes share
+request-ID validation, strict declared-query handling, JSON error envelopes, status semantics, read-only CORS,
+conditional weak ETags, and cache policy. `200` snapshot representations use private caches varied by
+`X-Request-ID`; `4xx`, `5xx`, and unavailable representations are `no-store`. Supply caps cache freshness plus
+stale-while-revalidate at the evidence's remaining time before its hard freshness boundary.
+
+Opaque cursor pagination defaults to 25 and is capped at 100. It applies only to endpoints that explicitly
+declare pagination; the implemented singular snapshot routes reject `cursor` and `limit`. Deprecation is also
+explicit: a deprecated route must emit `Deprecation`, `Sunset`, and a successor link. Current v1 routes are not
+deprecated. Full rationale and status mapping are in
+[`ADR 0006`](../decisions/0006-public-http-api-policy.md).
+
 ## API compatibility
 
 `tests/fixtures/contracts/reconciliation-snapshot-v1.json` is the initial serialized compatibility fixture.

@@ -509,7 +509,7 @@ Acceptance:
 - Staleness is explicit; the route does not imply an old snapshot is live.
 - No synchronous upstream fan-out occurs in the request.
 
-### [ ] API-02 — Standardize all HTTP behavior
+### [x] API-02 — Standardize all HTTP behavior
 
 Add validated parameters, error codes/envelope, request IDs, cache/ETag policy, CORS policy, pagination,
 maximum page sizes, deprecation headers, and consistent `200/4xx/5xx` semantics. Decide whether public paths

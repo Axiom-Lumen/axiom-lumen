@@ -1,62 +1,63 @@
-import { NextResponse } from 'next/server'
 import { loadLatestLedgerReadModel } from '../../../../../lib/db/latest-ledger-read-model'
 import {
-  LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
-  LATEST_LEDGER_METHODOLOGY_VERSION,
-  latestLedgerResponseSchema,
-} from '../../../../../lib/reconcile/latest-ledger'
+  apiErrorResponse,
+  apiJsonResponse,
+  apiMethodNotAllowedResponse,
+  apiOptionsResponse,
+  rejectUnexpectedQueryParameters,
+  resolveApiRequestId,
+} from '../../../../../lib/http/api'
 
 export const dynamic = 'force-dynamic'
 
-function unavailableResponse(message: string, sourcesConfigured = 0) {
-  const asOf = new Date().toISOString()
-  return NextResponse.json(
-    latestLedgerResponseSchema.parse({
-      metric: 'latest_ledger',
-      value: null,
-      status: 'unavailable',
-      confidence: 0,
-      confidence_formula_version: LATEST_LEDGER_CONFIDENCE_FORMULA_VERSION,
-      confidence_components: {
-        agreement: 0,
-        freshness: 0,
-        availability: 0,
-        diversity: 0,
-        spread: 0,
-      },
-      confidence_caps_applied: [],
-      sources_configured: sourcesConfigured,
-      sources_responded: 0,
-      sources_usable: 0,
-      sources_agreeing: 0,
-      sources_excluded: 0,
-      observations: [],
-      discrepancies: [],
-      source_errors: [
-        {
-          sourceId: 'configuration',
-          sourceUrl: '',
-          code: 'invalid_configuration',
-          message,
-          retrievedAt: asOf,
-        },
-      ],
-      as_of: asOf,
-      methodology_version: LATEST_LEDGER_METHODOLOGY_VERSION,
-    }),
-    { status: 503 },
-  )
+function requestError(request: Request, status: number, code: string, message: string, requestId: string) {
+  return apiErrorResponse({ request, status, code, message, requestId })
 }
 
-export async function GET() {
+export function OPTIONS(request: Request) {
+  return apiOptionsResponse(request)
+}
+
+export const HEAD = apiMethodNotAllowedResponse
+export const POST = apiMethodNotAllowedResponse
+export const PUT = apiMethodNotAllowedResponse
+export const PATCH = apiMethodNotAllowedResponse
+export const DELETE = apiMethodNotAllowedResponse
+
+export async function GET(request: Request) {
+  const resolved = resolveApiRequestId(request)
+  if (!resolved.ok) return requestError(request, 400, resolved.code, resolved.message, resolved.requestId)
+  const queryError = rejectUnexpectedQueryParameters(request)
+  if (queryError) return requestError(request, 400, queryError.code, queryError.message, resolved.requestId)
+
   try {
     const reconciled = await loadLatestLedgerReadModel()
-    if (!reconciled) return unavailableResponse('No finalized latest-ledger snapshot is available')
-    return NextResponse.json(reconciled, { status: reconciled.status === 'unavailable' ? 503 : 200 })
+    if (!reconciled) {
+      return requestError(
+        request,
+        404,
+        'latest_ledger_snapshot_not_found',
+        'No finalized latest-ledger snapshot is available',
+        resolved.requestId,
+      )
+    }
+    const status = reconciled.status === 'unavailable' ? 503 : 200
+    return apiJsonResponse(request, reconciled, {
+      status,
+      requestId: resolved.requestId,
+      cache: status === 200 ? { maxAgeSeconds: 15, staleWhileRevalidateSeconds: 45 } : 'no-store',
+      etag: status === 200,
+    })
   } catch (error) {
     console.error('Unable to load the latest-ledger read model', {
       name: error instanceof Error ? error.name : 'Error',
     })
-    return unavailableResponse('The latest-ledger read model is temporarily unavailable')
+    return requestError(
+      request,
+      503,
+      'latest_ledger_read_unavailable',
+      'The latest-ledger read model is temporarily unavailable',
+      resolved.requestId,
+    )
   }
 }

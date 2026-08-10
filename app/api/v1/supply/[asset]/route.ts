@@ -1,23 +1,24 @@
-import { randomUUID } from 'node:crypto'
-import { NextResponse } from 'next/server'
 import { supplyMethodologyConfig } from '../../../../../config/methodology'
 import {
   apiReconciliationSnapshotSchema,
-  createApiErrorResponse,
   parseAssetId,
   serializePublicReconciliationSnapshot,
   type ApiReconciliationSnapshot,
 } from '../../../../../lib/contracts'
 import { loadLatestSupplyReadModel } from '../../../../../lib/db/supply-read-model'
+import {
+  apiErrorResponse,
+  apiJsonResponse,
+  apiMethodNotAllowedResponse,
+  apiOptionsResponse,
+  rejectUnexpectedQueryParameters,
+  resolveApiRequestId,
+} from '../../../../../lib/http/api'
 
 export const dynamic = 'force-dynamic'
 
 interface SupplyRouteContext {
   params: Promise<{ asset: string }>
-}
-
-function errorResponse(status: number, code: string, message: string, requestId: string, asOf: Date) {
-  return NextResponse.json(createApiErrorResponse({ code, message, requestId, asOf }), { status })
 }
 
 function staleResponse(
@@ -54,9 +55,43 @@ function staleResponse(
   })
 }
 
-export async function GET(_request: Request, context: SupplyRouteContext) {
-  const requestId = randomUUID()
+export function OPTIONS(request: Request) {
+  return apiOptionsResponse(request)
+}
+
+export const HEAD = apiMethodNotAllowedResponse
+export const POST = apiMethodNotAllowedResponse
+export const PUT = apiMethodNotAllowedResponse
+export const PATCH = apiMethodNotAllowedResponse
+export const DELETE = apiMethodNotAllowedResponse
+
+function supplyCachePolicy(freshForSeconds: number) {
+  const totalBudget = Math.max(0, Math.floor(freshForSeconds))
+  const maxAgeSeconds = Math.min(15, totalBudget)
+  return {
+    maxAgeSeconds,
+    staleWhileRevalidateSeconds: Math.min(45, totalBudget - maxAgeSeconds),
+  }
+}
+
+export async function GET(request: Request, context: SupplyRouteContext) {
   const now = new Date()
+  const resolved = resolveApiRequestId(request)
+  if (!resolved.ok) {
+    return apiErrorResponse({
+      request,
+      status: 400,
+      code: resolved.code,
+      message: resolved.message,
+      requestId: resolved.requestId,
+      asOf: now,
+    })
+  }
+  const requestId = resolved.requestId
+  const queryError = rejectUnexpectedQueryParameters(request)
+  if (queryError) {
+    return apiErrorResponse({ request, status: 400, ...queryError, requestId, asOf: now })
+  }
   const { asset: rawAsset } = await context.params
   let asset
   try {
@@ -64,27 +99,54 @@ export async function GET(_request: Request, context: SupplyRouteContext) {
     if (parsed.kind !== 'credit') throw new Error('native XLM is not supported by supply v0.1')
     asset = parsed
   } catch {
-    return errorResponse(
-      400,
-      'invalid_asset',
-      'Asset must be a canonical CODE:ISSUER credit-asset identifier',
+    return apiErrorResponse({
+      request,
+      status: 400,
+      code: 'invalid_asset',
+      message: 'Asset must be a canonical CODE:ISSUER credit-asset identifier',
       requestId,
-      now,
-    )
+      asOf: now,
+    })
   }
 
   try {
     const readModel = await loadLatestSupplyReadModel(asset, now)
     if (!readModel) {
-      return errorResponse(404, 'supply_snapshot_not_found', 'No finalized supply snapshot is available', requestId, now)
+      return apiErrorResponse({
+        request,
+        status: 404,
+        code: 'supply_snapshot_not_found',
+        message: 'No finalized supply snapshot is available',
+        requestId,
+        asOf: now,
+      })
     }
     const response = serializePublicReconciliationSnapshot(readModel.snapshot, requestId)
-    if (readModel.stale) return NextResponse.json(staleResponse(response, requestId, now), { status: 503 })
-    return NextResponse.json(response, { status: response.status === 'unavailable' ? 503 : 200 })
+    if (readModel.stale) {
+      return apiJsonResponse(request, staleResponse(response, requestId, now), {
+        status: 503,
+        requestId,
+        cache: 'no-store',
+      })
+    }
+    const status = response.status === 'unavailable' ? 503 : 200
+    return apiJsonResponse(request, response, {
+      status,
+      requestId,
+      cache: status === 200 ? supplyCachePolicy(readModel.freshForSeconds) : 'no-store',
+      etag: status === 200,
+    })
   } catch (error) {
     console.error('Unable to load the supply read model', {
       name: error instanceof Error ? error.name : 'Error',
     })
-    return errorResponse(503, 'supply_read_unavailable', 'The supply read model is temporarily unavailable', requestId, now)
+    return apiErrorResponse({
+      request,
+      status: 503,
+      code: 'supply_read_unavailable',
+      message: 'The supply read model is temporarily unavailable',
+      requestId,
+      asOf: now,
+    })
   }
 }

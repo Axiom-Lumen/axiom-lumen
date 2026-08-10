@@ -159,7 +159,7 @@ Field semantics:
 A single usable source can return a value, but it is always `degraded` and confidence-capped so it is not presented as fully verified.
 
 This endpoint reads the latest finalized persisted snapshot. It never fans out to Horizon or waits for a live
-collection cycle. If no finalized snapshot exists, it returns `503 unavailable`.
+collection cycle. If no finalized snapshot exists, it returns the shared error envelope with `404`.
 
 ### `GET /api/v1/supply/{asset}`
 
@@ -178,6 +178,22 @@ The endpoint is currently pinned to the Public Network. Once the age already rec
 observation plus elapsed time exceeds 120 seconds, the response becomes explicitly `unavailable`, clears its
 current value/contributions, and records a `stale_observation` error while preserving the original snapshot
 `as_of`.
+
+### Shared HTTP behavior
+
+`/api/v1` is the canonical public prefix. Both implemented routes accept `GET` and `OPTIONS`, echo or generate
+`X-Request-ID`, expose public read-only CORS, reject undeclared query parameters, and return a shared error
+envelope for invalid requests, unsupported methods, missing snapshots, and read-store failures. Current `200`
+snapshots use private, request-ID-varying caches and complete-representation weak ETags; errors and unavailable
+responses use `Cache-Control: no-store`. Matching `If-None-Match` requests return `304`.
+
+The default cache window is 15 seconds plus 45 seconds of stale-while-revalidate. Supply caps that combined
+window at the evidence's remaining lifetime, so caching cannot extend data beyond the methodology's 120-second
+hard limit.
+
+Shared cursor pagination defaults to 25 and is capped at 100 for future list endpoints. The current snapshot
+routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route
+has an explicit sunset policy. See [ADR 0006](./docs/decisions/0006-public-http-api-policy.md).
 
 ---
 

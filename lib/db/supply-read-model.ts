@@ -31,6 +31,7 @@ import {
 export interface SupplyReadModel {
   snapshot: ReconciliationSnapshot
   stale: boolean
+  freshForSeconds: number
 }
 
 // Raw readings keep connector evidence beside the complete normalized observation.
@@ -197,9 +198,14 @@ export async function queryLatestSupplyReadModel(
     (maximum, contribution) => Math.max(maximum, contribution.ageSeconds + elapsedSinceSnapshotSeconds),
     elapsedSinceSnapshotSeconds,
   )
+  const freshForSeconds = Math.max(
+    0,
+    supplyMethodologyConfig.maximumObservationAgeSeconds - maximumEvidenceAgeSeconds,
+  )
   return {
     snapshot,
     stale: maximumEvidenceAgeSeconds > supplyMethodologyConfig.maximumObservationAgeSeconds,
+    freshForSeconds,
   }
 }
 
