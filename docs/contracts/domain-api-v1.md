@@ -25,6 +25,12 @@ serialization maps it to `onchain_asset_supply`, the scope-accurate ID approved 
 future endpoint is `/api/v1/supply/{asset}` and supports classic credit assets only under
 `onchain-asset-supply-v0.1`; native XLM requires a separate profile.
 
+Supply observations additionally require the closed ledger, all six exact component amounts, methodology
+version, evidence digest, connector/software versions, and a typed derivation checkpoint. Archive checkpoints
+also retain the independently trusted artifact digest and manifest identity, source, verification method,
+verification-proof digest, and verification time. Horizon aggregates and history-archive state replays use distinct derivation families bound
+to their permitted source identity; changing only a Horizon hostname does not create independent evidence.
+
 ## Asset identifiers
 
 Assets are either:

@@ -143,6 +143,29 @@ describe('domain contracts', () => {
       metric: 'circulating_supply',
       asset: { kind: 'credit', code: 'USDC', issuer: ISSUER },
       amount: '48213092.4400001',
+      components: {
+        authorized_trustlines: '48213092.4400001',
+        maintain_liabilities_trustlines: '0',
+        unauthorized_trustlines: '0',
+        claimable_balances: '0',
+        liquidity_pools: '0',
+        contract_balances: '0',
+      },
+      ledgerSequence: 500,
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+      derivation: {
+        family: 'horizon_asset_aggregate',
+        connectorVersion: 'horizon-supply-v0.1',
+        evidenceSha256: 'a'.repeat(64),
+        software: { name: 'stellar-horizon', version: null },
+        checkpoint: {
+          kind: 'horizon_asset_page',
+          ledgerSequence: 500,
+          terminalCursor: 'asset-500',
+          pagesScanned: 1,
+          recordsScanned: 1,
+        },
+      },
       provenance: PROVENANCE,
     })
 

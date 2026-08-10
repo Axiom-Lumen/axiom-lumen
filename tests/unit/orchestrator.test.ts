@@ -26,7 +26,11 @@ const NETWORK = {
 }
 
 function source(id: string, sourceClass: SourceIdentity['sourceClass'] = 'canonical_ledger'): SourceIdentity {
-  const adapter = sourceClass === 'anchor_self_reported' ? ('anchor' as const) : ('horizon' as const)
+  const adapter = sourceClass === 'anchor_self_reported'
+    ? ('anchor' as const)
+    : sourceClass === 'archive'
+      ? ('archive' as const)
+      : ('horizon' as const)
   return { id, sourceClass, adapter, url: `https://${id}.example/`, network: NETWORK }
 }
 
@@ -373,18 +377,69 @@ describe('metric reconciliation orchestrator', () => {
 
   it('supports decimal-safe amount profiles without coercing values to numbers', () => {
     const canonical = source('canonical')
-    const anchor = source('anchor', 'anchor_self_reported')
-    const asset = { kind: 'native' as const }
+    const archive = source('archive', 'archive')
+    const asset = { kind: 'credit' as const, code: 'USDC', issuer: `G${'A'.repeat(55)}` }
     const amount = parseStellarAmount('9007199254740993.0000001')
     const tolerance = parseStellarAmount('0.0000001')
-    const amountObservation = (sourceIdentity: SourceIdentity, value: string) => ({
-      observationId: `obs-${sourceIdentity.id}`,
-      cycleId: 'cycle-amount',
-      metric: 'circulating_supply' as const,
-      asset,
-      amount: value,
-      provenance: { source: sourceIdentity, sourceTimestamp: NOW.toISOString(), retrievedAt: NOW.toISOString() },
-    })
+    const amountObservation = (sourceIdentity: SourceIdentity, value: string) => {
+      const archiveSource = sourceIdentity.sourceClass === 'archive'
+      return {
+        observationId: `obs-${sourceIdentity.id}`,
+        cycleId: 'cycle-amount',
+        metric: 'circulating_supply' as const,
+        asset,
+        amount: value,
+        components: {
+          authorized_trustlines: value,
+          maintain_liabilities_trustlines: '0',
+          unauthorized_trustlines: '0',
+          claimable_balances: '0',
+          liquidity_pools: '0',
+          contract_balances: '0',
+        },
+        ledgerSequence: 500,
+        methodologyVersion: 'onchain-asset-supply-v0.1' as const,
+        derivation: archiveSource
+          ? {
+              family: 'history_archive_state_replay' as const,
+              connectorVersion: 'archive-supply-v0.1',
+              evidenceSha256: 'a'.repeat(64),
+              software: { name: 'supply-replay', version: '1.0.0', stellarCoreVersion: '24.0.0' },
+              checkpoint: {
+                kind: 'history_archive_replay' as const,
+                ledgerSequence: 500,
+                ledgerHash: 'b'.repeat(64),
+                trustedLedgerHash: 'b'.repeat(64),
+                bucketListHash: 'c'.repeat(64),
+                historyArchiveStateSha256: 'd'.repeat(64),
+                trustedArtifactSha256: 'f'.repeat(64),
+                trustProvenance: {
+                  manifestId: 'manifest-500',
+                  source: 'https://checkpoints.example/500.manifest.json',
+                  verificationMethod: 'trusted_manifest_signature' as const,
+                  verificationEvidenceSha256: '9'.repeat(64),
+                  verifiedAt: NOW.toISOString(),
+                },
+                replayStartLedger: 1,
+                replayEndLedger: 500,
+              },
+            }
+          : {
+              family: 'horizon_asset_aggregate' as const,
+              connectorVersion: 'horizon-supply-v0.1',
+              evidenceSha256: 'e'.repeat(64),
+              software: { name: 'stellar-horizon' as const, version: null },
+              checkpoint: {
+                kind: 'horizon_asset_page' as const,
+                ledgerSequence: 500,
+                terminalCursor: 'asset-500',
+                pagesScanned: 1,
+                recordsScanned: 1 as const,
+              },
+            },
+        provenance: { source: sourceIdentity, sourceTimestamp: NOW.toISOString(), retrievedAt: NOW.toISOString() },
+      }
+    }
     const amountProfile: MetricReconciliationProfile<
       ReturnType<typeof circulatingSupplyObservationSchema.parse>,
       StellarAmount
@@ -407,13 +462,13 @@ describe('metric reconciliation orchestrator', () => {
       snapshotId: 'snapshot-amount',
       cycleId: 'cycle-amount',
       subject: { kind: 'asset', asset },
-      configuredSources: [canonical, anchor],
+      configuredSources: [canonical, archive],
       observations: [
         amountObservation(canonical, amount.toString()),
-        amountObservation(anchor, '9007199254740993.0000002'),
+        amountObservation(archive, '9007199254740993.0000002'),
       ],
       clock: () => new Date(NOW),
-      methodology: { ...methodology, expectedSourceClasses: ['canonical_ledger', 'anchor_self_reported'] },
+      methodology: { ...methodology, expectedSourceClasses: ['canonical_ledger', 'archive'] },
       profile: amountProfile,
     })
 

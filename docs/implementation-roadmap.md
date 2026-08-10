@@ -471,7 +471,7 @@ Acceptance:
 - Invalid assets, missing issuers, rate limits, malformed records, and partial scans are structured failures.
 - Fixture totals are independently calculable.
 
-### [ ] SUP-03 — Add genuinely distinct corroborating sources
+### [x] SUP-03 — Add genuinely distinct corroborating sources
 
 Implement adapters only for sources approved in SUP-01, such as history/archive-derived state and an
 anchor-published/attested figure discovered through verified metadata. Each adapter returns the shared raw

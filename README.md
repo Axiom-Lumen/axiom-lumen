@@ -53,6 +53,8 @@ wiring, and anchor right-of-reply workflows.
   replica-independence policy, and truthful public naming.
 - [x] **Horizon supply connector:** Collects bounded, resumable, same-ledger classic-credit-asset totals with
   exact decimal arithmetic and structured failures. Worker/reconciliation integration remains planned.
+- [x] **Independent supply evidence:** Validates recorded history-archive state-replay artifacts against trusted
+  checkpoint metadata and normalizes them with Horizon readings through one raw observation contract.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Tests:** Unit tests for connector/reconciliation and integration tests for the API route.
 - [x] **CI:** npm-based lint, typecheck, test, integration-test, and build workflow.
