@@ -7,6 +7,8 @@ import {
   SUPPLY_COMPONENT_IDS,
   SUPPLY_METHODOLOGY_VERSION,
   depthMethodologyConfig,
+  depthReconciliationMethodologyConfig,
+  DEPTH_RECONCILIATION_METHODOLOGY_VERSION,
   methodologyConfig,
   supplyMethodologyConfig,
   validateMethodologyConfig,
@@ -158,6 +160,16 @@ describe('methodology v1.5 configuration', () => {
     })
     expect(Object.isFrozen(depthMethodologyConfig)).toBe(true)
     expect(Object.isFrozen(depthMethodologyConfig.priceBandsBasisPoints)).toBe(true)
+  })
+
+  it('pins the persisted depth reconciliation and read freshness profile', () => {
+    expect(DEPTH_RECONCILIATION_METHODOLOGY_VERSION).toBe('order-book-depth-v0.2')
+    expect(depthReconciliationMethodologyConfig).toMatchObject({
+      canonicalPath: '/api/v1/depth/{pair}', comparisonToleranceBasisPoints: 50,
+      minimumIndependentDerivations: 2, horizonReplicasAreIndependent: false,
+      freshnessHalfLifeSeconds: 5, maximumObservationAgeSeconds: 20,
+    })
+    expect(Object.isFrozen(depthReconciliationMethodologyConfig)).toBe(true)
   })
 
   it('rejects unordered depth bands and replica inflation', () => {

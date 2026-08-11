@@ -41,9 +41,9 @@ canonical asset order, and a checkpoint ledger equal to the observation ledger.
 
 The depth connector reports `invalid_pair`, `crossed_book`, and `stale_book` through the shared source-error
 vocabulary in addition to the existing configuration, transport, HTTP, payload, network, pagination, and
-ledger-drift failures. Empty and one-sided books remain explicit connector states but produce no raw price-band
-observations because they have no two-sided midpoint. Persistence, reconciliation, confidence scoring, and a
-public depth endpoint remain outside this contract version's implemented routes.
+ledger-drift failures. The persisted worker reports empty and one-sided states as `empty_book` and
+`one_sided_book`. The public depth value is one coherent six-bucket book with its exact midpoint and ledger/time
+boundary; `GET /api/v1/depth/{pair}` serves finalized `order-book-depth-v0.2` snapshots only.
 
 Supply reconciliation persists the same immutable cycle boundary as latest-ledger reconciliation. Its durable
 subject key is `network:CODE:ISSUER`, preventing cross-network asset collisions. Successful but stale connector

@@ -98,6 +98,33 @@ export const tradingPairSchema = z
   })
 export type TradingPair = z.infer<typeof tradingPairSchema>
 
+function assetSortKey(asset: AssetId) {
+  return asset.kind === 'native' ? '0:native' : `1:${asset.code}:${asset.issuer}`
+}
+
+export function canonicalizeTradingPair(pairInput: unknown): TradingPair {
+  const pair = tradingPairSchema.parse(pairInput)
+  return assetSortKey(pair.base) <= assetSortKey(pair.counter)
+    ? pair
+    : { base: pair.counter, counter: pair.base }
+}
+
+export function formatTradingPairId(pairInput: unknown) {
+  const pair = canonicalizeTradingPair(pairInput)
+  return `${formatAssetId(pair.base)}~${formatAssetId(pair.counter)}`
+}
+
+export function parseTradingPairId(value: unknown): TradingPair {
+  if (typeof value !== 'string') return canonicalizeTradingPair(value)
+  const parts = value.split('~')
+  if (parts.length !== 2) throw new Error('pair must be BASE~COUNTER')
+  return canonicalizeTradingPair({ base: parseAssetId(parts[0]), counter: parseAssetId(parts[1]) })
+}
+
+export function formatNetworkPairKey(networkId: NetworkIdentity['id'], pair: unknown) {
+  return `${networkIdSchema.parse(networkId)}:${formatTradingPairId(pair)}`
+}
+
 export const metricIdSchema = z.enum([
   'latest_ledger',
   'circulating_supply',
@@ -160,6 +187,15 @@ export const stellarAmountSchema = z.union([
     }
   }),
 ])
+
+function formatPositiveRational(numerator: string, denominator: string, decimals = 7) {
+  const scale = 10n ** BigInt(decimals)
+  const scaled = BigInt(numerator) * scale
+  const divisor = BigInt(denominator)
+  let rounded = scaled / divisor
+  if ((scaled % divisor) * 2n >= divisor) rounded += 1n
+  return `${rounded / scale}.${(rounded % scale).toString().padStart(decimals, '0')}`
+}
 
 export const supplyComponentsSchema = z.object({
   authorized_trustlines: stellarAmountSchema,
@@ -374,9 +410,6 @@ function validateOrderBookDepthObservation(
       message: `depth price band must be one of ${DEPTH_PRICE_BANDS_BPS.join(', ')} basis points`,
     })
   }
-  const assetSortKey = (asset: AssetId) => asset.kind === 'native'
-    ? '0:native'
-    : `1:${asset.code}:${asset.issuer}`
   if (assetSortKey(observation.pair.base) > assetSortKey(observation.pair.counter)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -447,6 +480,8 @@ export const sourceErrorCodeSchema = z.enum([
   'stale_observation',
   'stale_book',
   'crossed_book',
+  'empty_book',
+  'one_sided_book',
   'excluded_source',
 ])
 
@@ -500,17 +535,30 @@ export const retrievalAttemptSchema = z
   })
 export type RetrievalAttempt = z.infer<typeof retrievalAttemptSchema>
 
+const depthPriceBandSchema = z.union([z.literal(50), z.literal(100), z.literal(500)])
+
+const depthBucketValueSchema = z.object({
+  side: z.enum(['bid', 'ask']),
+  priceBandBasisPoints: depthPriceBandSchema,
+  value: stellarAmountSchema,
+}).strict()
+
+const depthMetricValueSchema = z.object({
+  kind: z.literal('depth'),
+  referencePrice: z.object({
+    numerator: z.string().regex(/^[1-9]\d*$/),
+    denominator: z.string().regex(/^[1-9]\d*$/),
+    decimal: z.string().regex(/^(0|[1-9]\d*)\.\d{7}$/),
+  }).strict(),
+  ledgerSequence: z.number().int().safe().positive(),
+  ledgerClosedAt: utcTimestampSchema,
+  buckets: z.array(depthBucketValueSchema).length(DEPTH_PRICE_BANDS_BPS.length * 2),
+}).strict()
+
 export const metricValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ledger'), value: z.number().int().safe().positive() }).strict(),
   z.object({ kind: z.literal('amount'), value: stellarAmountSchema }).strict(),
-  z
-    .object({
-      kind: z.literal('depth'),
-      value: stellarAmountSchema,
-      side: z.enum(['bid', 'ask']),
-      priceBandBasisPoints: z.number().int().safe().positive(),
-    })
-    .strict(),
+  depthMetricValueSchema,
   z
     .object({
       kind: z.literal('count'),
@@ -520,7 +568,26 @@ export const metricValueSchema = z.discriminatedUnion('kind', [
       ]),
     })
     .strict(),
-])
+]).superRefine((value, context) => {
+  if (value.kind !== 'depth') return
+  if (formatPositiveRational(value.referencePrice.numerator, value.referencePrice.denominator) !== value.referencePrice.decimal) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['referencePrice', 'decimal'], message: 'depth reference decimal must match its exact ratio' })
+  }
+  const keys = value.buckets.map((bucket) => `${bucket.side}:${bucket.priceBandBasisPoints}`)
+  if (new Set(keys).size !== DEPTH_PRICE_BANDS_BPS.length * 2) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['buckets'], message: 'depth book must contain each side and price band exactly once' })
+  }
+  for (const side of ['bid', 'ask'] as const) {
+    const amounts = DEPTH_PRICE_BANDS_BPS.map((band) =>
+      value.buckets.find((bucket) => bucket.side === side && bucket.priceBandBasisPoints === band)?.value,
+    )
+    amounts.forEach((amount, index) => {
+      if (index > 0 && amount && amounts[index - 1] && amount.compare(amounts[index - 1]!) < 0) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['buckets'], message: `${side} depth must be cumulative across wider bands` })
+      }
+    })
+  }
+})
 export type MetricValue = z.infer<typeof metricValueSchema>
 
 export const metricSubjectSchema = z.discriminatedUnion('kind', [
@@ -684,6 +751,20 @@ export const discrepancyDetailsSchema = z.discriminatedUnion('kind', [
         (differences) => new Set(differences.map((difference) => difference.component)).size === differences.length,
         { message: 'supply component differences must be unique' },
       ),
+  }).strict(),
+  z.object({
+    kind: z.literal('depth_comparison'),
+    observedLedgerSequence: z.number().int().safe().positive(),
+    referenceLedgerSequence: z.number().int().safe().positive(),
+    observedSourceTimestamp: utcTimestampSchema,
+    referenceSourceTimestamp: utcTimestampSchema,
+    bucketDifferences: z.array(z.object({
+      side: z.enum(['bid', 'ask']),
+      priceBandBasisPoints: depthPriceBandSchema,
+      observed: stellarAmountSchema,
+      reference: stellarAmountSchema,
+      absoluteDelta: stellarAmountSchema,
+    }).strict()).max(DEPTH_PRICE_BANDS_BPS.length * 2),
   }).strict(),
 ])
 export type DiscrepancyDetails = z.infer<typeof discrepancyDetailsSchema>

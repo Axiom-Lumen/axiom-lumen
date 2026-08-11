@@ -207,6 +207,8 @@ describe('domain contracts', () => {
     expect(sourceErrorCodeSchema.parse('invalid_pair')).toBe('invalid_pair')
     expect(sourceErrorCodeSchema.parse('crossed_book')).toBe('crossed_book')
     expect(sourceErrorCodeSchema.parse('stale_book')).toBe('stale_book')
+    expect(sourceErrorCodeSchema.parse('empty_book')).toBe('empty_book')
+    expect(sourceErrorCodeSchema.parse('one_sided_book')).toBe('one_sided_book')
   })
 
   it('enforces snapshot availability and source-count invariants', () => {

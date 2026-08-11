@@ -1,5 +1,11 @@
 # Methodology changelog
 
+## order-book-depth-v0.2 — 2026-08-11
+
+- Added persisted coherent-book reconciliation and `GET /api/v1/depth/{pair}`.
+- Pinned 50-basis-point bucket agreement, five/20-second freshness bounds, confidence coefficients and caps.
+- Kept Horizon replicas in one derivation family and empty/one-sided books out of usable observations.
+
 ## order-book-depth-v0.1 — 2026-08-11
 
 - Defined deterministic native/credit pair canonicalization and counter-per-base rational prices.

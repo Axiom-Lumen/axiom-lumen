@@ -14,6 +14,7 @@ import {
 
 const ISSUER = `G${'A'.repeat(55)}`
 const ASSET = `USDC:${ISSUER}`
+const PAIR = `native~${ASSET}`
 const AS_OF = '2026-08-10T12:00:00.000Z'
 
 export const IMPLEMENTED_PUBLIC_OPERATIONS = [
@@ -37,6 +38,8 @@ export const IMPLEMENTED_PUBLIC_OPERATIONS = [
     method: 'options',
     path: '/api/v1/supply/{asset}',
   },
+  { operationId: 'getDepth', method: 'get', path: '/api/v1/depth/{pair}' },
+  { operationId: 'depthOptions', method: 'options', path: '/api/v1/depth/{pair}' },
 ] as const
 
 function latestExample(status: 'verified' | 'degraded' | 'unavailable'): LatestLedgerReconciliationResult {
@@ -113,6 +116,23 @@ function supplyExample(status: 'verified' | 'degraded' | 'unavailable'): ApiReco
   })
 }
 
+function depthExample(status: 'verified' | 'degraded' | 'unavailable'): ApiReconciliationSnapshot {
+  const available = status !== 'unavailable'
+  const buckets = (['bid', 'ask'] as const).flatMap((side) => ([50, 100, 500] as const).map((price_band_basis_points, index) => ({ side, price_band_basis_points, value: String((index + 1) * 100) })))
+  return apiReconciliationSnapshotSchema.parse({
+    metric: 'order_book_depth', subject: { kind: 'pair', base: 'native', counter: ASSET }, status,
+    value: available ? { kind: 'depth', reference_price: { numerator: '2', denominator: '1', decimal: '2.0000000' }, ledger_sequence: 58_000_000, ledger_closed_at: AS_OF, buckets } : null,
+    confidence: status === 'verified' ? 0.95 : status === 'degraded' ? 0.6 : 0,
+    confidence_formula_version: 'order-book-depth-confidence-v0.2',
+    confidence_components: { agreement: available ? 1 : 0, freshness: available ? 0.95 : 0, availability: status === 'verified' ? 1 : status === 'degraded' ? 0.5 : 0, spread: available ? 1 : 0 },
+    confidence_caps_applied: status === 'degraded' ? ['single_source'] : [], sources_configured: 2,
+    sources_responded: available ? (status === 'verified' ? 2 : 1) : 0, sources_usable: available ? (status === 'verified' ? 2 : 1) : 0,
+    sources_agreeing: available ? (status === 'verified' ? 2 : 1) : 0, sources_excluded: 0, contributions: [], discrepancies: [],
+    source_errors: status === 'unavailable' ? [{ source_id: null, source_url: null, code: 'stale_book', category: 'freshness', message: 'Latest finalized depth evidence exceeds 20 seconds', occurred_at: AS_OF, retryable: false }] : [],
+    as_of: AS_OF, methodology_version: 'order-book-depth-v0.2', request_id: 'example_request', api_version: 'v1',
+  })
+}
+
 function errorExample(code: string, message: string): ApiErrorResponse {
   return apiErrorResponseSchema.parse({
     error: { code, message },
@@ -129,17 +149,22 @@ export const OPENAPI_EXAMPLES = {
   supplyVerified: supplyExample('verified'),
   supplyDegraded: supplyExample('degraded'),
   supplyUnavailable: supplyExample('unavailable'),
+  depthVerified: depthExample('verified'),
+  depthDegraded: depthExample('degraded'),
+  depthUnavailable: depthExample('unavailable'),
   invalidRequestId: errorExample(
     'invalid_request_id',
     'X-Request-ID must be a valid identifier of at most 128 characters',
   ),
   invalidQueryParameter: errorExample('invalid_query_parameter', 'Unsupported query parameter: limit'),
   invalidAsset: errorExample('invalid_asset', 'Asset must be a canonical CODE:ISSUER credit-asset identifier'),
+  invalidPair: errorExample('invalid_pair', 'Pair must be two different Stellar asset identifiers separated by ~'),
   latestMissingSnapshot: errorExample(
     'latest_ledger_snapshot_not_found',
     'No finalized latest-ledger snapshot is available',
   ),
   supplyMissingSnapshot: errorExample('supply_snapshot_not_found', 'No finalized supply snapshot is available'),
+  depthMissingSnapshot: errorExample('depth_snapshot_not_found', 'No finalized depth snapshot is available'),
   latestReadUnavailable: errorExample(
     'latest_ledger_read_unavailable',
     'The latest-ledger read model is temporarily unavailable',
@@ -148,6 +173,7 @@ export const OPENAPI_EXAMPLES = {
     'supply_read_unavailable',
     'The supply read model is temporarily unavailable',
   ),
+  depthReadUnavailable: errorExample('depth_read_unavailable', 'The depth read model is temporarily unavailable'),
   authenticationError: errorExample('authentication_required', 'A valid API credential is required'),
   rateLimitError: errorExample('rate_limit_exceeded', 'The request quota has been exceeded'),
 } as const
@@ -216,6 +242,7 @@ export function createOpenApiDocument() {
     tags: [
       { name: 'Ledger', description: 'Latest closed-ledger reconciliation' },
       { name: 'Supply', description: 'Classic credit-asset on-chain supply reconciliation' },
+      { name: 'Depth', description: 'Classic SDEX cumulative order-book depth reconciliation' },
     ],
     paths: {
       '/api/v1/stellar/latest-ledger': {
@@ -335,6 +362,20 @@ export function createOpenApiDocument() {
         },
         options: publicOptionsOperation('supplyOptions'),
       },
+      '/api/v1/depth/{pair}': {
+        get: {
+          operationId: 'getDepth', tags: ['Depth'], summary: 'Get the latest finalized Public Network SDEX depth snapshot',
+          parameters: [{ $ref: '#/components/parameters/Pair' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          responses: {
+            200: { description: 'Current verified or degraded depth snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/DepthVerified' }, degraded: { $ref: '#/components/examples/DepthDegraded' } } } } },
+            304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
+            400: { description: 'Invalid pair, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidPair: { $ref: '#/components/examples/InvalidPair' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No finalized snapshot exists for the pair', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/DepthMissingSnapshot' } }) },
+            503: { description: 'Persisted metric state, freshness, or read storage is unavailable', headers: responseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/DepthUnavailable' }, readUnavailable: { $ref: '#/components/examples/DepthReadUnavailable' } } } } },
+          },
+        },
+        options: publicOptionsOperation('depthOptions'),
+      },
     },
     components: {
       schemas: {
@@ -365,6 +406,11 @@ export function createOpenApiDocument() {
           description: 'Canonical classic credit asset identifier CODE:ISSUER',
           schema: { type: 'string', pattern: '^[A-Z0-9]{1,12}:G[A-Z2-7]{55}$' },
           example: ASSET,
+        },
+        Pair: {
+          name: 'pair', in: 'path', required: true,
+          description: 'Canonical unordered pair as BASE~COUNTER; native sorts before credit assets',
+          schema: { type: 'string', pattern: '^(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})$' }, example: PAIR,
         },
         RequestId: {
           name: 'X-Request-ID',
@@ -399,13 +445,19 @@ export function createOpenApiDocument() {
         SupplyVerified: { summary: 'Verified supply', value: OPENAPI_EXAMPLES.supplyVerified },
         SupplyDegraded: { summary: 'Degraded supply', value: OPENAPI_EXAMPLES.supplyDegraded },
         SupplyUnavailable: { summary: 'Unavailable or stale supply', value: OPENAPI_EXAMPLES.supplyUnavailable },
+        DepthVerified: { summary: 'Verified depth', value: OPENAPI_EXAMPLES.depthVerified },
+        DepthDegraded: { summary: 'Degraded depth', value: OPENAPI_EXAMPLES.depthDegraded },
+        DepthUnavailable: { summary: 'Unavailable or stale depth', value: OPENAPI_EXAMPLES.depthUnavailable },
         InvalidRequestId: { summary: 'Invalid request identifier', value: OPENAPI_EXAMPLES.invalidRequestId },
         InvalidQueryParameter: { summary: 'Unsupported query parameter', value: OPENAPI_EXAMPLES.invalidQueryParameter },
         InvalidAsset: { summary: 'Invalid supply asset', value: OPENAPI_EXAMPLES.invalidAsset },
+        InvalidPair: { summary: 'Invalid depth pair', value: OPENAPI_EXAMPLES.invalidPair },
         LatestMissingSnapshot: { summary: 'No finalized latest-ledger snapshot', value: OPENAPI_EXAMPLES.latestMissingSnapshot },
         SupplyMissingSnapshot: { summary: 'No finalized supply snapshot', value: OPENAPI_EXAMPLES.supplyMissingSnapshot },
+        DepthMissingSnapshot: { summary: 'No finalized depth snapshot', value: OPENAPI_EXAMPLES.depthMissingSnapshot },
         LatestReadUnavailable: { summary: 'Latest-ledger read storage unavailable', value: OPENAPI_EXAMPLES.latestReadUnavailable },
         SupplyReadUnavailable: { summary: 'Supply read storage unavailable', value: OPENAPI_EXAMPLES.supplyReadUnavailable },
+        DepthReadUnavailable: { summary: 'Depth read storage unavailable', value: OPENAPI_EXAMPLES.depthReadUnavailable },
         AuthenticationError: {
           summary: 'Reserved example for future authenticated operations; no production path currently references it',
           value: OPENAPI_EXAMPLES.authenticationError,

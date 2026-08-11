@@ -23,6 +23,10 @@
     {
       "name": "Supply",
       "description": "Classic credit-asset on-chain supply reconciliation"
+    },
+    {
+      "name": "Depth",
+      "description": "Classic SDEX cumulative order-book depth reconciliation"
     }
   ],
   "paths": {
@@ -571,6 +575,282 @@
           }
         }
       }
+    },
+    "/api/v1/depth/{pair}": {
+      "get": {
+        "operationId": "getDepth",
+        "tags": [
+          "Depth"
+        ],
+        "summary": "Get the latest finalized Public Network SDEX depth snapshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Pair"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current verified or degraded depth snapshot",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationSnapshot"
+                },
+                "examples": {
+                  "verified": {
+                    "$ref": "#/components/examples/DepthVerified"
+                  },
+                  "degraded": {
+                    "$ref": "#/components/examples/DepthDegraded"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation matches If-None-Match",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pair, request header, or query parameter",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidPair": {
+                    "$ref": "#/components/examples/InvalidPair"
+                  },
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  },
+                  "invalidQueryParameter": {
+                    "$ref": "#/components/examples/InvalidQueryParameter"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No finalized snapshot exists for the pair",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "missing": {
+                    "$ref": "#/components/examples/DepthMissingSnapshot"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Persisted metric state, freshness, or read storage is unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReconciliationSnapshot"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "unavailable": {
+                    "$ref": "#/components/examples/DepthUnavailable"
+                  },
+                  "readUnavailable": {
+                    "$ref": "#/components/examples/DepthReadUnavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "depthOptions",
+        "summary": "Inspect public read-only CORS policy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "CORS preflight accepted",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1019,29 +1299,81 @@
                         "type": "string",
                         "const": "depth"
                       },
-                      "value": {
-                        "type": "string",
-                        "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                      "reference_price": {
+                        "type": "object",
+                        "properties": {
+                          "numerator": {
+                            "type": "string",
+                            "pattern": "^[1-9]\\d*$"
+                          },
+                          "denominator": {
+                            "type": "string",
+                            "pattern": "^[1-9]\\d*$"
+                          },
+                          "decimal": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)\\.\\d{7}$"
+                          }
+                        },
+                        "required": [
+                          "numerator",
+                          "denominator",
+                          "decimal"
+                        ],
+                        "additionalProperties": false
                       },
-                      "side": {
-                        "type": "string",
-                        "enum": [
-                          "bid",
-                          "ask"
-                        ]
-                      },
-                      "price_band_basis_points": {
+                      "ledger_sequence": {
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
                         "exclusiveMinimum": 0
+                      },
+                      "ledger_closed_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "buckets": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "side": {
+                              "type": "string",
+                              "enum": [
+                                "bid",
+                                "ask"
+                              ]
+                            },
+                            "price_band_basis_points": {
+                              "type": "number",
+                              "enum": [
+                                50,
+                                100,
+                                500
+                              ]
+                            },
+                            "value": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                            }
+                          },
+                          "required": [
+                            "side",
+                            "price_band_basis_points",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 6,
+                        "maxItems": 6
                       }
                     },
                     "required": [
                       "kind",
-                      "value",
-                      "side",
-                      "price_band_basis_points"
+                      "reference_price",
+                      "ledger_sequence",
+                      "ledger_closed_at",
+                      "buckets"
                     ],
                     "additionalProperties": false
                   },
@@ -1253,29 +1585,81 @@
                           "type": "string",
                           "const": "depth"
                         },
-                        "value": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        "reference_price": {
+                          "type": "object",
+                          "properties": {
+                            "numerator": {
+                              "type": "string",
+                              "pattern": "^[1-9]\\d*$"
+                            },
+                            "denominator": {
+                              "type": "string",
+                              "pattern": "^[1-9]\\d*$"
+                            },
+                            "decimal": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)\\.\\d{7}$"
+                            }
+                          },
+                          "required": [
+                            "numerator",
+                            "denominator",
+                            "decimal"
+                          ],
+                          "additionalProperties": false
                         },
-                        "side": {
-                          "type": "string",
-                          "enum": [
-                            "bid",
-                            "ask"
-                          ]
-                        },
-                        "price_band_basis_points": {
+                        "ledger_sequence": {
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991,
                           "exclusiveMinimum": 0
+                        },
+                        "ledger_closed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "buckets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "bid",
+                                  "ask"
+                                ]
+                              },
+                              "price_band_basis_points": {
+                                "type": "number",
+                                "enum": [
+                                  50,
+                                  100,
+                                  500
+                                ]
+                              },
+                              "value": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "price_band_basis_points",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "minItems": 6,
+                          "maxItems": 6
                         }
                       },
                       "required": [
                         "kind",
-                        "value",
-                        "side",
-                        "price_band_basis_points"
+                        "reference_price",
+                        "ledger_sequence",
+                        "ledger_closed_at",
+                        "buckets"
                       ],
                       "additionalProperties": false
                     },
@@ -1346,29 +1730,81 @@
                           "type": "string",
                           "const": "depth"
                         },
-                        "value": {
-                          "type": "string",
-                          "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                        "reference_price": {
+                          "type": "object",
+                          "properties": {
+                            "numerator": {
+                              "type": "string",
+                              "pattern": "^[1-9]\\d*$"
+                            },
+                            "denominator": {
+                              "type": "string",
+                              "pattern": "^[1-9]\\d*$"
+                            },
+                            "decimal": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)\\.\\d{7}$"
+                            }
+                          },
+                          "required": [
+                            "numerator",
+                            "denominator",
+                            "decimal"
+                          ],
+                          "additionalProperties": false
                         },
-                        "side": {
-                          "type": "string",
-                          "enum": [
-                            "bid",
-                            "ask"
-                          ]
-                        },
-                        "price_band_basis_points": {
+                        "ledger_sequence": {
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991,
                           "exclusiveMinimum": 0
+                        },
+                        "ledger_closed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "buckets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "bid",
+                                  "ask"
+                                ]
+                              },
+                              "price_band_basis_points": {
+                                "type": "number",
+                                "enum": [
+                                  50,
+                                  100,
+                                  500
+                                ]
+                              },
+                              "value": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "price_band_basis_points",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "minItems": 6,
+                          "maxItems": 6
                         }
                       },
                       "required": [
                         "kind",
-                        "value",
-                        "side",
-                        "price_band_basis_points"
+                        "reference_price",
+                        "ledger_sequence",
+                        "ledger_closed_at",
+                        "buckets"
                       ],
                       "additionalProperties": false
                     },
@@ -1393,81 +1829,167 @@
                   ]
                 },
                 "details": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "const": "supply_comparison"
-                    },
-                    "observed_ledger_sequence": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "exclusiveMinimum": 0
-                    },
-                    "reference_ledger_sequence": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "exclusiveMinimum": 0
-                    },
-                    "observed_source_timestamp": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "reference_source_timestamp": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "component_differences": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "component": {
-                            "type": "string",
-                            "enum": [
-                              "authorized_trustlines",
-                              "maintain_liabilities_trustlines",
-                              "unauthorized_trustlines",
-                              "claimable_balances",
-                              "liquidity_pools",
-                              "contract_balances"
-                            ]
-                          },
-                          "observed": {
-                            "type": "string",
-                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
-                          },
-                          "reference": {
-                            "type": "string",
-                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
-                          },
-                          "absolute_delta": {
-                            "type": "string",
-                            "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
-                          }
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "supply_comparison"
                         },
-                        "required": [
-                          "component",
-                          "observed",
-                          "reference",
-                          "absolute_delta"
-                        ],
-                        "additionalProperties": false
+                        "observed_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "reference_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "observed_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "reference_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "component_differences": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "component": {
+                                "type": "string",
+                                "enum": [
+                                  "authorized_trustlines",
+                                  "maintain_liabilities_trustlines",
+                                  "unauthorized_trustlines",
+                                  "claimable_balances",
+                                  "liquidity_pools",
+                                  "contract_balances"
+                                ]
+                              },
+                              "observed": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              },
+                              "reference": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              },
+                              "absolute_delta": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              }
+                            },
+                            "required": [
+                              "component",
+                              "observed",
+                              "reference",
+                              "absolute_delta"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 6
+                        }
                       },
-                      "maxItems": 6
+                      "required": [
+                        "kind",
+                        "observed_ledger_sequence",
+                        "reference_ledger_sequence",
+                        "observed_source_timestamp",
+                        "reference_source_timestamp",
+                        "component_differences"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "depth_comparison"
+                        },
+                        "observed_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "reference_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "observed_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "reference_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "bucket_differences": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "bid",
+                                  "ask"
+                                ]
+                              },
+                              "price_band_basis_points": {
+                                "type": "number",
+                                "enum": [
+                                  50,
+                                  100,
+                                  500
+                                ]
+                              },
+                              "observed": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              },
+                              "reference": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              },
+                              "absolute_delta": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)(?:\\.\\d{1,7})?$"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "price_band_basis_points",
+                              "observed",
+                              "reference",
+                              "absolute_delta"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 6
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "observed_ledger_sequence",
+                        "reference_ledger_sequence",
+                        "observed_source_timestamp",
+                        "reference_source_timestamp",
+                        "bucket_differences"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "kind",
-                    "observed_ledger_sequence",
-                    "reference_ledger_sequence",
-                    "observed_source_timestamp",
-                    "reference_source_timestamp",
-                    "component_differences"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 "first_observed_at": {
                   "type": "string",
@@ -1548,6 +2070,8 @@
                     "stale_observation",
                     "stale_book",
                     "crossed_book",
+                    "empty_book",
+                    "one_sided_book",
                     "excluded_source"
                   ]
                 },
@@ -1768,6 +2292,17 @@
           "pattern": "^[A-Z0-9]{1,12}:G[A-Z2-7]{55}$"
         },
         "example": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "Pair": {
+        "name": "pair",
+        "in": "path",
+        "required": true,
+        "description": "Canonical unordered pair as BASE~COUNTER; native sorts before credit assets",
+        "schema": {
+          "type": "string",
+          "pattern": "^(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})$"
+        },
+        "example": "native~USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
       },
       "RequestId": {
         "name": "X-Request-ID",
@@ -2077,6 +2612,202 @@
           "api_version": "v1"
         }
       },
+      "DepthVerified": {
+        "summary": "Verified depth",
+        "value": {
+          "metric": "order_book_depth",
+          "subject": {
+            "kind": "pair",
+            "base": "native",
+            "counter": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "verified",
+          "value": {
+            "kind": "depth",
+            "reference_price": {
+              "numerator": "2",
+              "denominator": "1",
+              "decimal": "2.0000000"
+            },
+            "ledger_sequence": 58000000,
+            "ledger_closed_at": "2026-08-10T12:00:00.000Z",
+            "buckets": [
+              {
+                "side": "bid",
+                "price_band_basis_points": 50,
+                "value": "100"
+              },
+              {
+                "side": "bid",
+                "price_band_basis_points": 100,
+                "value": "200"
+              },
+              {
+                "side": "bid",
+                "price_band_basis_points": 500,
+                "value": "300"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 50,
+                "value": "100"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 100,
+                "value": "200"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 500,
+                "value": "300"
+              }
+            ]
+          },
+          "confidence": 0.95,
+          "confidence_formula_version": "order-book-depth-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 1,
+            "spread": 1
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 2,
+          "sources_usable": 2,
+          "sources_agreeing": 2,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "order-book-depth-v0.2",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "DepthDegraded": {
+        "summary": "Degraded depth",
+        "value": {
+          "metric": "order_book_depth",
+          "subject": {
+            "kind": "pair",
+            "base": "native",
+            "counter": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "degraded",
+          "value": {
+            "kind": "depth",
+            "reference_price": {
+              "numerator": "2",
+              "denominator": "1",
+              "decimal": "2.0000000"
+            },
+            "ledger_sequence": 58000000,
+            "ledger_closed_at": "2026-08-10T12:00:00.000Z",
+            "buckets": [
+              {
+                "side": "bid",
+                "price_band_basis_points": 50,
+                "value": "100"
+              },
+              {
+                "side": "bid",
+                "price_band_basis_points": 100,
+                "value": "200"
+              },
+              {
+                "side": "bid",
+                "price_band_basis_points": 500,
+                "value": "300"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 50,
+                "value": "100"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 100,
+                "value": "200"
+              },
+              {
+                "side": "ask",
+                "price_band_basis_points": 500,
+                "value": "300"
+              }
+            ]
+          },
+          "confidence": 0.6,
+          "confidence_formula_version": "order-book-depth-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 0.5,
+            "spread": 1
+          },
+          "confidence_caps_applied": [
+            "single_source"
+          ],
+          "sources_configured": 2,
+          "sources_responded": 1,
+          "sources_usable": 1,
+          "sources_agreeing": 1,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "order-book-depth-v0.2",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "DepthUnavailable": {
+        "summary": "Unavailable or stale depth",
+        "value": {
+          "metric": "order_book_depth",
+          "subject": {
+            "kind": "pair",
+            "base": "native",
+            "counter": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "unavailable",
+          "value": null,
+          "confidence": 0,
+          "confidence_formula_version": "order-book-depth-confidence-v0.2",
+          "confidence_components": {
+            "agreement": 0,
+            "freshness": 0,
+            "availability": 0,
+            "spread": 0
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 0,
+          "sources_usable": 0,
+          "sources_agreeing": 0,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [
+            {
+              "source_id": null,
+              "source_url": null,
+              "code": "stale_book",
+              "category": "freshness",
+              "message": "Latest finalized depth evidence exceeds 20 seconds",
+              "occurred_at": "2026-08-10T12:00:00.000Z",
+              "retryable": false
+            }
+          ],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "order-book-depth-v0.2",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
       "InvalidRequestId": {
         "summary": "Invalid request identifier",
         "value": {
@@ -2113,6 +2844,18 @@
           "api_version": "v1"
         }
       },
+      "InvalidPair": {
+        "summary": "Invalid depth pair",
+        "value": {
+          "error": {
+            "code": "invalid_pair",
+            "message": "Pair must be two different Stellar asset identifiers separated by ~"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
       "LatestMissingSnapshot": {
         "summary": "No finalized latest-ledger snapshot",
         "value": {
@@ -2137,6 +2880,18 @@
           "api_version": "v1"
         }
       },
+      "DepthMissingSnapshot": {
+        "summary": "No finalized depth snapshot",
+        "value": {
+          "error": {
+            "code": "depth_snapshot_not_found",
+            "message": "No finalized depth snapshot is available"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
       "LatestReadUnavailable": {
         "summary": "Latest-ledger read storage unavailable",
         "value": {
@@ -2155,6 +2910,18 @@
           "error": {
             "code": "supply_read_unavailable",
             "message": "The supply read model is temporarily unavailable"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "DepthReadUnavailable": {
+        "summary": "Depth read storage unavailable",
+        "value": {
+          "error": {
+            "code": "depth_read_unavailable",
+            "message": "The depth read model is temporarily unavailable"
           },
           "request_id": "example_request",
           "as_of": "2026-08-10T12:00:00.000Z",

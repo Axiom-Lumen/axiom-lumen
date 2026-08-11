@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SUPPLY_COMPONENT_IDS } from '../../config/methodology'
+import { DEPTH_PRICE_BANDS_BPS, SUPPLY_COMPONENT_IDS } from '../../config/methodology'
 import {
   type MetricValue,
   type MetricId,
@@ -51,14 +51,21 @@ const apiMetricSubjectSchema = z.discriminatedUnion('kind', [
 const apiMetricValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ledger'), value: z.number().int().safe().positive() }).strict(),
   z.object({ kind: z.literal('amount'), value: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/) }).strict(),
-  z
-    .object({
-      kind: z.literal('depth'),
-      value: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/),
+  z.object({
+    kind: z.literal('depth'),
+    reference_price: z.object({
+      numerator: z.string().regex(/^[1-9]\d*$/),
+      denominator: z.string().regex(/^[1-9]\d*$/),
+      decimal: z.string().regex(/^(0|[1-9]\d*)\.\d{7}$/),
+    }).strict(),
+    ledger_sequence: z.number().int().safe().positive(),
+    ledger_closed_at: utcTimestampSchema,
+    buckets: z.array(z.object({
       side: z.enum(['bid', 'ask']),
-      price_band_basis_points: z.number().int().safe().positive(),
-    })
-    .strict(),
+      price_band_basis_points: z.union([z.literal(50), z.literal(100), z.literal(500)]),
+      value: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/),
+    }).strict()).length(DEPTH_PRICE_BANDS_BPS.length * 2),
+  }).strict(),
   z.object({ kind: z.literal('count'), value: z.string().regex(/^(0|[1-9]\d*)$/) }).strict(),
 ])
 
@@ -98,7 +105,7 @@ const apiDiscrepancySchema = z
     consecutive_cycles: z.number().int().nonnegative(),
     observed_value: apiMetricValueSchema,
     reference_value: apiMetricValueSchema,
-    details: z.object({
+    details: z.discriminatedUnion('kind', [z.object({
       kind: z.literal('supply_comparison'),
       observed_ledger_sequence: z.number().int().safe().positive(),
       reference_ledger_sequence: z.number().int().safe().positive(),
@@ -115,7 +122,20 @@ const apiDiscrepancySchema = z
           (differences) => new Set(differences.map((difference) => difference.component)).size === differences.length,
           { message: 'supply component differences must be unique' },
         ),
-    }).strict().optional(),
+    }).strict(), z.object({
+      kind: z.literal('depth_comparison'),
+      observed_ledger_sequence: z.number().int().safe().positive(),
+      reference_ledger_sequence: z.number().int().safe().positive(),
+      observed_source_timestamp: utcTimestampSchema,
+      reference_source_timestamp: utcTimestampSchema,
+      bucket_differences: z.array(z.object({
+        side: z.enum(['bid', 'ask']),
+        price_band_basis_points: z.union([z.literal(50), z.literal(100), z.literal(500)]),
+        observed: apiStellarAmountSchema,
+        reference: apiStellarAmountSchema,
+        absolute_delta: apiStellarAmountSchema,
+      }).strict()).max(DEPTH_PRICE_BANDS_BPS.length * 2),
+    }).strict()]).optional(),
     first_observed_at: utcTimestampSchema,
     last_observed_at: utcTimestampSchema,
   })
@@ -251,9 +271,14 @@ function serializeMetricValue(value: MetricValue): z.infer<typeof apiMetricValue
     case 'depth':
       return {
         kind: 'depth',
-        value: value.value.toString(),
-        side: value.side,
-        price_band_basis_points: value.priceBandBasisPoints,
+        reference_price: value.referencePrice,
+        ledger_sequence: value.ledgerSequence,
+        ledger_closed_at: value.ledgerClosedAt,
+        buckets: value.buckets.map((bucket) => ({
+          side: bucket.side,
+          price_band_basis_points: bucket.priceBandBasisPoints,
+          value: bucket.value.toString(),
+        })),
       }
   }
 }
@@ -324,6 +349,21 @@ export function serializePublicReconciliationSnapshot(
             reference_source_timestamp: discrepancy.details.referenceSourceTimestamp,
             component_differences: discrepancy.details.componentDifferences.map((difference) => ({
               component: difference.component,
+              observed: difference.observed.toString(),
+              reference: difference.reference.toString(),
+              absolute_delta: difference.absoluteDelta.toString(),
+            })),
+          },
+        } : discrepancy.details?.kind === 'depth_comparison' ? {
+          details: {
+            kind: 'depth_comparison' as const,
+            observed_ledger_sequence: discrepancy.details.observedLedgerSequence,
+            reference_ledger_sequence: discrepancy.details.referenceLedgerSequence,
+            observed_source_timestamp: discrepancy.details.observedSourceTimestamp,
+            reference_source_timestamp: discrepancy.details.referenceSourceTimestamp,
+            bucket_differences: discrepancy.details.bucketDifferences.map((difference) => ({
+              side: difference.side,
+              price_band_basis_points: difference.priceBandBasisPoints,
               observed: difference.observed.toString(),
               reference: difference.reference.toString(),
               absolute_delta: difference.absoluteDelta.toString(),
