@@ -13,7 +13,7 @@ const plannedEndpoints = [
     method: 'GET',
     path: '/v1/depth/{pair}',
     name: 'DEX order book depth',
-    desc: 'Planned: verified bid and ask depth at configurable price bands for a trading pair.',
+    desc: 'Planned API: classic-offer ingestion semantics exist, but reconciled bid and ask depth is not served yet.',
   },
   {
     method: 'GET',

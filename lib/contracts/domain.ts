@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import {
+  DEPTH_METHODOLOGY_VERSION,
+  DEPTH_PRICE_BANDS_BPS,
   SOURCE_CLASS_IDS,
   SUPPLY_COMPONENT_IDS,
   SUPPLY_METHODOLOGY_VERSION,
@@ -313,15 +315,79 @@ function validateCirculatingSupplyObservation(
 export const circulatingSupplyObservationSchema = circulatingSupplyObservationObjectSchema
   .superRefine(validateCirculatingSupplyObservation)
 
-export const orderBookDepthObservationSchema = observationBaseSchema
+const orderBookDepthObservationObjectSchema = observationBaseSchema
   .extend({
     metric: z.literal('order_book_depth'),
     pair: tradingPairSchema,
     side: z.enum(['bid', 'ask']),
     priceBandBasisPoints: z.number().int().safe().positive(),
     amount: stellarAmountSchema,
+    referencePrice: z.object({
+      numerator: z.string().regex(/^[1-9]\d*$/),
+      denominator: z.string().regex(/^[1-9]\d*$/),
+    }).strict(),
+    ledgerSequence: z.number().int().safe().positive(),
+    methodologyVersion: z.literal(DEPTH_METHODOLOGY_VERSION),
+    derivation: z.object({
+      family: z.literal('horizon_sdex_offers'),
+      connectorVersion: z.string().min(1).max(100),
+      evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      checkpoint: z.object({
+        ledgerSequence: z.number().int().safe().positive(),
+        pagesScanned: z.number().int().safe().positive(),
+        recordsScanned: z.number().int().safe().nonnegative(),
+      }).strict(),
+    }).strict(),
   })
   .strict()
+
+function validateOrderBookDepthObservation(
+  observation: z.infer<typeof orderBookDepthObservationObjectSchema>,
+  context: z.RefinementCtx,
+) {
+  if (observation.provenance.sourceTimestamp === null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['provenance', 'sourceTimestamp'],
+      message: 'depth observation requires a closed-ledger source timestamp',
+    })
+  }
+  if (observation.derivation.checkpoint.ledgerSequence !== observation.ledgerSequence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['derivation', 'checkpoint', 'ledgerSequence'],
+      message: 'depth checkpoint must match the observation ledger',
+    })
+  }
+  const source = observation.provenance.source
+  if (source.adapter !== 'sdex' || source.sourceClass !== 'dex') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['provenance', 'source'],
+      message: 'Horizon SDEX depth requires a dex/sdex source identity',
+    })
+  }
+  if (!(DEPTH_PRICE_BANDS_BPS as readonly number[]).includes(observation.priceBandBasisPoints)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['priceBandBasisPoints'],
+      message: `depth price band must be one of ${DEPTH_PRICE_BANDS_BPS.join(', ')} basis points`,
+    })
+  }
+  const assetSortKey = (asset: AssetId) => asset.kind === 'native'
+    ? '0:native'
+    : `1:${asset.code}:${asset.issuer}`
+  if (assetSortKey(observation.pair.base) > assetSortKey(observation.pair.counter)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['pair'],
+      message: 'depth observation pair must use canonical asset order',
+    })
+  }
+}
+
+export const orderBookDepthObservationSchema = orderBookDepthObservationObjectSchema
+  .superRefine(validateOrderBookDepthObservation)
 
 export const trustlineCountObservationSchema = observationBaseSchema
   .extend({
@@ -347,17 +413,19 @@ export const anchorReservesObservationSchema = observationBaseSchema
 export const rawObservationSchema = z.discriminatedUnion('metric', [
   latestLedgerObservationSchema,
   circulatingSupplyObservationObjectSchema,
-  orderBookDepthObservationSchema,
+  orderBookDepthObservationObjectSchema,
   trustlineCountObservationSchema,
   anchorReservesObservationSchema,
 ])
   .superRefine((observation, context) => {
     if (observation.metric === 'circulating_supply') validateCirculatingSupplyObservation(observation, context)
+    if (observation.metric === 'order_book_depth') validateOrderBookDepthObservation(observation, context)
   })
 export type RawObservation = z.infer<typeof rawObservationSchema>
 
 export const sourceErrorCodeSchema = z.enum([
   'invalid_asset',
+  'invalid_pair',
   'invalid_configuration',
   'request_failed',
   'request_aborted',
@@ -377,6 +445,8 @@ export const sourceErrorCodeSchema = z.enum([
   'artifact_integrity_mismatch',
   'total_mismatch',
   'stale_observation',
+  'stale_book',
+  'crossed_book',
   'excluded_source',
 ])
 

@@ -12,6 +12,7 @@ import {
   reconciliationSnapshotSchema,
   retrievalAttemptSchema,
   serializePublicReconciliationSnapshot,
+  sourceErrorCodeSchema,
   tradingPairSchema,
 } from '../../lib/contracts'
 import { StellarAmount } from '../../lib/stellar/amount'
@@ -200,6 +201,12 @@ describe('domain contracts', () => {
         observationIds: ['obs_1'],
       }),
     ).toThrow(/cannot complete before it starts/)
+  })
+
+  it('represents depth connector failures in the shared source-error vocabulary', () => {
+    expect(sourceErrorCodeSchema.parse('invalid_pair')).toBe('invalid_pair')
+    expect(sourceErrorCodeSchema.parse('crossed_book')).toBe('crossed_book')
+    expect(sourceErrorCodeSchema.parse('stale_book')).toBe('stale_book')
   })
 
   it('enforces snapshot availability and source-count invariants', () => {

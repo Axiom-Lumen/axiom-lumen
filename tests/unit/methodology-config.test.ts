@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEPTH_METHODOLOGY_VERSION,
+  DEPTH_PRICE_BANDS_BPS,
   METHODOLOGY_VERSION,
   SOURCE_CLASS_IDS,
   SUPPLY_COMPONENT_IDS,
   SUPPLY_METHODOLOGY_VERSION,
+  depthMethodologyConfig,
   methodologyConfig,
   supplyMethodologyConfig,
   validateMethodologyConfig,
+  validateDepthMethodologyConfig,
   validateSupplyMethodologyConfig,
 } from '../../config/methodology'
 
@@ -138,5 +142,33 @@ describe('methodology v1.5 configuration', () => {
       horizonReplicasAreIndependent: true,
     } as unknown as Parameters<typeof validateSupplyMethodologyConfig>[0]
     expect(() => validateSupplyMethodologyConfig(replicaInflation)).toThrow(/replicas/)
+  })
+
+  it('defines the classic SDEX depth ingestion profile without overstating independence', () => {
+    expect(DEPTH_METHODOLOGY_VERSION).toBe('order-book-depth-v0.1')
+    expect(DEPTH_PRICE_BANDS_BPS).toEqual([50, 100, 500])
+    expect(depthMethodologyConfig).toMatchObject({
+      priceUnit: 'counter_per_base',
+      aggregationUnit: 'base_asset_equivalent',
+      referencePrice: 'two_sided_midpoint',
+      liquidityPoolPolicy: 'excluded',
+      horizonReplicasAreIndependent: false,
+      freshnessHalfLifeSeconds: 5,
+      maximumObservationAgeSeconds: 20,
+    })
+    expect(Object.isFrozen(depthMethodologyConfig)).toBe(true)
+    expect(Object.isFrozen(depthMethodologyConfig.priceBandsBasisPoints)).toBe(true)
+  })
+
+  it('rejects unordered depth bands and replica inflation', () => {
+    const unordered = structuredClone(depthMethodologyConfig)
+    unordered.priceBandsBasisPoints = [100, 50]
+    expect(() => validateDepthMethodologyConfig(unordered)).toThrow(/ascending/)
+
+    const replicas = {
+      ...structuredClone(depthMethodologyConfig),
+      horizonReplicasAreIndependent: true,
+    } as unknown as Parameters<typeof validateDepthMethodologyConfig>[0]
+    expect(() => validateDepthMethodologyConfig(replicas)).toThrow(/replicas/)
   })
 })
