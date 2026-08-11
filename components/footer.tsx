@@ -3,6 +3,7 @@ import { Logo } from '@/components/logo'
 
 const index = [
   { href: '/', label: 'Index', code: 'AL-00' },
+  { href: '/dashboard', label: 'Dashboard', code: 'AL-06' },
   { href: '/methodology', label: 'Methodology', code: 'AL-01' },
   { href: '/docs', label: 'API reference', code: 'AL-02' },
   { href: '/pricing', label: 'Rate schedule', code: 'AL-03' },
