@@ -12,9 +12,11 @@ import {
 } from '../../lib/db/repositories'
 import * as schema from '../../lib/db/schema'
 import { queryLatestSupplyReadModel } from '../../lib/db/supply-read-model'
+import { queryLatestTrustlineReadModel } from '../../lib/db/trustline-read-model'
 import { computeEvidenceSha256 } from '../../lib/evidence/json'
 import type { ClaimedCycle, DiscoveredIngestJob } from '../../lib/db/scheduler-repository'
 import { createSupplyJobHandler } from '../../lib/worker/supply-job'
+import { createTrustlineJobHandler } from '../../lib/worker/trustline-job'
 
 const adminUrl = process.env.DATABASE_TEST_ADMIN_URL
 const describeWithDatabase = adminUrl ? describe : describe.skip
@@ -238,6 +240,64 @@ describeWithDatabase('transactional persistence repositories', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('persists and reconstructs finalized trustline-state evidence', async () => {
+    const pool = await createDatabase()
+    try {
+      const issuer = `G${'T'.repeat(55)}`
+      const assetId = `USDC:${issuer}`
+      const subjectKey = `public:${assetId}`
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+        VALUES ('asset-trustline-usdc', 'public', 'credit', 'USDC', $1, $2)
+      `, [issuer, assetId])
+      const job: DiscoveredIngestJob = {
+        metric: 'trustline_count',
+        subjectKey,
+        methodologyVersion: 'trustline-state-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer },
+        sources: [{
+          id: 'source-a', url: 'https://horizon.example', sourceClass: 'canonical_ledger', adapter: 'horizon',
+          upstreamId: null, networkId: 'public', networkPassphrase: 'Public Global Stellar Network ; September 2015',
+        }],
+      }
+      const lease: ClaimedCycle = {
+        id: 'cycle-trustline-e2e', metric: 'trustline_count', subjectKey,
+        methodologyVersion: 'trustline-state-v0.1',
+        idempotencyKey: `trustline_count:${subjectKey}:trustline-state-v0.1:2026-08-10T12:00:00.000Z`,
+        scheduledAt: '2026-08-10T12:00:00.000Z', leaseOwner: 'worker-a', leaseToken: 1,
+        leaseExpiresAt: '2026-08-10T12:01:00.000Z', attemptCount: 1,
+      }
+      vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
+        const target = String(url)
+        if (target === 'https://horizon.example/') return Response.json({ network_passphrase: 'Public Global Stellar Network ; September 2015' })
+        if (target === `https://horizon.example/accounts/${issuer}`) return Response.json({ account_id: issuer }, { headers: { 'Latest-Ledger': '499' } })
+        if (target.startsWith('https://horizon.example/assets?')) return Response.json({ _embedded: { records: [{ ...supplyHorizonFixture, asset_issuer: issuer }] } }, { headers: { 'Latest-Ledger': '500' } })
+        if (target === 'https://horizon.example/ledgers/500') return Response.json({ sequence: 500, closed_at: '2026-08-10T12:00:00Z' })
+        throw new Error(`unexpected URL ${target}`)
+      }))
+      const databaseClient = { pool, db: drizzle({ client: pool, schema }) }
+      const repositories = createPersistenceRepositories(databaseClient)
+      const handler = createTrustlineJobHandler(repositories, () => new Date('2026-08-10T12:00:05.000Z'), {
+        resiliencePolicy: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0, concurrency: 1, circuitFailureThreshold: 2, circuitCooldownMs: 60_000 },
+      })
+      const batch = await handler({ lease, job, signal: new AbortController().signal })
+      expect(batch.snapshot).toMatchObject({ status: 'degraded', value: { kind: 'trustline_state', total: 825n }, sourcesUsable: 1 })
+      expect(await repositories.persistCompletedCycle(batch)).toEqual({ status: 'inserted', cycleId: lease.id })
+      const readModel = await queryLatestTrustlineReadModel(databaseClient, job.asset, new Date('2026-08-10T12:00:05.000Z'))
+      expect(readModel).toMatchObject({
+        stale: false, freshForSeconds: 895,
+        snapshot: {
+          metric: 'trustline_count', status: 'degraded', subject: { kind: 'asset', asset: job.asset },
+          value: { kind: 'trustline_state', total: 825n, states: { authorized: 700n, authorized_to_maintain_liabilities: 100n, unauthorized: 25n }, ledgerSequence: 500 },
+          contributions: [expect.objectContaining({ sourceId: 'source-a', agrees: true })],
+        },
+      })
+      expect(await queryLatestTrustlineReadModel(databaseClient, job.asset, new Date('2026-08-10T12:15:00.001Z'))).toMatchObject({ stale: true, freshForSeconds: 0 })
+    } finally {
+      await pool.end()
+    }
   })
 
   it('persists the connector-to-reconciliation supply pipeline and deduplicates cycle replay', async () => {

@@ -26,3 +26,11 @@ export {
   validateDepthReconciliationMethodologyConfig,
   type DepthReconciliationMethodologyConfig,
 } from './depth_v0_2'
+export {
+  TRUSTLINE_METHODOLOGY_VERSION,
+  TRUSTLINE_STATE_IDS,
+  trustlineMethodologyConfig,
+  validateTrustlineMethodologyConfig,
+  type TrustlineMethodologyConfig,
+  type TrustlineStateId,
+} from './trustlines_v0_1'

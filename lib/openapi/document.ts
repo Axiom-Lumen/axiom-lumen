@@ -40,6 +40,8 @@ export const IMPLEMENTED_PUBLIC_OPERATIONS = [
   },
   { operationId: 'getDepth', method: 'get', path: '/api/v1/depth/{pair}' },
   { operationId: 'depthOptions', method: 'options', path: '/api/v1/depth/{pair}' },
+  { operationId: 'getTrustlines', method: 'get', path: '/api/v1/trustlines/{asset}' },
+  { operationId: 'trustlineOptions', method: 'options', path: '/api/v1/trustlines/{asset}' },
 ] as const
 
 function latestExample(status: 'verified' | 'degraded' | 'unavailable'): LatestLedgerReconciliationResult {
@@ -133,6 +135,22 @@ function depthExample(status: 'verified' | 'degraded' | 'unavailable'): ApiRecon
   })
 }
 
+function trustlineExample(status: 'verified' | 'degraded' | 'unavailable'): ApiReconciliationSnapshot {
+  const available = status !== 'unavailable'
+  return apiReconciliationSnapshotSchema.parse({
+    metric: 'trustline_state', subject: { kind: 'asset', asset: ASSET }, status,
+    value: available ? { kind: 'trustline_state', total: '825', states: { authorized: '700', authorized_to_maintain_liabilities: '100', unauthorized: '25' }, ledger_sequence: 58_000_000, ledger_closed_at: AS_OF } : null,
+    confidence: status === 'verified' ? 0.95 : status === 'degraded' ? 0.6 : 0,
+    confidence_formula_version: 'trustline-state-confidence-v0.1',
+    confidence_components: { agreement: available ? 1 : 0, freshness: available ? 0.95 : 0, availability: status === 'verified' ? 1 : status === 'degraded' ? 0.5 : 0, spread: available ? 1 : 0 },
+    confidence_caps_applied: status === 'degraded' ? ['single_source'] : [], sources_configured: 2,
+    sources_responded: available ? (status === 'verified' ? 2 : 1) : 0, sources_usable: available ? (status === 'verified' ? 2 : 1) : 0,
+    sources_agreeing: available ? (status === 'verified' ? 2 : 1) : 0, sources_excluded: 0, contributions: [], discrepancies: [],
+    source_errors: status === 'unavailable' ? [{ source_id: null, source_url: null, code: 'stale_observation', category: 'freshness', message: 'Latest finalized trustline evidence exceeds 900 seconds', occurred_at: AS_OF, retryable: false }] : [],
+    as_of: AS_OF, methodology_version: 'trustline-state-v0.1', request_id: 'example_request', api_version: 'v1',
+  })
+}
+
 function errorExample(code: string, message: string): ApiErrorResponse {
   return apiErrorResponseSchema.parse({
     error: { code, message },
@@ -152,6 +170,9 @@ export const OPENAPI_EXAMPLES = {
   depthVerified: depthExample('verified'),
   depthDegraded: depthExample('degraded'),
   depthUnavailable: depthExample('unavailable'),
+  trustlineVerified: trustlineExample('verified'),
+  trustlineDegraded: trustlineExample('degraded'),
+  trustlineUnavailable: trustlineExample('unavailable'),
   invalidRequestId: errorExample(
     'invalid_request_id',
     'X-Request-ID must be a valid identifier of at most 128 characters',
@@ -165,6 +186,7 @@ export const OPENAPI_EXAMPLES = {
   ),
   supplyMissingSnapshot: errorExample('supply_snapshot_not_found', 'No finalized supply snapshot is available'),
   depthMissingSnapshot: errorExample('depth_snapshot_not_found', 'No finalized depth snapshot is available'),
+  trustlineMissingSnapshot: errorExample('trustline_snapshot_not_found', 'No finalized trustline snapshot is available'),
   latestReadUnavailable: errorExample(
     'latest_ledger_read_unavailable',
     'The latest-ledger read model is temporarily unavailable',
@@ -174,6 +196,7 @@ export const OPENAPI_EXAMPLES = {
     'The supply read model is temporarily unavailable',
   ),
   depthReadUnavailable: errorExample('depth_read_unavailable', 'The depth read model is temporarily unavailable'),
+  trustlineReadUnavailable: errorExample('trustline_read_unavailable', 'The trustline read model is temporarily unavailable'),
   authenticationError: errorExample('authentication_required', 'A valid API credential is required'),
   rateLimitError: errorExample('rate_limit_exceeded', 'The request quota has been exceeded'),
 } as const
@@ -243,6 +266,7 @@ export function createOpenApiDocument() {
       { name: 'Ledger', description: 'Latest closed-ledger reconciliation' },
       { name: 'Supply', description: 'Classic credit-asset on-chain supply reconciliation' },
       { name: 'Depth', description: 'Classic SDEX cumulative order-book depth reconciliation' },
+      { name: 'Trustlines', description: 'Classic credit-asset trustline authorization-state reconciliation' },
     ],
     paths: {
       '/api/v1/stellar/latest-ledger': {
@@ -376,6 +400,20 @@ export function createOpenApiDocument() {
         },
         options: publicOptionsOperation('depthOptions'),
       },
+      '/api/v1/trustlines/{asset}': {
+        get: {
+          operationId: 'getTrustlines', tags: ['Trustlines'], summary: 'Get finalized Public Network trustline authorization-state counts',
+          parameters: [{ $ref: '#/components/parameters/Asset' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          responses: {
+            200: { description: 'Current verified or degraded trustline-state snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/TrustlineVerified' }, degraded: { $ref: '#/components/examples/TrustlineDegraded' } } } } },
+            304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
+            400: { description: 'Invalid asset, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidAsset: { $ref: '#/components/examples/InvalidAsset' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No finalized snapshot exists for the asset', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/TrustlineMissingSnapshot' } }) },
+            503: { description: 'Persisted metric state, freshness, or read storage is unavailable', headers: responseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/TrustlineUnavailable' }, readUnavailable: { $ref: '#/components/examples/TrustlineReadUnavailable' } } } } },
+          },
+        },
+        options: publicOptionsOperation('trustlineOptions'),
+      },
     },
     components: {
       schemas: {
@@ -448,6 +486,9 @@ export function createOpenApiDocument() {
         DepthVerified: { summary: 'Verified depth', value: OPENAPI_EXAMPLES.depthVerified },
         DepthDegraded: { summary: 'Degraded depth', value: OPENAPI_EXAMPLES.depthDegraded },
         DepthUnavailable: { summary: 'Unavailable or stale depth', value: OPENAPI_EXAMPLES.depthUnavailable },
+        TrustlineVerified: { summary: 'Verified trustline state', value: OPENAPI_EXAMPLES.trustlineVerified },
+        TrustlineDegraded: { summary: 'Degraded trustline state', value: OPENAPI_EXAMPLES.trustlineDegraded },
+        TrustlineUnavailable: { summary: 'Unavailable or stale trustline state', value: OPENAPI_EXAMPLES.trustlineUnavailable },
         InvalidRequestId: { summary: 'Invalid request identifier', value: OPENAPI_EXAMPLES.invalidRequestId },
         InvalidQueryParameter: { summary: 'Unsupported query parameter', value: OPENAPI_EXAMPLES.invalidQueryParameter },
         InvalidAsset: { summary: 'Invalid supply asset', value: OPENAPI_EXAMPLES.invalidAsset },
@@ -455,9 +496,11 @@ export function createOpenApiDocument() {
         LatestMissingSnapshot: { summary: 'No finalized latest-ledger snapshot', value: OPENAPI_EXAMPLES.latestMissingSnapshot },
         SupplyMissingSnapshot: { summary: 'No finalized supply snapshot', value: OPENAPI_EXAMPLES.supplyMissingSnapshot },
         DepthMissingSnapshot: { summary: 'No finalized depth snapshot', value: OPENAPI_EXAMPLES.depthMissingSnapshot },
+        TrustlineMissingSnapshot: { summary: 'No finalized trustline snapshot', value: OPENAPI_EXAMPLES.trustlineMissingSnapshot },
         LatestReadUnavailable: { summary: 'Latest-ledger read storage unavailable', value: OPENAPI_EXAMPLES.latestReadUnavailable },
         SupplyReadUnavailable: { summary: 'Supply read storage unavailable', value: OPENAPI_EXAMPLES.supplyReadUnavailable },
         DepthReadUnavailable: { summary: 'Depth read storage unavailable', value: OPENAPI_EXAMPLES.depthReadUnavailable },
+        TrustlineReadUnavailable: { summary: 'Trustline read storage unavailable', value: OPENAPI_EXAMPLES.trustlineReadUnavailable },
         AuthenticationError: {
           summary: 'Reserved example for future authenticated operations; no production path currently references it',
           value: OPENAPI_EXAMPLES.authenticationError,

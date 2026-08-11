@@ -2,13 +2,14 @@ import { createDatabaseClient } from '../lib/db/client'
 import { createPersistenceRepositories } from '../lib/db/repositories'
 import { createSchedulerRepository } from '../lib/db/scheduler-repository'
 import { LATEST_LEDGER_METHODOLOGY_VERSION } from '../lib/reconcile/latest-ledger'
-import { DEPTH_RECONCILIATION_METHODOLOGY_VERSION, SUPPLY_METHODOLOGY_VERSION } from '../config/methodology'
+import { DEPTH_RECONCILIATION_METHODOLOGY_VERSION, SUPPLY_METHODOLOGY_VERSION, TRUSTLINE_METHODOLOGY_VERSION } from '../config/methodology'
 import { parseHorizonHostList } from '../lib/stellar/horizon'
 import { parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
 import { serializeWorkerError } from '../lib/worker/errors'
 import { createLatestLedgerJobHandler } from '../lib/worker/latest-ledger-job'
 import { createSupplyJobHandler } from '../lib/worker/supply-job'
 import { createDepthJobHandler } from '../lib/worker/depth-job'
+import { createTrustlineJobHandler } from '../lib/worker/trustline-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
 
 function executionMode(arguments_: readonly string[]) {
@@ -37,6 +38,7 @@ async function main() {
       methodologyVersion: LATEST_LEDGER_METHODOLOGY_VERSION,
       supplyMethodologyVersion: SUPPLY_METHODOLOGY_VERSION,
       depthMethodologyVersion: DEPTH_RECONCILIATION_METHODOLOGY_VERSION,
+      trustlineMethodologyVersion: TRUSTLINE_METHODOLOGY_VERSION,
       handlers: {
         latest_ledger: createLatestLedgerJobHandler(persistenceRepositories, () => new Date(), {
           endpointPolicy: {
@@ -57,6 +59,15 @@ async function main() {
           maxResponseBytes,
         }),
         order_book_depth: createDepthJobHandler(persistenceRepositories, () => new Date(), {
+          endpointPolicy: {
+            allowedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_ALLOWED_HOSTS),
+            deniedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_DENIED_HOSTS),
+          },
+          resiliencePolicy,
+          timeoutMs,
+          maxResponseBytes,
+        }),
+        trustline_count: createTrustlineJobHandler(persistenceRepositories, () => new Date(), {
           endpointPolicy: {
             allowedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_ALLOWED_HOSTS),
             deniedHosts: parseHorizonHostList(process.env.STELLAR_HORIZON_DENIED_HOSTS),

@@ -209,6 +209,14 @@ function assertSnapshotMatchesCycle(snapshot: ReconciliationSnapshot, cycle: Com
       !networkIdSchema.safeParse(cycle.subjectKey.split(':', 1)[0]).success
     )
   ) throw new Error('depth snapshot pair must match the completed cycle subject')
+  if (
+    cycle.metric === 'trustline_count' &&
+    (
+      snapshot.subject.kind !== 'asset' ||
+      !cycle.subjectKey.endsWith(`:${formatAssetId(snapshot.subject.asset)}`) ||
+      !networkIdSchema.safeParse(cycle.subjectKey.split(':', 1)[0]).success
+    )
+  ) throw new Error('trustline snapshot asset must match the completed cycle subject')
 }
 
 function sameCycleIdentity(existing: typeof ingestCycles.$inferSelect, requested: CompletedCycleRecord) {
@@ -246,6 +254,10 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           input.cycle.metric === 'order_book_depth' &&
           identity.network.id !== input.cycle.subjectKey.split(':', 1)[0]
         ) throw new Error(`reading ${reading.id} source network does not match the depth cycle subject`)
+        if (
+          input.cycle.metric === 'trustline_count' &&
+          identity.network.id !== input.cycle.subjectKey.split(':', 1)[0]
+        ) throw new Error(`reading ${reading.id} source network does not match the trustline cycle subject`)
         return [reading.id, identity]
       }))
       const states = Object.values(input.discrepancyStates).map((state) => persistedDiscrepancyStateSchema.parse(state))

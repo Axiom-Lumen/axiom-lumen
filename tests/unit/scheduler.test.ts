@@ -46,6 +46,8 @@ function dependencies(jobs: DiscoveredIngestJob[], leases: ClaimedCycle[], handl
     reapExpiredLeases: vi.fn(async () => ({ retried: 0, abandoned: 0, finalized: 0 })),
     discoverLatestLedgerJobs: vi.fn(async () => jobs),
     discoverSupplyJobs: vi.fn(async () => []),
+    discoverDepthJobs: vi.fn(async () => []),
+    discoverTrustlineJobs: vi.fn(async () => []),
     ensureScheduledCycle: vi.fn(async () => true),
     claimNextCycle: vi.fn(async () => queue.shift() ?? null),
     renewLease: vi.fn(async () => true),
@@ -144,6 +146,23 @@ describe('worker scheduler', () => {
     expect(fixture.schedulerRepository.discoverLatestLedgerJobs).toHaveBeenCalledWith('latest-ledger-v0.2')
     expect(fixture.schedulerRepository.discoverSupplyJobs).toHaveBeenCalledWith('onchain-asset-supply-v0.1')
     expect(supplyHandler).toHaveBeenCalledOnce()
+  })
+
+  it('discovers and dispatches trustline-state jobs through their registered handler', async () => {
+    const trustlineJob: DiscoveredIngestJob = {
+      metric: 'trustline_count', subjectKey: `public:USDC:G${'A'.repeat(55)}`, methodologyVersion: 'trustline-state-v0.1',
+      asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+      sources: [{ id: 'trustline-source', url: 'https://trustlines.example', sourceClass: 'canonical_ledger', adapter: 'horizon', upstreamId: null, networkId: 'public', networkPassphrase: 'Public Global Stellar Network ; September 2015' }],
+    }
+    const trustlineLease = leaseFor(trustlineJob)
+    const handler = vi.fn(async () => ({ cycle: { id: trustlineLease.id } } as never))
+    const fixture = dependencies([], [trustlineLease], vi.fn())
+    vi.mocked(fixture.schedulerRepository.discoverTrustlineJobs).mockResolvedValue([trustlineJob])
+    const configured: SchedulerDependencies = { ...fixture.value, trustlineMethodologyVersion: 'trustline-state-v0.1', handlers: { ...fixture.value.handlers, trustline_count: handler } }
+
+    expect(await runSchedulerOnce(configured, options)).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
+    expect(fixture.schedulerRepository.discoverTrustlineJobs).toHaveBeenCalledWith('trustline-state-v0.1')
+    expect(handler).toHaveBeenCalledOnce()
   })
 
   it('executes a claimed lease from its immutable job snapshot after source configuration changes', async () => {

@@ -27,6 +27,10 @@
     {
       "name": "Depth",
       "description": "Classic SDEX cumulative order-book depth reconciliation"
+    },
+    {
+      "name": "Trustlines",
+      "description": "Classic credit-asset trustline authorization-state reconciliation"
     }
   ],
   "paths": {
@@ -851,6 +855,282 @@
           }
         }
       }
+    },
+    "/api/v1/trustlines/{asset}": {
+      "get": {
+        "operationId": "getTrustlines",
+        "tags": [
+          "Trustlines"
+        ],
+        "summary": "Get finalized Public Network trustline authorization-state counts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Asset"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current verified or degraded trustline-state snapshot",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationSnapshot"
+                },
+                "examples": {
+                  "verified": {
+                    "$ref": "#/components/examples/TrustlineVerified"
+                  },
+                  "degraded": {
+                    "$ref": "#/components/examples/TrustlineDegraded"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation matches If-None-Match",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid asset, request header, or query parameter",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidAsset": {
+                    "$ref": "#/components/examples/InvalidAsset"
+                  },
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  },
+                  "invalidQueryParameter": {
+                    "$ref": "#/components/examples/InvalidQueryParameter"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No finalized snapshot exists for the asset",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "missing": {
+                    "$ref": "#/components/examples/TrustlineMissingSnapshot"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Persisted metric state, freshness, or read storage is unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReconciliationSnapshot"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "unavailable": {
+                    "$ref": "#/components/examples/TrustlineUnavailable"
+                  },
+                  "readUnavailable": {
+                    "$ref": "#/components/examples/TrustlineReadUnavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "trustlineOptions",
+        "summary": "Inspect public read-only CORS policy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "CORS preflight accepted",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1173,7 +1453,7 @@
               "latest_ledger",
               "onchain_asset_supply",
               "order_book_depth",
-              "trustline_count",
+              "trustline_state",
               "anchor_reserves"
             ]
           },
@@ -1392,6 +1672,60 @@
                     "required": [
                       "kind",
                       "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "trustline_state"
+                      },
+                      "total": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)$"
+                      },
+                      "states": {
+                        "type": "object",
+                        "properties": {
+                          "authorized": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)$"
+                          },
+                          "authorized_to_maintain_liabilities": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)$"
+                          },
+                          "unauthorized": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d*)$"
+                          }
+                        },
+                        "required": [
+                          "authorized",
+                          "authorized_to_maintain_liabilities",
+                          "unauthorized"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "ledger_sequence": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "exclusiveMinimum": 0
+                      },
+                      "ledger_closed_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "total",
+                      "states",
+                      "ledger_sequence",
+                      "ledger_closed_at"
                     ],
                     "additionalProperties": false
                   }
@@ -1680,6 +2014,60 @@
                         "value"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "trustline_state"
+                        },
+                        "total": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)$"
+                        },
+                        "states": {
+                          "type": "object",
+                          "properties": {
+                            "authorized": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            },
+                            "authorized_to_maintain_liabilities": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            },
+                            "unauthorized": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            }
+                          },
+                          "required": [
+                            "authorized",
+                            "authorized_to_maintain_liabilities",
+                            "unauthorized"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "ledger_closed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "total",
+                        "states",
+                        "ledger_sequence",
+                        "ledger_closed_at"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 },
@@ -1823,6 +2211,60 @@
                       "required": [
                         "kind",
                         "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "trustline_state"
+                        },
+                        "total": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)$"
+                        },
+                        "states": {
+                          "type": "object",
+                          "properties": {
+                            "authorized": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            },
+                            "authorized_to_maintain_liabilities": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            },
+                            "unauthorized": {
+                              "type": "string",
+                              "pattern": "^(0|[1-9]\\d*)$"
+                            }
+                          },
+                          "required": [
+                            "authorized",
+                            "authorized_to_maintain_liabilities",
+                            "unauthorized"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "ledger_closed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "total",
+                        "states",
+                        "ledger_sequence",
+                        "ledger_closed_at"
                       ],
                       "additionalProperties": false
                     }
@@ -1986,6 +2428,80 @@
                         "observed_source_timestamp",
                         "reference_source_timestamp",
                         "bucket_differences"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "trustline_comparison"
+                        },
+                        "observed_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "reference_ledger_sequence": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "exclusiveMinimum": 0
+                        },
+                        "observed_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "reference_source_timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "state_differences": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "authorized",
+                                  "authorized_to_maintain_liabilities",
+                                  "unauthorized"
+                                ]
+                              },
+                              "observed": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)$"
+                              },
+                              "reference": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)$"
+                              },
+                              "absolute_delta": {
+                                "type": "string",
+                                "pattern": "^(0|[1-9]\\d*)$"
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "observed",
+                              "reference",
+                              "absolute_delta"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 3
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "observed_ledger_sequence",
+                        "reference_ledger_sequence",
+                        "observed_source_timestamp",
+                        "reference_source_timestamp",
+                        "state_differences"
                       ],
                       "additionalProperties": false
                     }
@@ -2808,6 +3324,137 @@
           "api_version": "v1"
         }
       },
+      "TrustlineVerified": {
+        "summary": "Verified trustline state",
+        "value": {
+          "metric": "trustline_state",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "verified",
+          "value": {
+            "kind": "trustline_state",
+            "total": "825",
+            "states": {
+              "authorized": "700",
+              "authorized_to_maintain_liabilities": "100",
+              "unauthorized": "25"
+            },
+            "ledger_sequence": 58000000,
+            "ledger_closed_at": "2026-08-10T12:00:00.000Z"
+          },
+          "confidence": 0.95,
+          "confidence_formula_version": "trustline-state-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 1,
+            "spread": 1
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 2,
+          "sources_usable": 2,
+          "sources_agreeing": 2,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "trustline-state-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "TrustlineDegraded": {
+        "summary": "Degraded trustline state",
+        "value": {
+          "metric": "trustline_state",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "degraded",
+          "value": {
+            "kind": "trustline_state",
+            "total": "825",
+            "states": {
+              "authorized": "700",
+              "authorized_to_maintain_liabilities": "100",
+              "unauthorized": "25"
+            },
+            "ledger_sequence": 58000000,
+            "ledger_closed_at": "2026-08-10T12:00:00.000Z"
+          },
+          "confidence": 0.6,
+          "confidence_formula_version": "trustline-state-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 1,
+            "freshness": 0.95,
+            "availability": 0.5,
+            "spread": 1
+          },
+          "confidence_caps_applied": [
+            "single_source"
+          ],
+          "sources_configured": 2,
+          "sources_responded": 1,
+          "sources_usable": 1,
+          "sources_agreeing": 1,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "trustline-state-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
+      "TrustlineUnavailable": {
+        "summary": "Unavailable or stale trustline state",
+        "value": {
+          "metric": "trustline_state",
+          "subject": {
+            "kind": "asset",
+            "asset": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "status": "unavailable",
+          "value": null,
+          "confidence": 0,
+          "confidence_formula_version": "trustline-state-confidence-v0.1",
+          "confidence_components": {
+            "agreement": 0,
+            "freshness": 0,
+            "availability": 0,
+            "spread": 0
+          },
+          "confidence_caps_applied": [],
+          "sources_configured": 2,
+          "sources_responded": 0,
+          "sources_usable": 0,
+          "sources_agreeing": 0,
+          "sources_excluded": 0,
+          "contributions": [],
+          "discrepancies": [],
+          "source_errors": [
+            {
+              "source_id": null,
+              "source_url": null,
+              "code": "stale_observation",
+              "category": "freshness",
+              "message": "Latest finalized trustline evidence exceeds 900 seconds",
+              "occurred_at": "2026-08-10T12:00:00.000Z",
+              "retryable": false
+            }
+          ],
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "methodology_version": "trustline-state-v0.1",
+          "request_id": "example_request",
+          "api_version": "v1"
+        }
+      },
       "InvalidRequestId": {
         "summary": "Invalid request identifier",
         "value": {
@@ -2892,6 +3539,18 @@
           "api_version": "v1"
         }
       },
+      "TrustlineMissingSnapshot": {
+        "summary": "No finalized trustline snapshot",
+        "value": {
+          "error": {
+            "code": "trustline_snapshot_not_found",
+            "message": "No finalized trustline snapshot is available"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
       "LatestReadUnavailable": {
         "summary": "Latest-ledger read storage unavailable",
         "value": {
@@ -2922,6 +3581,18 @@
           "error": {
             "code": "depth_read_unavailable",
             "message": "The depth read model is temporarily unavailable"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "TrustlineReadUnavailable": {
+        "summary": "Trustline read storage unavailable",
+        "value": {
+          "error": {
+            "code": "trustline_read_unavailable",
+            "message": "The trustline read model is temporarily unavailable"
           },
           "request_id": "example_request",
           "as_of": "2026-08-10T12:00:00.000Z",

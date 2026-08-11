@@ -30,6 +30,9 @@ describe('OpenAPI 3.1 contract', () => {
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthVerified)).toEqual(OPENAPI_EXAMPLES.depthVerified)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthDegraded)).toEqual(OPENAPI_EXAMPLES.depthDegraded)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthUnavailable)).toEqual(OPENAPI_EXAMPLES.depthUnavailable)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineVerified)).toEqual(OPENAPI_EXAMPLES.trustlineVerified)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineDegraded)).toEqual(OPENAPI_EXAMPLES.trustlineDegraded)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineUnavailable)).toEqual(OPENAPI_EXAMPLES.trustlineUnavailable)
     const errorExamples = [
       OPENAPI_EXAMPLES.invalidRequestId,
       OPENAPI_EXAMPLES.invalidQueryParameter,
@@ -38,9 +41,11 @@ describe('OpenAPI 3.1 contract', () => {
       OPENAPI_EXAMPLES.latestMissingSnapshot,
       OPENAPI_EXAMPLES.supplyMissingSnapshot,
       OPENAPI_EXAMPLES.depthMissingSnapshot,
+      OPENAPI_EXAMPLES.trustlineMissingSnapshot,
       OPENAPI_EXAMPLES.latestReadUnavailable,
       OPENAPI_EXAMPLES.supplyReadUnavailable,
       OPENAPI_EXAMPLES.depthReadUnavailable,
+      OPENAPI_EXAMPLES.trustlineReadUnavailable,
       OPENAPI_EXAMPLES.authenticationError,
       OPENAPI_EXAMPLES.rateLimitError,
     ]

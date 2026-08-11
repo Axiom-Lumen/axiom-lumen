@@ -51,6 +51,11 @@ results remain raw readings for audit purposes while being excluded from snapsho
 values. Public supply discrepancies carry both ledger/timestamp identities and exact per-component differences,
 so an offsetting component change remains explainable even when the aggregate totals match.
 
+Trustline observations retain exact integer counts for `authorized`, `authorized_to_maintain_liabilities`, and
+`unauthorized` classic credit-asset trustlines at one closed ledger. Their `total` must equal the three-state sum.
+The public serializer maps the internal `trustline_count` discriminator to `trustline_state`; it does not claim
+to measure funded holders, wallets, users, or beneficial owners. Horizon replicas retain one derivation family.
+
 ## Asset identifiers
 
 Assets are either:

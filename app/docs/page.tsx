@@ -5,22 +5,10 @@ import { PageHero, DocSection, CodePanel, ConfidenceJson, K, S } from '@/compone
 export const metadata: Metadata = {
   title: 'API documentation',
   description:
-    'Implemented and planned API surfaces for Axiom Lumen, including persisted latest-ledger and supply reconciliation endpoints.',
+    'Implemented and planned API surfaces for Axiom Lumen, including persisted ledger, supply, depth, and trustline reconciliation endpoints.',
 }
 
 const plannedEndpoints = [
-  {
-    method: 'GET',
-    path: '/v1/depth/{pair}',
-    name: 'DEX order book depth',
-    desc: 'Planned API: classic-offer ingestion semantics exist, but reconciled bid and ask depth is not served yet.',
-  },
-  {
-    method: 'GET',
-    path: '/v1/trustlines/{asset}',
-    name: 'Trustline state',
-    desc: 'Planned: trustline counts and authorization state reconciled between Horizon and archive sources.',
-  },
   {
     method: 'GET',
     path: '/v1/anchors/{anchor}/reserves',
@@ -35,9 +23,9 @@ export default function DocsPage() {
       <PageHero
         docCode="AL-API-03 · API STATUS"
         kicker="Developer documentation"
-        title="Two implemented endpoints. One machine-readable contract."
+        title="Four implemented endpoints. One machine-readable contract."
       >
-        The current API serves persisted latest-ledger and on-chain credit-asset supply snapshots.
+        The current API serves persisted latest-ledger, supply, classic SDEX depth, and trustline-state snapshots.
         Authenticated hosted APIs, paid tiers, WebSocket streams, and additional metrics remain
         planned work.
       </PageHero>
@@ -128,8 +116,8 @@ export default function DocsPage() {
       <DocSection num="03" label="Semantics" title="Status, confidence, and source visibility.">
         <div className="flex max-w-[640px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
           <p>
-            <K>verified</K> means at least two usable Horizon sources agreed without source errors
-            and confidence stayed high. <K>degraded</K> means a value is available but source
+            <K>verified</K> means the metric&apos;s minimum independent evidence requirement was met without source
+            errors and confidence stayed high. Replicas of one derivation do not create independence. <K>degraded</K> means a value is available but source
             availability, freshness, or agreement is limited. <K>unavailable</K> means no usable
             source could produce a latest-ledger value.
           </p>
