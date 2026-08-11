@@ -6,6 +6,9 @@ __v0_jsx-dev-runtime.ts
 .v0-trash/
 .vercel/
 
+# Local strategic planning; move durable copies to an access-controlled project system.
+.private/
+
 # Environment variables
 .env*.local
 
