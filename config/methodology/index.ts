@@ -13,3 +13,10 @@ export {
   type SupplyComponentId,
   type SupplyMethodologyConfig,
 } from './supply_v0_1'
+export {
+  DEPTH_METHODOLOGY_VERSION,
+  DEPTH_PRICE_BANDS_BPS,
+  depthMethodologyConfig,
+  validateDepthMethodologyConfig,
+  type DepthMethodologyConfig,
+} from './depth_v0_1'

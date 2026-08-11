@@ -30,7 +30,7 @@ Implemented in this repository today:
    confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: DEX/order-book reconciliation, anchor reserve comparison, authenticated
+Planned but not implemented yet: DEX/order-book persistence and reconciliation, anchor reserve comparison, authenticated
 public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply workflows.
 
 ---
@@ -60,6 +60,9 @@ public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply w
 - [x] **Persisted supply reconciliation:** Discovers explicitly configured credit assets, runs Horizon and
   independently trusted archive derivations, excludes stale evidence, and atomically stores raw readings,
   snapshots, source health, discrepancies, and events with idempotent cycle replay.
+- [x] **SDEX depth ingestion foundation:** Defines canonical pair, price, and band semantics and collects
+  bounded, same-ledger classic-offer depth with exact rational arithmetic. Persistence, reconciliation, and
+  serving are still planned.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
   credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
@@ -68,7 +71,8 @@ public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply w
 
 ### Mocked, static, planned, or missing
 
-- [ ] **DEX/order-book depth:** Planned; no connector or reconciliation implementation yet.
+- [ ] **DEX/order-book depth API:** Connector and methodology implemented; persistence, reconciliation,
+  confidence scoring, and the public endpoint remain planned.
 - [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
@@ -265,6 +269,10 @@ The broader methodology baseline is documented in [axiom-lumen-agent-guide.md](.
 The implemented credit-asset reconciliation metric is defined as
 [On-chain asset supply v0.1](./docs/methodology/onchain-asset-supply-v0.1.md). It includes every ledger balance
 container at one closed ledger and deliberately does not claim to measure economic free float or native XLM.
+
+The implemented SDEX ingestion profile is defined as
+[Order-book depth v0.1](./docs/methodology/order-book-depth-v0.1.md). It covers exact classic-offer depth only;
+liquidity pools, reconciliation, confidence scoring, persistence, and a public depth endpoint remain excluded.
 
 ---
 

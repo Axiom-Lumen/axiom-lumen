@@ -32,6 +32,19 @@ verification-proof digest, and verification time. Horizon aggregates and history
 distinct derivation families bound to their permitted source identity; changing only a Horizon hostname does not
 create independent evidence.
 
+Order-book depth observations use the canonical pair orientation defined by
+`order-book-depth-v0.1`, one of its configured 50, 100, or 500 basis-point bands, a bid/ask side, an exact
+base-asset-equivalent amount, and the rational two-sided midpoint used as the reference price. They also retain
+the closed ledger, methodology and connector versions, evidence digest, and a typed Horizon SDEX offer-scan
+checkpoint. The runtime schema requires a `dex` / `sdex` source identity, a non-null closed-ledger timestamp,
+canonical asset order, and a checkpoint ledger equal to the observation ledger.
+
+The depth connector reports `invalid_pair`, `crossed_book`, and `stale_book` through the shared source-error
+vocabulary in addition to the existing configuration, transport, HTTP, payload, network, pagination, and
+ledger-drift failures. Empty and one-sided books remain explicit connector states but produce no raw price-band
+observations because they have no two-sided midpoint. Persistence, reconciliation, confidence scoring, and a
+public depth endpoint remain outside this contract version's implemented routes.
+
 Supply reconciliation persists the same immutable cycle boundary as latest-ledger reconciliation. Its durable
 subject key is `network:CODE:ISSUER`, preventing cross-network asset collisions. Successful but stale connector
 results remain raw readings for audit purposes while being excluded from snapshot contributions and current

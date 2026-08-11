@@ -1,5 +1,15 @@
 # Methodology changelog
 
+## order-book-depth-v0.1 — 2026-08-11
+
+- Defined deterministic native/credit pair canonicalization and counter-per-base rational prices.
+- Defined base-asset-equivalent cumulative bid and ask depth at 50, 100, and 500 basis points around a
+  two-sided midpoint.
+- Pinned classic SDEX offer inclusion, round-down amount conversion, same-ledger pagination, a 5-second
+  freshness half-life, and a 20-second hard age bound.
+- Excluded liquidity pools and prohibited Horizon replicas from being treated as independent corroboration.
+- This version defines ingestion only; public reconciliation and serving remain unimplemented.
+
 The public methodology is versioned independently from application releases. Changes to weights, freshness
 parameters, tolerance bands, confidence formulas, or severity thresholds require a new methodology version.
 
