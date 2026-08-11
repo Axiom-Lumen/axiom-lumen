@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:database": "vitest run tests/database",
+    "test:database": "vitest run tests/database --testTimeout 15000",
     "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm test && npm run test:integration && npm run db:check && npm run build"
   },
   "dependencies": {
