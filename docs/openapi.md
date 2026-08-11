@@ -5,8 +5,9 @@ implemented public operations:
 
 - `GET` and `OPTIONS /api/v1/stellar/latest-ledger`
 - `GET` and `OPTIONS /api/v1/supply/{asset}`
+- `GET` and `OPTIONS /api/v1/depth/{pair}`
 
-Planned depth, trustline, anchor, authentication, quota, and event endpoints are excluded. Authentication and
+Planned trustline, anchor, authentication, quota, and event endpoints are excluded. Authentication and
 rate-limit failures are retained as unreferenced reusable response components for the future policies that
 introduce those responses; their presence does not claim that current public operations enforce authentication
 or quotas.

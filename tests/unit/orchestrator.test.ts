@@ -473,6 +473,7 @@ describe('metric reconciliation orchestrator', () => {
     })
 
     expect(result.snapshot.value?.kind).toBe('amount')
-    expect(result.snapshot.value?.value.toString()).toBe(amount.toString())
+    if (result.snapshot.value?.kind !== 'amount') throw new Error('expected amount snapshot')
+    expect(result.snapshot.value.value.toString()).toBe(amount.toString())
   })
 })

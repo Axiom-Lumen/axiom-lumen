@@ -7,11 +7,13 @@ import {
   GET as supplyGet,
   OPTIONS as supplyOptions,
 } from '../../app/api/v1/supply/[asset]/route'
+import { GET as depthGet, OPTIONS as depthOptions } from '../../app/api/v1/depth/[pair]/route'
 import { IMPLEMENTED_PUBLIC_OPERATIONS } from '../../lib/openapi/document'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
 const ISSUER = `G${'A'.repeat(55)}`
 const ASSET = `USDC:${ISSUER}`
+const PAIR = `native~${ASSET}`
 type OperationId = (typeof IMPLEMENTED_PUBLIC_OPERATIONS)[number]['operationId']
 
 const contractRequests: Record<OperationId, () => Response | Promise<Response>> = {
@@ -28,6 +30,12 @@ const contractRequests: Record<OperationId, () => Response | Promise<Response>> 
   supplyOptions: () => supplyOptions(new Request(`https://axiom.example/api/v1/supply/${ASSET}`, {
     method: 'OPTIONS',
     headers: { 'X-Request-ID': 'contract_supply_options' },
+  })),
+  getDepth: () => depthGet(new Request(`https://axiom.example/api/v1/depth/${PAIR}`, {
+    headers: { 'X-Request-ID': 'invalid request id' },
+  }), { params: Promise.resolve({ pair: PAIR }) }),
+  depthOptions: () => depthOptions(new Request(`https://axiom.example/api/v1/depth/${PAIR}`, {
+    method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_depth_options' },
   })),
 }
 

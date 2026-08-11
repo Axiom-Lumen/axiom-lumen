@@ -4,7 +4,10 @@ import {
   creditAssetSchema,
   formatAssetId,
   formatNetworkAssetKey,
+  formatNetworkPairKey,
   networkIdSchema,
+  parseTradingPairId,
+  tradingPairSchema,
   type MetricId,
 } from '../contracts/domain'
 import { serializeWorkerError } from '../worker/errors'
@@ -15,6 +18,11 @@ const supplySourceConfigSchema = z.object({
   enabled: z.literal(true),
   assetIds: z.array(z.string().min(1)).min(1),
   trustedCheckpoints: z.record(z.unknown()).optional(),
+}).strict()
+
+const depthSourceConfigSchema = z.object({
+  enabled: z.literal(true),
+  pairs: z.array(z.string().min(1)).min(1),
 }).strict()
 
 const discoveredSourceSchema = z.object({
@@ -42,6 +50,13 @@ export const discoveredIngestJobSchema = z.discriminatedUnion('metric', [
     subjectKey: z.string().min(1),
     methodologyVersion: z.string().min(1),
     asset: creditAssetSchema,
+    sources: z.array(discoveredSourceSchema).min(1),
+  }).strict(),
+  z.object({
+    metric: z.literal('order_book_depth'),
+    subjectKey: z.string().min(1),
+    methodologyVersion: z.string().min(1),
+    pair: tradingPairSchema,
     sources: z.array(discoveredSourceSchema).min(1),
   }).strict(),
 ])
@@ -195,6 +210,57 @@ export function createSchedulerRepository(client: DatabaseClient) {
         })
       }
       return jobs
+    },
+
+    async discoverDepthJobs(methodologyVersion: string): Promise<DiscoveredIngestJob[]> {
+      const rows = await db
+        .select({
+          id: sourceDefinitions.id,
+          url: sourceDefinitions.url,
+          sourceClass: sourceDefinitions.sourceClass,
+          adapter: sourceDefinitions.adapter,
+          upstreamId: sourceDefinitions.upstreamId,
+          networkId: networks.id,
+          networkPassphrase: networks.passphrase,
+          config: sourceDefinitions.config,
+        })
+        .from(sourceDefinitions)
+        .innerJoin(networks, eq(networks.id, sourceDefinitions.networkId))
+        .where(eq(sourceDefinitions.enabled, true))
+        .orderBy(asc(networks.id), asc(sourceDefinitions.id))
+      const jobs = new Map<string, Extract<DiscoveredIngestJob, { metric: 'order_book_depth' }>>()
+      for (const source of rows) {
+        if (source.adapter !== 'sdex' || source.sourceClass !== 'dex') continue
+        const rawDepthConfig = source.config.depth
+        if (!rawDepthConfig || typeof rawDepthConfig !== 'object' || Array.isArray(rawDepthConfig)) continue
+        const rawConfig = rawDepthConfig as Record<string, unknown>
+        if (rawConfig.enabled !== true) continue
+        const routingPairs = Array.isArray(rawConfig.pairs) && rawConfig.pairs.every((pair) => typeof pair === 'string')
+          ? rawConfig.pairs as string[] : null
+        if (!routingPairs || routingPairs.length === 0) continue
+        const parsedConfig = depthSourceConfigSchema.safeParse(rawDepthConfig)
+        for (const pairId of routingPairs) {
+          let pair
+          try {
+            pair = parseTradingPairId(pairId)
+          } catch {
+            throw new Error(`configured depth pair ${pairId} is invalid`)
+          }
+          const networkId = networkIdSchema.parse(source.networkId)
+          const subjectKey = formatNetworkPairKey(networkId, pair)
+          let job = jobs.get(subjectKey)
+          if (!job) {
+            job = { metric: 'order_book_depth', subjectKey, methodologyVersion, pair, sources: [] }
+            jobs.set(subjectKey, job)
+          }
+          job.sources.push(discoveredSourceSchema.parse({
+            ...source,
+            networkId,
+            ...(parsedConfig.success ? {} : { configurationError: 'Depth source configuration is malformed' }),
+          }))
+        }
+      }
+      return [...jobs.values()]
     },
 
     async ensureScheduledCycle(input: ScheduledCycleInput) {

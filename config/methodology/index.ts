@@ -20,3 +20,9 @@ export {
   validateDepthMethodologyConfig,
   type DepthMethodologyConfig,
 } from './depth_v0_1'
+export {
+  DEPTH_RECONCILIATION_METHODOLOGY_VERSION,
+  depthReconciliationMethodologyConfig,
+  validateDepthReconciliationMethodologyConfig,
+  type DepthReconciliationMethodologyConfig,
+} from './depth_v0_2'

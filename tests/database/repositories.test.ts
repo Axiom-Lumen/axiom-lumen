@@ -398,6 +398,9 @@ describeWithDatabase('transactional persistence repositories', () => {
       if (publicDiscrepancy?.details?.kind !== 'supply_comparison') {
         throw new Error('expected supply discrepancy details')
       }
+      if (publicDiscrepancy.observedValue.kind !== 'amount' || publicDiscrepancy.referenceValue.kind !== 'amount') {
+        throw new Error('expected supply amount values')
+      }
       expect(publicDiscrepancy.observedValue.value.toString()).toBe('1001')
       expect(publicDiscrepancy.referenceValue.value.toString()).toBe('1000')
       expect(publicDiscrepancy.details.componentDifferences.map((difference) => ({

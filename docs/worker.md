@@ -51,6 +51,18 @@ configuration is retained in every otherwise eligible asset job and produces a s
 so an operator-visible source error cannot disappear through routing. A configured archive source without a valid
 trusted checkpoint is likewise retained and cannot be silently treated as independent evidence.
 
+Depth discovery is opt-in for enabled `dex` / `sdex` sources. Route canonical pair IDs explicitly:
+
+```sql
+UPDATE source_definitions
+SET config = jsonb_set(config, '{depth}',
+  '{"enabled":true,"pairs":["native~USDC:G..."]}'::jsonb)
+WHERE id = 'stellar-public-sdex';
+```
+
+The worker persists empty and one-sided books as successful evidence states, but only complete two-sided books
+become reconciliation contributions.
+
 Run exactly one scheduling/drain pass:
 
 ```bash

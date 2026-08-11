@@ -27,14 +27,20 @@ describe('OpenAPI 3.1 contract', () => {
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.supplyVerified)).toEqual(OPENAPI_EXAMPLES.supplyVerified)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.supplyDegraded)).toEqual(OPENAPI_EXAMPLES.supplyDegraded)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.supplyUnavailable)).toEqual(OPENAPI_EXAMPLES.supplyUnavailable)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthVerified)).toEqual(OPENAPI_EXAMPLES.depthVerified)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthDegraded)).toEqual(OPENAPI_EXAMPLES.depthDegraded)
+    expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.depthUnavailable)).toEqual(OPENAPI_EXAMPLES.depthUnavailable)
     const errorExamples = [
       OPENAPI_EXAMPLES.invalidRequestId,
       OPENAPI_EXAMPLES.invalidQueryParameter,
       OPENAPI_EXAMPLES.invalidAsset,
+      OPENAPI_EXAMPLES.invalidPair,
       OPENAPI_EXAMPLES.latestMissingSnapshot,
       OPENAPI_EXAMPLES.supplyMissingSnapshot,
+      OPENAPI_EXAMPLES.depthMissingSnapshot,
       OPENAPI_EXAMPLES.latestReadUnavailable,
       OPENAPI_EXAMPLES.supplyReadUnavailable,
+      OPENAPI_EXAMPLES.depthReadUnavailable,
       OPENAPI_EXAMPLES.authenticationError,
       OPENAPI_EXAMPLES.rateLimitError,
     ]

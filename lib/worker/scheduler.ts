@@ -33,6 +33,7 @@ export interface SchedulerDependencies {
   handlers: WorkerJobHandlers
   methodologyVersion: string
   supplyMethodologyVersion?: string
+  depthMethodologyVersion?: string
   clock?: () => Date
 }
 
@@ -108,6 +109,9 @@ export async function runSchedulerOnce(
     ...await dependencies.schedulerRepository.discoverLatestLedgerJobs(dependencies.methodologyVersion),
     ...(dependencies.supplyMethodologyVersion
       ? await dependencies.schedulerRepository.discoverSupplyJobs(dependencies.supplyMethodologyVersion)
+      : []),
+    ...(dependencies.depthMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverDepthJobs(dependencies.depthMethodologyVersion)
       : []),
   ]
   const jobsByKey = new Map(jobs.map((job) => [`${job.metric}:${job.subjectKey}`, job]))

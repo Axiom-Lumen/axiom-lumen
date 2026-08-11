@@ -28,5 +28,6 @@ created only for a complete two-sided book.
 
 The connector uses Horizon to read canonical classic SDEX offers. Different Horizon hosts remain replicas of
 the same derivation family and are not independent corroboration. Liquidity pools are explicitly excluded.
-Persistence, reconciliation, confidence, and `GET /api/v1/depth/{pair}` belong to DEX-02 and are not provided
-by this connector.
+Persistence, reconciliation, confidence, and `GET /api/v1/depth/{pair}` are provided by
+[`order-book-depth-v0.2`](../methodology/order-book-depth-v0.2.md). The connector remains the v0.1 raw-evidence
+boundary; its output is not independently verified by itself.
