@@ -1,5 +1,11 @@
 # Methodology changelog
 
+## trustline-state-v0.1 — 2026-08-11
+
+- Defined exact authorized, maintain-liabilities, and unauthorized classic trustline counts and their total.
+- Explicitly excluded funded-holder, wallet-user, and beneficial-owner claims.
+- Added finalized reconciliation, confidence policy, freshness bounds, and the public trustline endpoint.
+
 ## order-book-depth-v0.2 — 2026-08-11
 
 - Added persisted coherent-book reconciliation and `GET /api/v1/depth/{pair}`.

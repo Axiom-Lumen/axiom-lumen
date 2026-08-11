@@ -8,6 +8,7 @@ import {
   OPTIONS as supplyOptions,
 } from '../../app/api/v1/supply/[asset]/route'
 import { GET as depthGet, OPTIONS as depthOptions } from '../../app/api/v1/depth/[pair]/route'
+import { GET as trustlineGet, OPTIONS as trustlineOptions } from '../../app/api/v1/trustlines/[asset]/route'
 import { IMPLEMENTED_PUBLIC_OPERATIONS } from '../../lib/openapi/document'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
@@ -37,6 +38,8 @@ const contractRequests: Record<OperationId, () => Response | Promise<Response>> 
   depthOptions: () => depthOptions(new Request(`https://axiom.example/api/v1/depth/${PAIR}`, {
     method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_depth_options' },
   })),
+  getTrustlines: () => trustlineGet(new Request(`https://axiom.example/api/v1/trustlines/${ASSET}`, { headers: { 'X-Request-ID': 'invalid request id' } }), { params: Promise.resolve({ asset: ASSET }) }),
+  trustlineOptions: () => trustlineOptions(new Request(`https://axiom.example/api/v1/trustlines/${ASSET}`, { method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_trustline_options' } })),
 }
 
 describe('implemented OpenAPI operation coverage', () => {

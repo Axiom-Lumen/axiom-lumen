@@ -218,6 +218,28 @@ describeWithDatabase('scheduler leases', () => {
       }])
       await pool.query(`
         UPDATE source_definitions
+        SET config = jsonb_set(config, '{trustlines}', '{"enabled":true,"assetIds":["asset-usdc"]}'::jsonb)
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverTrustlineJobs('trustline-state-v0.1')).toEqual([{
+        metric: 'trustline_count',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'trustline-state-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [expect.objectContaining({ id: 'source-a', adapter: 'horizon', sourceClass: 'canonical_ledger' })],
+      }])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = jsonb_set(config, '{trustlines}', '{"enabled":true,"assetIds":"asset-usdc"}'::jsonb)
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverTrustlineJobs('trustline-state-v0.1')).toEqual([
+        expect.objectContaining({
+          sources: [expect.objectContaining({ id: 'source-a', configurationError: 'Trustline source configuration is malformed' })],
+        }),
+      ])
+      await pool.query(`
+        UPDATE source_definitions
         SET config = '{"supply":{"enabled":true,"assetIds":"asset-usdc"}}'
         WHERE id = 'source-a'
       `)

@@ -24,6 +24,7 @@ const depthSourceConfigSchema = z.object({
   enabled: z.literal(true),
   pairs: z.array(z.string().min(1)).min(1),
 }).strict()
+const trustlineSourceConfigSchema = z.object({ enabled: z.literal(true), assetIds: z.array(z.string().min(1)).min(1) }).strict()
 
 const discoveredSourceSchema = z.object({
   id: z.string().min(1),
@@ -57,6 +58,13 @@ export const discoveredIngestJobSchema = z.discriminatedUnion('metric', [
     subjectKey: z.string().min(1),
     methodologyVersion: z.string().min(1),
     pair: tradingPairSchema,
+    sources: z.array(discoveredSourceSchema).min(1),
+  }).strict(),
+  z.object({
+    metric: z.literal('trustline_count'),
+    subjectKey: z.string().min(1),
+    methodologyVersion: z.string().min(1),
+    asset: creditAssetSchema,
     sources: z.array(discoveredSourceSchema).min(1),
   }).strict(),
 ])
@@ -261,6 +269,40 @@ export function createSchedulerRepository(client: DatabaseClient) {
         }
       }
       return [...jobs.values()]
+    },
+
+    async discoverTrustlineJobs(methodologyVersion: string): Promise<DiscoveredIngestJob[]> {
+      const [sourceRows, assetRows] = await Promise.all([
+        db.select({ id: sourceDefinitions.id, url: sourceDefinitions.url, sourceClass: sourceDefinitions.sourceClass,
+          adapter: sourceDefinitions.adapter, upstreamId: sourceDefinitions.upstreamId, networkId: networks.id,
+          networkPassphrase: networks.passphrase, config: sourceDefinitions.config })
+          .from(sourceDefinitions).innerJoin(networks, eq(networks.id, sourceDefinitions.networkId))
+          .where(eq(sourceDefinitions.enabled, true)).orderBy(asc(networks.id), asc(sourceDefinitions.id)),
+        db.select({ id: assets.id, networkId: assets.networkId, code: assets.code, issuer: assets.issuer, canonicalId: assets.canonicalId })
+          .from(assets).where(eq(assets.type, 'credit')).orderBy(asc(assets.networkId), asc(assets.canonicalId)),
+      ])
+      const jobs: DiscoveredIngestJob[] = []
+      for (const asset of assetRows) {
+        const parsedAsset = creditAssetSchema.safeParse({ kind: 'credit', code: asset.code, issuer: asset.issuer })
+        if (!parsedAsset.success || formatAssetId(parsedAsset.data) !== asset.canonicalId) throw new Error(`configured trustline asset ${asset.id} has an invalid identity`)
+        const sources = sourceRows.flatMap((source): DiscoveredSource[] => {
+          if (source.adapter !== 'horizon' || source.sourceClass !== 'canonical_ledger' || source.networkId !== asset.networkId) return []
+          const raw = source.config.trustlines
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return []
+          const record = raw as Record<string, unknown>
+          if (record.enabled !== true) return []
+          const routingIds = Array.isArray(record.assetIds) && record.assetIds.every((id) => typeof id === 'string')
+            ? record.assetIds as string[]
+            : null
+          if (routingIds && !routingIds.includes(asset.id)) return []
+          const parsed = trustlineSourceConfigSchema.safeParse(raw)
+          return [{ id: source.id, url: source.url, sourceClass: source.sourceClass, adapter: source.adapter,
+            upstreamId: source.upstreamId, networkId: networkIdSchema.parse(source.networkId), networkPassphrase: source.networkPassphrase,
+            ...(parsed.success ? {} : { configurationError: 'Trustline source configuration is malformed' }) }]
+        })
+        if (sources.length) jobs.push({ metric: 'trustline_count', subjectKey: formatNetworkAssetKey(networkIdSchema.parse(asset.networkId), parsedAsset.data), methodologyVersion, asset: parsedAsset.data, sources })
+      }
+      return jobs
     },
 
     async ensureScheduledCycle(input: ScheduledCycleInput) {

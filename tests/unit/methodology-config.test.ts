@@ -14,6 +14,8 @@ import {
   validateMethodologyConfig,
   validateDepthMethodologyConfig,
   validateSupplyMethodologyConfig,
+  TRUSTLINE_METHODOLOGY_VERSION,
+  trustlineMethodologyConfig,
 } from '../../config/methodology'
 
 describe('methodology v1.5 configuration', () => {
@@ -182,5 +184,18 @@ describe('methodology v1.5 configuration', () => {
       horizonReplicasAreIndependent: true,
     } as unknown as Parameters<typeof validateDepthMethodologyConfig>[0]
     expect(() => validateDepthMethodologyConfig(replicas)).toThrow(/replicas/)
+  })
+
+  it('defines authorization-state trustlines without calling them funded holders', () => {
+    expect(TRUSTLINE_METHODOLOGY_VERSION).toBe('trustline-state-v0.1')
+    expect(trustlineMethodologyConfig).toMatchObject({
+      publicMetricId: 'trustline_state',
+      states: ['authorized', 'authorized_to_maintain_liabilities', 'unauthorized'],
+      totalDefinition: 'sum_of_authorization_states',
+      fundedHolderPolicy: 'not_measured',
+      horizonReplicasAreIndependent: false,
+      freshnessHalfLifeSeconds: 300,
+      maximumObservationAgeSeconds: 900,
+    })
   })
 })

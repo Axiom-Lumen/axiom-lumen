@@ -63,6 +63,18 @@ WHERE id = 'stellar-public-sdex';
 The worker persists empty and one-sided books as successful evidence states, but only complete two-sided books
 become reconciliation contributions.
 
+Trustline discovery is opt-in per Horizon source and registered credit asset:
+
+```sql
+UPDATE source_definitions
+SET config = jsonb_set(config, '{trustlines}',
+  '{"enabled":true,"assetIds":["public-usdc"]}'::jsonb)
+WHERE id = 'stellar-public-horizon';
+```
+
+The same-ledger asset aggregate is normalized into authorized, maintain-liabilities, and unauthorized counts.
+Horizon replicas retain one derivation identity and cannot make the result verified by themselves.
+
 Run exactly one scheduling/drain pass:
 
 ```bash

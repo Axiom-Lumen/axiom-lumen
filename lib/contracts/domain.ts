@@ -5,6 +5,8 @@ import {
   SOURCE_CLASS_IDS,
   SUPPLY_COMPONENT_IDS,
   SUPPLY_METHODOLOGY_VERSION,
+  TRUSTLINE_METHODOLOGY_VERSION,
+  TRUSTLINE_STATE_IDS,
 } from '../../config/methodology'
 import { StellarAmount, parseStellarAmount } from '../stellar/amount'
 
@@ -187,6 +189,17 @@ export const stellarAmountSchema = z.union([
     }
   }),
 ])
+
+export const nonnegativeCountSchema = z.union([
+  z.bigint().nonnegative(),
+  z.string().regex(/^(0|[1-9]\d*)$/).transform((value) => BigInt(value)),
+])
+
+export const trustlineStateCountsSchema = z.object({
+  authorized: nonnegativeCountSchema,
+  authorized_to_maintain_liabilities: nonnegativeCountSchema,
+  unauthorized: nonnegativeCountSchema,
+}).strict()
 
 function formatPositiveRational(numerator: string, denominator: string, decimals = 7) {
   const scale = 10n ** BigInt(decimals)
@@ -422,16 +435,36 @@ function validateOrderBookDepthObservation(
 export const orderBookDepthObservationSchema = orderBookDepthObservationObjectSchema
   .superRefine(validateOrderBookDepthObservation)
 
-export const trustlineCountObservationSchema = observationBaseSchema
+const trustlineCountObservationObjectSchema = observationBaseSchema
   .extend({
     metric: z.literal('trustline_count'),
-    asset: assetIdSchema,
-    count: z.union([
-      z.bigint().nonnegative(),
-      z.string().regex(/^(0|[1-9]\d*)$/).transform((value) => BigInt(value)),
-    ]),
+    asset: creditAssetSchema,
+    total: nonnegativeCountSchema,
+    states: trustlineStateCountsSchema,
+    ledgerSequence: z.number().int().safe().positive(),
+    methodologyVersion: z.literal(TRUSTLINE_METHODOLOGY_VERSION),
+    derivation: z.object({
+      family: z.literal('horizon_asset_aggregate'),
+      connectorVersion: z.string().min(1).max(100),
+      evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      checkpoint: z.object({ ledgerSequence: z.number().int().safe().positive() }).strict(),
+    }).strict(),
   })
   .strict()
+
+function validateTrustlineCountObservation(
+  observation: z.infer<typeof trustlineCountObservationObjectSchema>,
+  context: z.RefinementCtx,
+) {
+  if (observation.provenance.sourceTimestamp === null) context.addIssue({ code: z.ZodIssueCode.custom, path: ['provenance', 'sourceTimestamp'], message: 'trustline observation requires a closed-ledger timestamp' })
+  if (observation.derivation.checkpoint.ledgerSequence !== observation.ledgerSequence) context.addIssue({ code: z.ZodIssueCode.custom, path: ['derivation', 'checkpoint', 'ledgerSequence'], message: 'trustline checkpoint must match the observation ledger' })
+  const total = TRUSTLINE_STATE_IDS.reduce((sum, state) => sum + observation.states[state], 0n)
+  if (total !== observation.total) context.addIssue({ code: z.ZodIssueCode.custom, path: ['total'], message: 'trustline total must equal its authorization-state counts' })
+  const source = observation.provenance.source
+  if (source.adapter !== 'horizon' || source.sourceClass !== 'canonical_ledger') context.addIssue({ code: z.ZodIssueCode.custom, path: ['provenance', 'source'], message: 'Horizon trustline aggregates require a canonical-ledger Horizon source' })
+}
+
+export const trustlineCountObservationSchema = trustlineCountObservationObjectSchema.superRefine(validateTrustlineCountObservation)
 
 export const anchorReservesObservationSchema = observationBaseSchema
   .extend({
@@ -447,12 +480,13 @@ export const rawObservationSchema = z.discriminatedUnion('metric', [
   latestLedgerObservationSchema,
   circulatingSupplyObservationObjectSchema,
   orderBookDepthObservationObjectSchema,
-  trustlineCountObservationSchema,
+  trustlineCountObservationObjectSchema,
   anchorReservesObservationSchema,
 ])
   .superRefine((observation, context) => {
     if (observation.metric === 'circulating_supply') validateCirculatingSupplyObservation(observation, context)
     if (observation.metric === 'order_book_depth') validateOrderBookDepthObservation(observation, context)
+    if (observation.metric === 'trustline_count') validateTrustlineCountObservation(observation, context)
   })
 export type RawObservation = z.infer<typeof rawObservationSchema>
 
@@ -555,10 +589,19 @@ const depthMetricValueSchema = z.object({
   buckets: z.array(depthBucketValueSchema).length(DEPTH_PRICE_BANDS_BPS.length * 2),
 }).strict()
 
+const trustlineStateMetricValueSchema = z.object({
+  kind: z.literal('trustline_state'),
+  total: nonnegativeCountSchema,
+  states: trustlineStateCountsSchema,
+  ledgerSequence: z.number().int().safe().positive(),
+  ledgerClosedAt: utcTimestampSchema,
+}).strict()
+
 export const metricValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ledger'), value: z.number().int().safe().positive() }).strict(),
   z.object({ kind: z.literal('amount'), value: stellarAmountSchema }).strict(),
   depthMetricValueSchema,
+  trustlineStateMetricValueSchema,
   z
     .object({
       kind: z.literal('count'),
@@ -569,6 +612,11 @@ export const metricValueSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
 ]).superRefine((value, context) => {
+  if (value.kind === 'trustline_state') {
+    const total = TRUSTLINE_STATE_IDS.reduce((sum, state) => sum + value.states[state], 0n)
+    if (total !== value.total) context.addIssue({ code: z.ZodIssueCode.custom, path: ['total'], message: 'trustline total must equal its authorization-state counts' })
+    return
+  }
   if (value.kind !== 'depth') return
   if (formatPositiveRational(value.referencePrice.numerator, value.referencePrice.denominator) !== value.referencePrice.decimal) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['referencePrice', 'decimal'], message: 'depth reference decimal must match its exact ratio' })
@@ -766,6 +814,19 @@ export const discrepancyDetailsSchema = z.discriminatedUnion('kind', [
       absoluteDelta: stellarAmountSchema,
     }).strict()).max(DEPTH_PRICE_BANDS_BPS.length * 2),
   }).strict(),
+  z.object({
+    kind: z.literal('trustline_comparison'),
+    observedLedgerSequence: z.number().int().safe().positive(),
+    referenceLedgerSequence: z.number().int().safe().positive(),
+    observedSourceTimestamp: utcTimestampSchema,
+    referenceSourceTimestamp: utcTimestampSchema,
+    stateDifferences: z.array(z.object({
+      state: z.enum(TRUSTLINE_STATE_IDS),
+      observed: nonnegativeCountSchema,
+      reference: nonnegativeCountSchema,
+      absoluteDelta: nonnegativeCountSchema,
+    }).strict()).max(TRUSTLINE_STATE_IDS.length),
+  }).strict(),
 ])
 export type DiscrepancyDetails = z.infer<typeof discrepancyDetailsSchema>
 
@@ -828,7 +889,7 @@ export const reconciliationSnapshotSchema = z
       latest_ledger: 'ledger',
       circulating_supply: 'amount',
       order_book_depth: 'depth',
-      trustline_count: 'count',
+      trustline_count: 'trustline_state',
       anchor_reserves: 'amount',
     }[snapshot.metric]
     const expectedSubjectKind = {

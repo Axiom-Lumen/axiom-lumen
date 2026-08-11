@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DEPTH_PRICE_BANDS_BPS, SUPPLY_COMPONENT_IDS } from '../../config/methodology'
+import { DEPTH_PRICE_BANDS_BPS, SUPPLY_COMPONENT_IDS, TRUSTLINE_STATE_IDS } from '../../config/methodology'
 import {
   type MetricValue,
   type MetricId,
@@ -19,7 +19,7 @@ const apiMetricIdSchema = z.enum([
   'latest_ledger',
   'onchain_asset_supply',
   'order_book_depth',
-  'trustline_count',
+  'trustline_state',
   'anchor_reserves',
 ])
 
@@ -67,7 +67,28 @@ const apiMetricValueSchema = z.discriminatedUnion('kind', [
     }).strict()).length(DEPTH_PRICE_BANDS_BPS.length * 2),
   }).strict(),
   z.object({ kind: z.literal('count'), value: z.string().regex(/^(0|[1-9]\d*)$/) }).strict(),
-])
+  z.object({
+    kind: z.literal('trustline_state'),
+    total: z.string().regex(/^(0|[1-9]\d*)$/),
+    states: z.object({
+      authorized: z.string().regex(/^(0|[1-9]\d*)$/),
+      authorized_to_maintain_liabilities: z.string().regex(/^(0|[1-9]\d*)$/),
+      unauthorized: z.string().regex(/^(0|[1-9]\d*)$/),
+    }).strict(),
+    ledger_sequence: z.number().int().safe().positive(),
+    ledger_closed_at: utcTimestampSchema,
+  }).strict(),
+]).superRefine((value, context) => {
+  if (value.kind !== 'trustline_state') return
+  const statesTotal = TRUSTLINE_STATE_IDS.reduce((total, state) => total + BigInt(value.states[state]), 0n)
+  if (statesTotal !== BigInt(value.total)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['total'],
+      message: 'trustline total must equal its authorization-state counts',
+    })
+  }
+})
 
 const apiStellarAmountSchema = z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/)
 
@@ -135,6 +156,18 @@ const apiDiscrepancySchema = z
         reference: apiStellarAmountSchema,
         absolute_delta: apiStellarAmountSchema,
       }).strict()).max(DEPTH_PRICE_BANDS_BPS.length * 2),
+    }).strict(), z.object({
+      kind: z.literal('trustline_comparison'),
+      observed_ledger_sequence: z.number().int().safe().positive(),
+      reference_ledger_sequence: z.number().int().safe().positive(),
+      observed_source_timestamp: utcTimestampSchema,
+      reference_source_timestamp: utcTimestampSchema,
+      state_differences: z.array(z.object({
+        state: z.enum(TRUSTLINE_STATE_IDS),
+        observed: z.string().regex(/^(0|[1-9]\d*)$/),
+        reference: z.string().regex(/^(0|[1-9]\d*)$/),
+        absolute_delta: z.string().regex(/^(0|[1-9]\d*)$/),
+      }).strict()).max(TRUSTLINE_STATE_IDS.length),
     }).strict()]).optional(),
     first_observed_at: utcTimestampSchema,
     last_observed_at: utcTimestampSchema,
@@ -189,14 +222,14 @@ export const apiReconciliationSnapshotSchema = z
       latest_ledger: 'ledger',
       onchain_asset_supply: 'amount',
       order_book_depth: 'depth',
-      trustline_count: 'count',
+      trustline_state: 'trustline_state',
       anchor_reserves: 'amount',
     }[snapshot.metric]
     const expectedSubjectKind = {
       latest_ledger: 'network',
       onchain_asset_supply: 'asset',
       order_book_depth: 'pair',
-      trustline_count: 'asset',
+      trustline_state: 'asset',
       anchor_reserves: 'asset',
     }[snapshot.metric]
 
@@ -280,6 +313,16 @@ function serializeMetricValue(value: MetricValue): z.infer<typeof apiMetricValue
           value: bucket.value.toString(),
         })),
       }
+    case 'trustline_state':
+      return {
+        kind: 'trustline_state',
+        total: value.total.toString(),
+        states: Object.fromEntries(
+          TRUSTLINE_STATE_IDS.map((state) => [state, value.states[state].toString()]),
+        ) as Record<(typeof TRUSTLINE_STATE_IDS)[number], string>,
+        ledger_sequence: value.ledgerSequence,
+        ledger_closed_at: value.ledgerClosedAt,
+      }
   }
 }
 
@@ -299,7 +342,9 @@ function serializeMetricSubject(subject: MetricSubject): z.infer<typeof apiMetri
 }
 
 function serializeMetricId(metric: MetricId): z.infer<typeof apiMetricIdSchema> {
-  return metric === 'circulating_supply' ? 'onchain_asset_supply' : metric
+  if (metric === 'circulating_supply') return 'onchain_asset_supply'
+  if (metric === 'trustline_count') return 'trustline_state'
+  return metric
 }
 
 /** The only domain camelCase → public snake_case adapter; non-public discrepancies are omitted. */
@@ -364,6 +409,20 @@ export function serializePublicReconciliationSnapshot(
             bucket_differences: discrepancy.details.bucketDifferences.map((difference) => ({
               side: difference.side,
               price_band_basis_points: difference.priceBandBasisPoints,
+              observed: difference.observed.toString(),
+              reference: difference.reference.toString(),
+              absolute_delta: difference.absoluteDelta.toString(),
+            })),
+          },
+        } : discrepancy.details?.kind === 'trustline_comparison' ? {
+          details: {
+            kind: 'trustline_comparison' as const,
+            observed_ledger_sequence: discrepancy.details.observedLedgerSequence,
+            reference_ledger_sequence: discrepancy.details.referenceLedgerSequence,
+            observed_source_timestamp: discrepancy.details.observedSourceTimestamp,
+            reference_source_timestamp: discrepancy.details.referenceSourceTimestamp,
+            state_differences: discrepancy.details.stateDifferences.map((difference) => ({
+              state: difference.state,
               observed: difference.observed.toString(),
               reference: difference.reference.toString(),
               absolute_delta: difference.absoluteDelta.toString(),

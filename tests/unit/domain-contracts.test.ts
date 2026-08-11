@@ -18,6 +18,7 @@ import {
 import { StellarAmount } from '../../lib/stellar/amount'
 
 const ISSUER = `G${'A'.repeat(55)}`
+const TRUSTLINE_AT = '2026-08-09T12:00:05.000Z'
 const NETWORK = {
   id: 'public' as const,
   passphrase: 'Public Global Stellar Network ; September 2015',
@@ -316,19 +317,34 @@ describe('API contracts', () => {
     })
   })
 
-  it('serializes bigint counts and amounts as strings', () => {
+  it('serializes exact trustline-state counts as strings', () => {
     const countSnapshot = reconciliationSnapshotSchema.parse({
       ...snapshotInput(),
       metric: 'trustline_count',
-      subject: { kind: 'asset', asset: { kind: 'native' } },
-      value: { kind: 'count', value: '900719925474099312345' },
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: {
+        kind: 'trustline_state',
+        total: '900719925474099312345',
+        states: { authorized: '900719925474099312340', authorized_to_maintain_liabilities: '3', unauthorized: '2' },
+        ledgerSequence: 500,
+        ledgerClosedAt: TRUSTLINE_AT,
+      },
       discrepancies: [],
     })
 
-    expect(serializePublicReconciliationSnapshot(countSnapshot, 'req_3').value).toEqual({
-      kind: 'count',
-      value: '900719925474099312345',
+    const serialized = serializePublicReconciliationSnapshot(countSnapshot, 'req_3')
+    expect(serialized.value).toEqual({
+      kind: 'trustline_state',
+      total: '900719925474099312345',
+      states: { authorized: '900719925474099312340', authorized_to_maintain_liabilities: '3', unauthorized: '2' },
+      ledger_sequence: 500,
+      ledger_closed_at: TRUSTLINE_AT,
     })
+    expect(apiReconciliationSnapshotSchema.parse(serialized)).toEqual(serialized)
+    expect(() => apiReconciliationSnapshotSchema.parse({
+      ...serialized,
+      value: { ...serialized.value, total: '900719925474099312346' },
+    })).toThrow(/trustline total must equal/)
   })
 
   it('creates and validates a standard error response with UTC metadata', () => {

@@ -7,7 +7,7 @@
 Axiom Lumen is being built as a verification and intelligence layer for the Stellar ecosystem. The long-term product goal is to aggregate on-chain and off-chain data, cross-check it with published methodology, and return confidence-scored outputs with source context.
 
 This repository currently contains a Next.js presentation surface plus durable latest-ledger, on-chain supply,
-and classic SDEX depth pipelines. A background worker collects registered sources, reconciles and persists their
+classic SDEX depth, and trustline-state pipelines. A background worker collects registered sources, reconciles and persists their
 evidence, and the public APIs serve finalized snapshots only.
 
 ---
@@ -64,6 +64,8 @@ public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply w
   bounded, same-ledger classic-offer depth with exact rational arithmetic.
 - [x] **Persisted SDEX depth:** Discovers explicitly routed pairs, persists coherent six-bucket books, reconciles
   complete source observations, and serves `GET /api/v1/depth/{pair}` with freshness enforcement.
+- [x] **Trustline state:** Publishes exact authorization-state counts and their total at
+  `GET /api/v1/trustlines/{asset}` without presenting trustlines as funded holders or users.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
   credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
@@ -182,17 +184,28 @@ observation plus elapsed time exceeds 120 seconds, the response becomes explicit
 current value/contributions, and records a `stale_observation` error while preserving the original snapshot
 `as_of`.
 
+### `GET /api/v1/depth/{pair}`
+
+Returns one coherent classic-offer depth book for canonical `BASE~COUNTER`, with bid and ask cumulative depth at
+50, 100, and 500 basis points around an exact midpoint. Reversed pair identifiers resolve to the canonical
+subject. Liquidity pools remain excluded, and Horizon-only evidence is confidence-capped as degraded.
+
+### `GET /api/v1/trustlines/{asset}`
+
+Returns exact `authorized`, `authorized_to_maintain_liabilities`, and `unauthorized` trustline counts plus their
+sum for a classic `CODE:ISSUER` asset. This is trustline authorization state—not funded holders, wallet users, or
+beneficial owners. Native XLM is unsupported because it has no trustline.
+
 ### Shared HTTP behavior
 
-`/api/v1` is the canonical public prefix. Both implemented routes accept `GET` and `OPTIONS`, echo or generate
+`/api/v1` is the canonical public prefix. All four implemented routes accept `GET` and `OPTIONS`, echo or generate
 `X-Request-ID`, expose public read-only CORS, reject undeclared query parameters, and return a shared error
 envelope for invalid requests, unsupported methods, missing snapshots, and read-store failures. Current `200`
 snapshots use private, request-ID-varying caches and complete-representation weak ETags; errors and unavailable
 responses use `Cache-Control: no-store`. Matching `If-None-Match` requests return `304`.
 
-The default cache window is 15 seconds plus 45 seconds of stale-while-revalidate. Supply caps that combined
-window at the evidence's remaining lifetime, so caching cannot extend data beyond the methodology's 120-second
-hard limit.
+Each route caps caching at its remaining evidence lifetime. Supply uses at most 15 seconds plus 45 seconds of
+stale-while-revalidate, depth uses 5 plus 15 seconds, and trustline state uses 60 plus 300 seconds.
 
 Shared cursor pagination defaults to 25 and is capped at 100 for future list endpoints. The current snapshot
 routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route

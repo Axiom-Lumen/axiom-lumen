@@ -57,7 +57,8 @@ function formatValue(value: SnapshotValue | null) {
   if (!value) return 'Not available'
   if (value.kind === 'amount' || value.kind === 'count') return formatDecimal(value.value)
   if (value.kind === 'ledger') return value.value.toLocaleString('en-US')
-    return `${value.buckets.length} depth buckets around ${value.reference_price.decimal}`
+  if (value.kind === 'trustline_state') return `${formatDecimal(value.total)} trustlines`
+  return `${value.buckets.length} depth buckets around ${value.reference_price.decimal}`
 }
 
 function shortAsset(asset: string) {
