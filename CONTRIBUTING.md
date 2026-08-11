@@ -125,7 +125,7 @@ Any change to the reconciliation methodology requires a version bump. This inclu
 
 The canonical product rules document is [axiom-lumen-agent-guide.md](axiom-lumen-agent-guide.md). Any methodology change should be reflected there and in the public methodology copy.
 
-The ordered remaining work and acceptance criteria are maintained in [docs/implementation-roadmap.md](docs/implementation-roadmap.md). `docs/issue-backlog.md` is a historical pre-backend audit, not the current execution plan.
+Broad product direction is maintained in the [public roadmap](docs/implementation-roadmap.md). Detailed sequencing and internal acceptance criteria are maintained privately. `docs/issue-backlog.md` is a historical pre-backend audit, not the current execution plan.
 
 ## 8. Pull request checklist
 

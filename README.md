@@ -274,7 +274,7 @@ Axiom Lumen reports measured deviations between independent data sources. It is 
 
 Contributors and automated agents must follow the project tone and legal guardrails in [axiom-lumen-agent-guide.md](./axiom-lumen-agent-guide.md): factual, descriptive, timestamped, confidence-aware, and never investment advice.
 
-The dependency-ordered remaining work is tracked in [docs/implementation-roadmap.md](./docs/implementation-roadmap.md). The older issue backlog is a historical audit and should not be used as the current implementation status.
+Broad product direction is described in the [public roadmap](./docs/implementation-roadmap.md). Detailed sequencing and internal acceptance criteria are maintained privately. The older issue backlog is a historical audit and should not be used as the current implementation status.
 
 ---
 
