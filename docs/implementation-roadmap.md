@@ -20,13 +20,15 @@ Items below are directional and are not commitments to a particular scope or rel
   parity checks.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,
   stale, unavailable, and empty states.
+- An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy
+  context.
 - Automated lint, type, unit, integration, database, contract, and production-build checks.
 
 ## Direction
 
 Future work may broaden the product in these areas:
 
-- Deeper reconciliation and source-context views for currently supported metrics.
+- Additional reconciliation views where the public contract exposes sufficient evidence.
 - Additional Stellar network metrics where semantics and independent evidence can be defined precisely.
 - Carefully governed issuer and anchor comparison workflows.
 - Production-grade access, event delivery, observability, and reliability capabilities.

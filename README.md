@@ -30,9 +30,8 @@ Implemented in this repository today:
    confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: the supply read API, DEX/order-book reconciliation, anchor reserve comparison,
-authenticated public API keys, rate limits, SSE/WebSocket streams, live dashboard
-wiring, and anchor right-of-reply workflows.
+Planned but not implemented yet: DEX/order-book reconciliation, anchor reserve comparison, authenticated
+public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply workflows.
 
 ---
 
@@ -40,8 +39,9 @@ wiring, and anchor right-of-reply workflows.
 
 ### Implemented
 
-- [x] **Frontend shell:** Static pages under `/`, `/about`, `/docs`, `/methodology`, `/anchors`, and `/pricing`.
+- [x] **Frontend shell:** Public pages under `/`, `/dashboard`, `/about`, `/docs`, `/methodology`, `/anchors`, and `/pricing`.
 - [x] **Homepage reconciliation strip:** Server-rendered persisted supply snapshot with validated periodic refresh and explicit failure states.
+- [x] **Reconciliation dashboard:** API-derived supply status, confidence explanation, source context, failures, and current-snapshot publication-approved discrepancy intervals.
 - [x] **Latest-ledger Horizon connector:** Reads latest ledger records from configured Horizon endpoints.
 - [x] **Latest-ledger reconciliation:** Weighted median, freshness decay, availability-aware confidence, status classification, discrepancies, and source errors.
 - [x] **Local API route:** `GET /api/v1/stellar/latest-ledger`.

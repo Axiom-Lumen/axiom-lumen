@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Logo } from '@/components/logo'
 
 const links = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/methodology', label: 'Methodology' },
   { href: '/docs', label: 'Docs' },
   { href: '/anchors', label: 'Anchors' },
