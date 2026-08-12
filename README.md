@@ -30,8 +30,8 @@ Implemented in this repository today:
    confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: anchor reserve comparison, authenticated
-public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply workflows.
+Planned but not implemented yet: public anchor reserve disclosure, authenticated public API keys, rate limits,
+SSE/WebSocket streams, and anchor right-of-reply workflows.
 
 ---
 
@@ -66,6 +66,10 @@ public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply w
   complete source observations, and serves `GET /api/v1/depth/{pair}` with freshness enforcement.
 - [x] **Trustline state:** Publishes exact authorization-state counts and their total at
   `GET /api/v1/trustlines/{asset}` without presenting trustlines as funded holders or users.
+- [x] **Internal anchor reserve comparison:** Verifies issuer-to-domain attribution through SEP-1, ingests the
+  generic strict exact-unit contract, and includes an isolated real-provider mZAR PDF profile matched to a
+  historical supply ledger close. Named-party results remain behind the reply/review publication gate; no public
+  reserve endpoint exists yet.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
   credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
@@ -74,7 +78,8 @@ public API keys, rate limits, SSE/WebSocket streams, and anchor right-of-reply w
 
 ### Mocked, static, planned, or missing
 
-- [ ] **Anchor reserve comparison:** Planned; no anchor ingestion or notification workflow yet.
+- [ ] **Public anchor reserve workflow:** Comparison ingestion exists internally; notification, review, and
+  publication controls remain planned.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
 - [ ] **Right-of-reply tooling:** Described in product documentation, but not implemented in code.

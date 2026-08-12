@@ -75,6 +75,29 @@ WHERE id = 'stellar-public-horizon';
 The same-ledger asset aggregate is normalized into authorized, maintain-liabilities, and unauthorized counts.
 Horizon replicas retain one derivation identity and cannot make the result verified by themselves.
 
+Verified anchor reserve discovery is opt-in through the anchor registry. ANC-01 creates an enabled
+`anchor_self_reported` / `anchor` source only after issuer, home-domain, SEP-1 currency, and evidence URL
+verification. The worker then schedules `anchor_reserves` for its routed assets. A current persisted supply
+snapshot is required; comparison output remains internal until ANC-03 provides notification and review controls.
+
+The exact verified mZAR issuer/domain/index tuple is routed instead to the isolated `mesh_mzar_pdf_v1` profile.
+That profile reads the provider's monthly PDF report under methodology v0.2 and requires a persisted supply
+snapshot at the report's historical ledger-close boundary. It never falls back to current supply. A missing
+historical checkpoint or a report older than 62 days produces an unavailable snapshot. All other anchors retain
+the generic v0.1 JSON behavior.
+
+After registering the credit asset and network, verify and register its anchor source with:
+
+```bash
+npm run anchor:discover -- \
+  --network public \
+  --asset 'USDC:G...' \
+  --horizon 'https://horizon.stellar.org'
+```
+
+Discovery fails without writing attribution if the Horizon network, issuing account, home domain, SEP-1 asset,
+DNS policy, or reserve evidence URL cannot be verified.
+
 Run exactly one scheduling/drain pass:
 
 ```bash
@@ -112,6 +135,11 @@ After one finalized cycle, `npm run dev` serves the latest persisted Public Netw
 - `HORIZON_TIMEOUT_MS`: timeout applied to each Horizon request; defaults to `5000`.
 - `HORIZON_MAX_RESPONSE_BYTES`: maximum decoded bytes accepted from each Horizon response; defaults to
   `1000000`.
+
+The Horizon timeout and response-size settings apply only to Horizon/archive connectors. Anchor reserve JSON is
+bounded to 256 KB. The mZAR provider profile uses a 30-second end-to-end timeout, a 2 MB index limit, and a 5 MB
+PDF limit; these independent bounds accommodate the verified provider document without widening Horizon or
+generic anchor limits.
 
 Except for the bounded jitter ratio, every numeric setting must be a positive integer. Keep the lease duration
 comfortably above the worst-case per-source retry duration. `WORKER_CONCURRENCY` limits jobs; the independent

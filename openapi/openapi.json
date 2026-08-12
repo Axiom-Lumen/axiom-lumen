@@ -2588,7 +2588,15 @@
                     "crossed_book",
                     "empty_book",
                     "one_sided_book",
-                    "excluded_source"
+                    "excluded_source",
+                    "home_domain_missing",
+                    "domain_unverified",
+                    "unsafe_endpoint",
+                    "unsupported_attestation",
+                    "scope_mismatch",
+                    "unit_mismatch",
+                    "period_mismatch",
+                    "reference_unavailable"
                   ]
                 },
                 "category": {
@@ -2805,7 +2813,7 @@
         "description": "Canonical classic credit asset identifier CODE:ISSUER",
         "schema": {
           "type": "string",
-          "pattern": "^[A-Z0-9]{1,12}:G[A-Z2-7]{55}$"
+          "pattern": "^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$"
         },
         "example": "USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
       },
@@ -2816,7 +2824,7 @@
         "description": "Canonical unordered pair as BASE~COUNTER; native sorts before credit assets",
         "schema": {
           "type": "string",
-          "pattern": "^(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})$"
+          "pattern": "^(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})$"
         },
         "example": "native~USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
       },

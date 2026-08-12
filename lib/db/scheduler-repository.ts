@@ -1,5 +1,6 @@
 import { and, asc, eq, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION, MZAR_RESERVE_CONNECTOR_PROFILE } from '../../config/methodology'
 import {
   creditAssetSchema,
   formatAssetId,
@@ -12,7 +13,7 @@ import {
 } from '../contracts/domain'
 import { serializeWorkerError } from '../worker/errors'
 import type { DatabaseClient } from './client'
-import { assets, ingestCycles, networks, scheduledCycleLeases, sourceDefinitions } from './schema'
+import { anchorDomains, anchors, assets, ingestCycles, networks, scheduledCycleLeases, sourceDefinitions } from './schema'
 
 const supplySourceConfigSchema = z.object({
   enabled: z.literal(true),
@@ -25,6 +26,16 @@ const depthSourceConfigSchema = z.object({
   pairs: z.array(z.string().min(1)).min(1),
 }).strict()
 const trustlineSourceConfigSchema = z.object({ enabled: z.literal(true), assetIds: z.array(z.string().min(1)).min(1) }).strict()
+const anchorReserveSourceConfigSchema = z.object({
+  enabled: z.literal(true),
+  assetIds: z.array(z.string().min(1)).min(1),
+  verifications: z.record(z.object({
+    domainId: z.string().min(1),
+    verifiedAt: z.string().datetime({ offset: true }),
+    verificationExpiresAt: z.string().datetime({ offset: true }),
+  }).strict()),
+  profiles: z.record(z.enum(['axiom_json_v1', MZAR_RESERVE_CONNECTOR_PROFILE])).optional(),
+}).strict()
 
 const discoveredSourceSchema = z.object({
   id: z.string().min(1),
@@ -66,6 +77,15 @@ export const discoveredIngestJobSchema = z.discriminatedUnion('metric', [
     methodologyVersion: z.string().min(1),
     asset: creditAssetSchema,
     sources: z.array(discoveredSourceSchema).min(1),
+  }).strict(),
+  z.object({
+    metric: z.literal('anchor_reserves'),
+    subjectKey: z.string().min(1),
+    methodologyVersion: z.string().min(1),
+    anchorId: z.string().min(1),
+    connectorProfile: z.enum(['axiom_json_v1', MZAR_RESERVE_CONNECTOR_PROFILE]),
+    asset: creditAssetSchema,
+    sources: z.array(discoveredSourceSchema).length(1),
   }).strict(),
 ])
 
@@ -301,6 +321,79 @@ export function createSchedulerRepository(client: DatabaseClient) {
             ...(parsed.success ? {} : { configurationError: 'Trustline source configuration is malformed' }) }]
         })
         if (sources.length) jobs.push({ metric: 'trustline_count', subjectKey: formatNetworkAssetKey(networkIdSchema.parse(asset.networkId), parsedAsset.data), methodologyVersion, asset: parsedAsset.data, sources })
+      }
+      return jobs
+    },
+
+    async discoverAnchorReserveJobs(methodologyVersion: string, now = new Date()): Promise<DiscoveredIngestJob[]> {
+      if (!Number.isFinite(now.getTime())) throw new Error('anchor reserve discovery time must be valid')
+      const [sourceRows, assetRows, domainRows] = await Promise.all([
+        db.select({
+          id: sourceDefinitions.id,
+          url: sourceDefinitions.url,
+          sourceClass: sourceDefinitions.sourceClass,
+          adapter: sourceDefinitions.adapter,
+          upstreamId: sourceDefinitions.upstreamId,
+          networkId: networks.id,
+          networkPassphrase: networks.passphrase,
+          config: sourceDefinitions.config,
+          anchorId: anchors.id,
+          anchorStatus: anchors.status,
+          anchorAccount: anchors.stellarAccount,
+        }).from(sourceDefinitions)
+          .innerJoin(networks, eq(networks.id, sourceDefinitions.networkId))
+          .innerJoin(anchors, eq(anchors.id, sourceDefinitions.anchorId))
+          .where(eq(sourceDefinitions.enabled, true))
+          .orderBy(asc(networks.id), asc(sourceDefinitions.id)),
+        db.select({ id: assets.id, networkId: assets.networkId, code: assets.code, issuer: assets.issuer, canonicalId: assets.canonicalId })
+          .from(assets).where(eq(assets.type, 'credit')).orderBy(asc(assets.networkId), asc(assets.canonicalId)),
+        db.select({ id: anchorDomains.id, anchorId: anchorDomains.anchorId, verificationExpiresAt: anchorDomains.verificationExpiresAt })
+          .from(anchorDomains),
+      ])
+      const domainsById = new Map(domainRows.map((domain) => [domain.id, domain]))
+      const jobs: DiscoveredIngestJob[] = []
+      for (const source of sourceRows) {
+        if (source.adapter !== 'anchor' || source.sourceClass !== 'anchor_self_reported' || source.anchorStatus !== 'verified') continue
+        const raw = source.config.anchorReserves
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const parsed = anchorReserveSourceConfigSchema.safeParse(raw)
+        if (!parsed.success) continue
+        const routingIds = parsed.data.assetIds
+        for (const asset of assetRows.filter((candidate) => candidate.networkId === source.networkId && routingIds.includes(candidate.id))) {
+          const verification = parsed.data.verifications[asset.id]
+          if (!verification || Date.parse(verification.verificationExpiresAt) <= now.getTime()) continue
+          const domain = domainsById.get(verification.domainId)
+          if (!domain || domain.anchorId !== source.anchorId || !domain.verificationExpiresAt ||
+            Date.parse(domain.verificationExpiresAt) <= now.getTime()) continue
+          const parsedAsset = creditAssetSchema.safeParse({ kind: 'credit', code: asset.code, issuer: asset.issuer })
+          if (!parsedAsset.success || formatAssetId(parsedAsset.data) !== asset.canonicalId || asset.issuer !== source.anchorAccount) {
+            throw new Error(`configured anchor reserve asset ${asset.id} has invalid issuer attribution`)
+          }
+          jobs.push({
+            metric: 'anchor_reserves',
+            subjectKey: formatNetworkAssetKey(networkIdSchema.parse(source.networkId), parsedAsset.data),
+            methodologyVersion: parsed.data.profiles?.[asset.id] === MZAR_RESERVE_CONNECTOR_PROFILE
+              ? MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION
+              : methodologyVersion,
+            anchorId: source.anchorId,
+            connectorProfile: parsed.data.profiles?.[asset.id] ?? 'axiom_json_v1',
+            asset: parsedAsset.data,
+            sources: [discoveredSourceSchema.parse({
+              id: source.id,
+              url: source.url,
+              sourceClass: source.sourceClass,
+              adapter: source.adapter,
+              upstreamId: source.upstreamId,
+              networkId: networkIdSchema.parse(source.networkId),
+              networkPassphrase: source.networkPassphrase,
+            })],
+          })
+        }
+      }
+      const seen = new Set<string>()
+      for (const job of jobs) {
+        if (seen.has(job.subjectKey)) throw new Error(`multiple active verified anchor reserve routes exist for ${job.subjectKey}`)
+        seen.add(job.subjectKey)
       }
       return jobs
     },

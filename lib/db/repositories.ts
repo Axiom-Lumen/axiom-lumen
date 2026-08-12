@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto'
-import { and, asc, eq, inArray, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, lte } from 'drizzle-orm'
+import { SUPPLY_METHODOLOGY_VERSION } from '../../config/methodology'
 import {
+  circulatingSupplyObservationSchema,
   persistedDiscrepancyStateSchema,
   reconciliationSnapshotSchema,
   sourceIdentitySchema,
   formatAssetId,
+  formatNetworkAssetKey,
   formatTradingPairId,
   networkIdSchema,
   type PersistedDiscrepancyState,
@@ -84,6 +87,14 @@ function canonicalDatabaseTimestamp(value: string) {
 
 export function computePayloadSha256(value: unknown) {
   return createHash('sha256').update(canonicalJson(value)).digest('hex')
+}
+
+export function assertSupplyReferenceSubject(subjectKey: string, input: unknown) {
+  const observation = circulatingSupplyObservationSchema.parse(input)
+  if (formatNetworkAssetKey(observation.provenance.source.network.id, observation.asset) !== subjectKey) {
+    throw new Error('persisted supply reference evidence does not match the requested asset')
+  }
+  return observation
 }
 
 export interface CompletedCycleRecord {
@@ -217,6 +228,14 @@ function assertSnapshotMatchesCycle(snapshot: ReconciliationSnapshot, cycle: Com
       !networkIdSchema.safeParse(cycle.subjectKey.split(':', 1)[0]).success
     )
   ) throw new Error('trustline snapshot asset must match the completed cycle subject')
+  if (
+    cycle.metric === 'anchor_reserves' &&
+    (
+      snapshot.subject.kind !== 'asset' ||
+      !cycle.subjectKey.endsWith(`:${formatAssetId(snapshot.subject.asset)}`) ||
+      !networkIdSchema.safeParse(cycle.subjectKey.split(':', 1)[0]).success
+    )
+  ) throw new Error('anchor reserve snapshot asset must match the completed cycle subject')
 }
 
 function sameCycleIdentity(existing: typeof ingestCycles.$inferSelect, requested: CompletedCycleRecord) {
@@ -228,6 +247,57 @@ function sameCycleIdentity(existing: typeof ingestCycles.$inferSelect, requested
     existing.status === 'completed' &&
     Date.parse(existing.scheduledAt) === Date.parse(requested.scheduledAt)
   )
+}
+
+interface SupplySnapshotRow {
+  status: 'verified' | 'degraded' | 'unavailable'
+  value: { kind: string; value?: string } | null
+  confidence: string
+  methodologyVersion: string
+  asOf: string
+  snapshotId: string
+  cycleId: string
+}
+
+async function materializeSupplyReference(db: DatabaseClient['db'], subjectKey: string, row: SupplySnapshotRow) {
+  if (row.status === 'unavailable' || !row.value || row.value.kind !== 'amount' || typeof row.value.value !== 'string') return null
+  const confidence = Number(row.confidence)
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error('persisted supply confidence is invalid')
+  const evidenceRows = await db.select({
+    readingId: rawReadings.id,
+    observationId: rawReadings.observationId,
+    sourceId: rawReadings.sourceId,
+    sourceTimestamp: rawReadings.sourceTimestamp,
+    payloadSha256: rawReadings.payloadSha256,
+    rawPayload: rawReadings.rawPayload,
+  }).from(snapshotContributions)
+    .innerJoin(rawReadings, eq(rawReadings.id, snapshotContributions.readingId))
+    .where(and(eq(snapshotContributions.snapshotId, row.snapshotId), eq(snapshotContributions.agrees, true)))
+    .orderBy(asc(rawReadings.sourceId))
+  const evidence = evidenceRows.map((candidate) => {
+    const raw = candidate.rawPayload
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('observation' in raw)) throw new Error('persisted supply reference evidence is malformed')
+    const observation = assertSupplyReferenceSubject(subjectKey, (raw as { observation: unknown }).observation)
+    if (
+      observation.observationId !== candidate.observationId || observation.cycleId !== row.cycleId ||
+      observation.provenance.source.id !== candidate.sourceId ||
+      observation.provenance.sourceTimestamp !== canonicalDatabaseTimestamp(candidate.sourceTimestamp!) ||
+      !observation.amount.equals(StellarAmount.parse(row.value!.value!))
+    ) throw new Error('persisted supply reference evidence does not match its snapshot')
+    return {
+      readingId: candidate.readingId, observationId: candidate.observationId, sourceId: candidate.sourceId,
+      payloadSha256: candidate.payloadSha256, ledgerSequence: observation.ledgerSequence,
+      ledgerClosedAt: observation.provenance.sourceTimestamp!,
+    }
+  })
+  if (evidence.length === 0) throw new Error('available supply reference has no agreeing evidence')
+  const checkpoints = new Set(evidence.map((item) => `${item.ledgerSequence}:${item.ledgerClosedAt}`))
+  if (checkpoints.size !== 1) throw new Error('supply reference evidence does not share one ledger checkpoint')
+  return {
+    snapshotId: row.snapshotId, cycleId: row.cycleId, amount: StellarAmount.parse(row.value.value), status: row.status,
+    confidence, methodologyVersion: row.methodologyVersion, asOf: canonicalDatabaseTimestamp(row.asOf),
+    ledgerSequence: evidence[0]!.ledgerSequence, ledgerClosedAt: evidence[0]!.ledgerClosedAt, evidence,
+  }
 }
 
 /** Repository surface intentionally exposes no update or delete operation for immutable audit records. */
@@ -258,6 +328,10 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           input.cycle.metric === 'trustline_count' &&
           identity.network.id !== input.cycle.subjectKey.split(':', 1)[0]
         ) throw new Error(`reading ${reading.id} source network does not match the trustline cycle subject`)
+        if (
+          input.cycle.metric === 'anchor_reserves' &&
+          identity.network.id !== input.cycle.subjectKey.split(':', 1)[0]
+        ) throw new Error(`reading ${reading.id} source network does not match the anchor reserve cycle subject`)
         return [reading.id, identity]
       }))
       const states = Object.values(input.discrepancyStates).map((state) => persistedDiscrepancyStateSchema.parse(state))
@@ -554,11 +628,15 @@ export function createPersistenceRepositories(client: DatabaseClient) {
         .orderBy(asc(discrepancyEvents.occurredAt), asc(discrepancyEvents.id))
     },
 
-    async getDiscrepancyStates(metric: typeof discrepancies.$inferSelect.metric, subjectKey: string) {
+    async getDiscrepancyStates(metric: typeof discrepancies.$inferSelect.metric, subjectKey: string, methodologyVersion?: string) {
       const rows = await db
         .select()
         .from(discrepancies)
-        .where(and(eq(discrepancies.metric, metric), eq(discrepancies.subjectKey, subjectKey)))
+        .where(and(
+          eq(discrepancies.metric, metric),
+          eq(discrepancies.subjectKey, subjectKey),
+          ...(methodologyVersion ? [eq(discrepancies.methodologyVersion, methodologyVersion)] : []),
+        ))
         .orderBy(asc(discrepancies.sourceId))
       return Object.fromEntries(
         rows.map((row) => [
@@ -582,6 +660,75 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           }),
         ]),
       )
+    },
+
+    async getLatestSupplyReference(subjectKey: string) {
+      const rows = await db
+        .select({
+          status: reconciliationSnapshots.status,
+          value: reconciliationSnapshots.value,
+          confidence: reconciliationSnapshots.confidence,
+          methodologyVersion: reconciliationSnapshots.methodologyVersion,
+          asOf: reconciliationSnapshots.asOf,
+          snapshotId: reconciliationSnapshots.id,
+          cycleId: reconciliationSnapshots.cycleId,
+        })
+        .from(reconciliationSnapshots)
+        .innerJoin(ingestCycles, eq(ingestCycles.id, reconciliationSnapshots.cycleId))
+        .where(and(
+          eq(reconciliationSnapshots.metric, 'circulating_supply'),
+          eq(reconciliationSnapshots.subjectKey, subjectKey),
+          eq(reconciliationSnapshots.methodologyVersion, SUPPLY_METHODOLOGY_VERSION),
+          eq(ingestCycles.status, 'completed'),
+          eq(ingestCycles.metric, 'circulating_supply'),
+          eq(ingestCycles.subjectKey, subjectKey),
+          eq(ingestCycles.methodologyVersion, SUPPLY_METHODOLOGY_VERSION),
+        ))
+        .orderBy(desc(reconciliationSnapshots.asOf), desc(reconciliationSnapshots.id))
+        .limit(1)
+      const row = rows[0]
+      return row ? materializeSupplyReference(db, subjectKey, row as SupplySnapshotRow) : null
+    },
+
+    async getSupplyReferenceAt(subjectKey: string, targetAt: string, maximumSkewSeconds: number) {
+      const target = new Date(targetAt)
+      if (!Number.isFinite(target.getTime())) throw new Error('supply reference target must be a valid timestamp')
+      if (!Number.isSafeInteger(maximumSkewSeconds) || maximumSkewSeconds <= 0) throw new Error('supply reference skew must be a positive safe integer')
+      const lower = new Date(target.getTime() - maximumSkewSeconds * 1_000).toISOString()
+      const upper = new Date(target.getTime() + maximumSkewSeconds * 1_000).toISOString()
+      const rows = await db.selectDistinct({
+        status: reconciliationSnapshots.status,
+        value: reconciliationSnapshots.value,
+        confidence: reconciliationSnapshots.confidence,
+        methodologyVersion: reconciliationSnapshots.methodologyVersion,
+        asOf: reconciliationSnapshots.asOf,
+        snapshotId: reconciliationSnapshots.id,
+        cycleId: reconciliationSnapshots.cycleId,
+      }).from(reconciliationSnapshots)
+        .innerJoin(ingestCycles, eq(ingestCycles.id, reconciliationSnapshots.cycleId))
+        .innerJoin(snapshotContributions, eq(snapshotContributions.snapshotId, reconciliationSnapshots.id))
+        .innerJoin(rawReadings, eq(rawReadings.id, snapshotContributions.readingId))
+        .where(and(
+          eq(reconciliationSnapshots.metric, 'circulating_supply'),
+          eq(reconciliationSnapshots.subjectKey, subjectKey),
+          eq(reconciliationSnapshots.methodologyVersion, SUPPLY_METHODOLOGY_VERSION),
+          eq(snapshotContributions.agrees, true),
+          gte(rawReadings.sourceTimestamp, lower),
+          lte(rawReadings.sourceTimestamp, upper),
+          eq(ingestCycles.status, 'completed'),
+          eq(ingestCycles.metric, 'circulating_supply'),
+          eq(ingestCycles.subjectKey, subjectKey),
+          eq(ingestCycles.methodologyVersion, SUPPLY_METHODOLOGY_VERSION),
+        )).orderBy(desc(reconciliationSnapshots.asOf), desc(reconciliationSnapshots.id)).limit(100)
+      const references = []
+      for (const row of rows) {
+        const reference = await materializeSupplyReference(db, subjectKey, row as SupplySnapshotRow)
+        if (reference && Math.abs(Date.parse(reference.ledgerClosedAt) - target.getTime()) <= maximumSkewSeconds * 1_000) references.push(reference)
+      }
+      references.sort((left, right) =>
+        Math.abs(Date.parse(left.ledgerClosedAt) - target.getTime()) - Math.abs(Date.parse(right.ledgerClosedAt) - target.getTime()) ||
+        left.snapshotId.localeCompare(right.snapshotId))
+      return references[0] ?? null
     },
 
     async getSourceHealthStates(sourceIds: readonly string[]) {

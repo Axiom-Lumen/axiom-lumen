@@ -138,7 +138,7 @@ export const anchors = pgTable(
     updatedAt: utcTimestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('anchors_network_name_uidx').on(table.networkId, table.name),
+    index('anchors_network_name_idx').on(table.networkId, table.name),
     uniqueIndex('anchors_network_account_uidx').on(table.networkId, table.stellarAccount),
     index('anchors_status_idx').on(table.status),
   ],
@@ -588,12 +588,39 @@ export const anchorDomains = pgTable(
       .references(() => anchors.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
     domain: text('domain').notNull(),
     verifiedAt: utcTimestamp('verified_at'),
+    verificationExpiresAt: utcTimestamp('verification_expires_at'),
     verificationEvidence: jsonb('verification_evidence').$type<Record<string, unknown>>(),
     createdAt: createdAt(),
   },
   (table) => [
-    uniqueIndex('anchor_domains_domain_uidx').on(table.domain),
+    uniqueIndex('anchor_domains_anchor_domain_uidx').on(table.anchorId, table.domain),
     index('anchor_domains_anchor_idx').on(table.anchorId),
+  ],
+)
+
+export const anchorVerificationEvents = pgTable(
+  'anchor_verification_events',
+  {
+    id: text('id').primaryKey(),
+    anchorId: text('anchor_id')
+      .notNull()
+      .references(() => anchors.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    domainId: text('domain_id')
+      .notNull()
+      .references(() => anchorDomains.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    evidence: jsonb('evidence').$type<Record<string, unknown>>().notNull(),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+    expiresAt: utcTimestamp('expires_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('anchor_verification_events_anchor_occurred_idx').on(table.anchorId, table.occurredAt),
+    index('anchor_verification_events_domain_occurred_idx').on(table.domainId, table.occurredAt),
+    check('anchor_verification_events_type_check', sql`${table.eventType} IN ('verified', 'suspended')`),
   ],
 )
 

@@ -1,5 +1,29 @@
 # Methodology changelog
 
+## anchor-reserve-comparison-v0.2 — 2026-08-11
+
+- Added the exact `mesh_mzar_pdf_v1` provider profile without changing generic v0.1 behavior.
+- Verified the real mZAR index and PDF layout, including signature values stored in AcroForm fields.
+- Required a persisted supply ledger close within five minutes of the historical report cutoff; current supply
+  cannot substitute for the retrospective reference.
+- Limited the report cutoff age to 62 days and publication delay to 35 days.
+- Allowed ZAR-to-mZAR normalization only under the document's explicit one-to-one redemption assertion.
+- Preserved original PDF bytes for evidence hashing and retained the existing internal-publication gate.
+
+## anchor-reserve-comparison-v0.1 — 2026-08-11
+
+- Added issuer → home-domain → SEP-1 currency attribution before accepting anchor evidence.
+- Added a strict JSON attestation schema in exact issued-asset units.
+- Required a current persisted supply reference and a five-minute comparison boundary.
+- Set a 10-basis-point inclusive tolerance and retained v1.5 persistence-based severity transitions.
+- Kept every named-party output non-public until reply and human-review controls are implemented.
+- Pinned public-HTTPS connections to validated DNS addresses and enforced response limits while streaming.
+- Added per-asset verification expiry, append-only verification events, atomic endpoint supersession, and
+  fail-closed suspension after failed re-verification.
+- Bound comparisons to the approved supply methodology and exact snapshot, ledger checkpoint, close time, and
+  contributing evidence identifiers.
+- Moved confidence coefficients into executable configuration and kept discrepancies internal until notification.
+
 ## trustline-state-v0.1 — 2026-08-11
 
 - Defined exact authorized, maintain-liabilities, and unauthorized classic trustline counts and their total.

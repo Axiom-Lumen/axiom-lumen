@@ -17,6 +17,7 @@ Items below are directional and are not commitments to a particular scope or rel
 - A persisted latest-ledger diagnostic API for the Stellar Public Network.
 - A persisted on-chain credit-asset supply API with explicit freshness and unavailable behavior.
 - Persisted classic SDEX depth and credit-asset trustline-state APIs with explicit methodology and freshness.
+- Verified SEP-1 anchor attribution and internal, publication-gated exact-unit reserve comparison.
 - Runtime-validated public API contracts, consistent HTTP behavior, OpenAPI 3.1 documentation, and contract
   parity checks.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,

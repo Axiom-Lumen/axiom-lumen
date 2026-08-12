@@ -7,6 +7,11 @@ import {
   SUPPLY_METHODOLOGY_VERSION,
   TRUSTLINE_METHODOLOGY_VERSION,
   TRUSTLINE_STATE_IDS,
+  ANCHOR_RESERVE_ATTESTATION_SCHEMA,
+  ANCHOR_RESERVE_METHODOLOGY_VERSION,
+  MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION,
+  MZAR_RESERVE_ATTESTATION_SCHEMA,
+  MZAR_RESERVE_CONNECTOR_PROFILE,
 } from '../../config/methodology'
 import { StellarAmount, parseStellarAmount } from '../stellar/amount'
 
@@ -50,7 +55,7 @@ export const nativeAssetSchema = z.object({ kind: z.literal('native') }).strict(
 export const creditAssetSchema = z
   .object({
     kind: z.literal('credit'),
-    code: z.string().regex(/^[A-Z0-9]{1,12}$/, 'asset code must contain 1–12 uppercase letters or digits'),
+    code: z.string().regex(/^[A-Za-z0-9]{1,12}$/, 'asset code must contain 1–12 case-sensitive ASCII letters or digits'),
     issuer: stellarAccountIdSchema,
   })
   .strict()
@@ -466,27 +471,77 @@ function validateTrustlineCountObservation(
 
 export const trustlineCountObservationSchema = trustlineCountObservationObjectSchema.superRefine(validateTrustlineCountObservation)
 
-export const anchorReservesObservationSchema = observationBaseSchema
+const anchorReservesObservationObjectSchema = observationBaseSchema
   .extend({
     metric: z.literal('anchor_reserves'),
     anchorId: identifierSchema,
-    asset: assetIdSchema,
+    asset: creditAssetSchema,
     amount: stellarAmountSchema,
+    unit: z.object({ kind: z.literal('asset_units'), asset: creditAssetSchema }).strict(),
+    attestationPeriodStart: utcTimestampSchema,
     attestationPeriodEnd: utcTimestampSchema,
+    publishedAt: utcTimestampSchema,
+    methodologyVersion: z.union([
+      z.literal(ANCHOR_RESERVE_METHODOLOGY_VERSION),
+      z.literal(MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION),
+    ]),
+    attestation: z.discriminatedUnion('schema', [
+      z.object({
+        schema: z.literal(ANCHOR_RESERVE_ATTESTATION_SCHEMA),
+        evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+        documentUrl: httpUrlSchema,
+      }).strict(),
+      z.object({
+        schema: z.literal(MZAR_RESERVE_ATTESTATION_SCHEMA),
+        evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+        documentUrl: httpUrlSchema,
+        provider: z.literal('Mesh Trade South Africa (Pty) Ltd'),
+        connectorProfile: z.literal(MZAR_RESERVE_CONNECTOR_PROFILE),
+        indexEvidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
+        reportedSupply: stellarAmountSchema,
+        reserveDenomination: z.literal('ZAR'),
+        conversionPolicy: z.literal('one_mzar_equals_one_zar'),
+      }).strict(),
+    ]),
   })
   .strict()
+
+function validateAnchorReservesObservation(
+  observation: z.infer<typeof anchorReservesObservationObjectSchema>,
+  context: z.RefinementCtx,
+) {
+    if (observation.provenance.source.adapter !== 'anchor' || observation.provenance.source.sourceClass !== 'anchor_self_reported') {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['provenance', 'source'], message: 'reserve attestations require an anchor self-reported source' })
+    }
+    if (formatAssetId(observation.asset) !== formatAssetId(observation.unit.asset)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['unit', 'asset'], message: 'reserve unit must be the exact issued asset' })
+    }
+    if (Date.parse(observation.attestationPeriodEnd) < Date.parse(observation.attestationPeriodStart)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['attestationPeriodEnd'], message: 'attestation period cannot end before it starts' })
+    }
+    if (Date.parse(observation.publishedAt) < Date.parse(observation.attestationPeriodEnd)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['publishedAt'], message: 'attestation cannot be published before its period ends' })
+    }
+    const v01 = observation.methodologyVersion === ANCHOR_RESERVE_METHODOLOGY_VERSION && observation.attestation.schema === ANCHOR_RESERVE_ATTESTATION_SCHEMA
+    const v02 = observation.methodologyVersion === MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION && observation.attestation.schema === MZAR_RESERVE_ATTESTATION_SCHEMA
+    if (!v01 && !v02) context.addIssue({ code: z.ZodIssueCode.custom, path: ['attestation', 'schema'], message: 'reserve attestation schema does not match its methodology profile' })
+}
+
+export const anchorReservesObservationSchema = anchorReservesObservationObjectSchema
+  .superRefine(validateAnchorReservesObservation)
 
 export const rawObservationSchema = z.discriminatedUnion('metric', [
   latestLedgerObservationSchema,
   circulatingSupplyObservationObjectSchema,
   orderBookDepthObservationObjectSchema,
   trustlineCountObservationObjectSchema,
-  anchorReservesObservationSchema,
+  anchorReservesObservationObjectSchema,
 ])
   .superRefine((observation, context) => {
     if (observation.metric === 'circulating_supply') validateCirculatingSupplyObservation(observation, context)
     if (observation.metric === 'order_book_depth') validateOrderBookDepthObservation(observation, context)
     if (observation.metric === 'trustline_count') validateTrustlineCountObservation(observation, context)
+    if (observation.metric === 'anchor_reserves') validateAnchorReservesObservation(observation, context)
   })
 export type RawObservation = z.infer<typeof rawObservationSchema>
 
@@ -517,6 +572,14 @@ export const sourceErrorCodeSchema = z.enum([
   'empty_book',
   'one_sided_book',
   'excluded_source',
+  'home_domain_missing',
+  'domain_unverified',
+  'unsafe_endpoint',
+  'unsupported_attestation',
+  'scope_mismatch',
+  'unit_mismatch',
+  'period_mismatch',
+  'reference_unavailable',
 ])
 
 export const sourceErrorSchema = z
@@ -732,13 +795,6 @@ export const persistedDiscrepancyStateSchema = z
     if (state.severity === 'info' && state.publicationState !== 'internal') {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['publicationState'], message: 'Info discrepancy must remain internal' })
     }
-    if (state.namedParty && state.severity !== 'info' && state.publicationState === 'internal') {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['publicationState'],
-        message: 'named-party Warning or Critical discrepancy requires reply review',
-      })
-    }
     if (state.publicationState === 'internal' && state.replyReviewState !== 'not_required') {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['replyReviewState'], message: 'internal discrepancy cannot have an active reply review' })
     }
@@ -782,6 +838,17 @@ export const reconciliationContributionSchema = z
 export type ReconciliationContribution = z.infer<typeof reconciliationContributionSchema>
 
 export const discrepancyDetailsSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('anchor_reserve_comparison'),
+    anchorId: identifierSchema,
+    attestationPeriodEnd: utcTimestampSchema,
+    supplyAsOf: utcTimestampSchema,
+    supplySnapshotId: identifierSchema,
+    supplyLedgerSequence: z.number().int().safe().positive(),
+    supplyLedgerClosedAt: utcTimestampSchema,
+    absoluteDelta: stellarAmountSchema,
+    deltaBasisPoints: z.number().finite().nonnegative(),
+  }).strict(),
   z.object({
     kind: z.literal('supply_comparison'),
     observedLedgerSequence: z.number().int().safe().positive(),

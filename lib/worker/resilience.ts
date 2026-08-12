@@ -147,7 +147,17 @@ export function sourceHealthState(error: RetryableSourceError | undefined): Sour
   }
   if (error.code === 'stale_observation') return 'stale'
   if (
-    ['redirect_rejected', 'invalid_configuration', 'excluded_source'].includes(error.code) ||
+    [
+      'redirect_rejected',
+      'invalid_configuration',
+      'excluded_source',
+      'unsafe_endpoint',
+      'domain_unverified',
+      'unsupported_attestation',
+      'scope_mismatch',
+      'unit_mismatch',
+      'period_mismatch',
+    ].includes(error.code) ||
     (error.code === 'non_200_response' &&
       (error.status ?? 500) < 500 &&
       ![408, 425, 429].includes(error.status ?? 0))

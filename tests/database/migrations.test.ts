@@ -74,6 +74,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'anchor_domains',
         'anchor_replies',
         'anchor_reviews',
+        'anchor_verification_events',
         'anchors',
         'api_keys',
         'api_plans',
@@ -100,7 +101,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(6)
+      expect(migrationRows.rows[0]?.count).toBe(8)
 
       const leaseSnapshotColumns = await pool.query<{ column_name: string; data_type: string }>(
         `SELECT column_name, data_type
@@ -151,6 +152,10 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'scheduled_cycle_leases_expiry_idx',
           'source_health_states_state_idx',
           'source_health_states_circuit_idx',
+          'anchor_verification_events_anchor_occurred_idx',
+          'anchor_verification_events_domain_occurred_idx',
+          'anchor_domains_anchor_domain_uidx',
+          'anchors_network_name_idx',
         ]),
       )
 

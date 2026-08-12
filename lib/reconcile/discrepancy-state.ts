@@ -188,11 +188,10 @@ export function classifyStellarAmountDeviationBand({
   return 'above_info'
 }
 
-function initialPublication(namedParty: boolean, severity: MeasurementSeverity, at: string) {
-  const needsReply = namedParty && severity !== 'info'
+function initialPublication(at: string) {
   return {
-    publicationState: needsReply ? ('pending_reply' as const) : ('internal' as const),
-    replyReviewState: needsReply ? ('awaiting_reply' as const) : ('not_required' as const),
+    publicationState: 'internal' as const,
+    replyReviewState: 'not_required' as const,
     publicationUpdatedAt: at,
   }
 }
@@ -303,14 +302,10 @@ export function advanceDiscrepancyState({
         replyReviewState: continuingState.replyReviewState,
         publicationUpdatedAt: continuingState.publicationUpdatedAt,
       }
-    : initialPublication(namedParty, severity, cycle.completedAt)
+    : initialPublication(cycle.completedAt)
   if (continuing && severity === 'info') {
     publication.publicationState = 'internal'
     publication.replyReviewState = 'not_required'
-    publication.publicationUpdatedAt = cycle.completedAt
-  } else if (continuingState && namedParty && continuingState.publicationState === 'internal') {
-    publication.publicationState = 'pending_reply'
-    publication.replyReviewState = 'awaiting_reply'
     publication.publicationUpdatedAt = cycle.completedAt
   }
 

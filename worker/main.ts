@@ -2,7 +2,7 @@ import { createDatabaseClient } from '../lib/db/client'
 import { createPersistenceRepositories } from '../lib/db/repositories'
 import { createSchedulerRepository } from '../lib/db/scheduler-repository'
 import { LATEST_LEDGER_METHODOLOGY_VERSION } from '../lib/reconcile/latest-ledger'
-import { DEPTH_RECONCILIATION_METHODOLOGY_VERSION, SUPPLY_METHODOLOGY_VERSION, TRUSTLINE_METHODOLOGY_VERSION } from '../config/methodology'
+import { ANCHOR_RESERVE_METHODOLOGY_VERSION, DEPTH_RECONCILIATION_METHODOLOGY_VERSION, SUPPLY_METHODOLOGY_VERSION, TRUSTLINE_METHODOLOGY_VERSION } from '../config/methodology'
 import { parseHorizonHostList } from '../lib/stellar/horizon'
 import { parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
 import { serializeWorkerError } from '../lib/worker/errors'
@@ -10,6 +10,7 @@ import { createLatestLedgerJobHandler } from '../lib/worker/latest-ledger-job'
 import { createSupplyJobHandler } from '../lib/worker/supply-job'
 import { createDepthJobHandler } from '../lib/worker/depth-job'
 import { createTrustlineJobHandler } from '../lib/worker/trustline-job'
+import { createAnchorReserveJobHandler } from '../lib/worker/anchor-reserve-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
 
 function executionMode(arguments_: readonly string[]) {
@@ -39,6 +40,7 @@ async function main() {
       supplyMethodologyVersion: SUPPLY_METHODOLOGY_VERSION,
       depthMethodologyVersion: DEPTH_RECONCILIATION_METHODOLOGY_VERSION,
       trustlineMethodologyVersion: TRUSTLINE_METHODOLOGY_VERSION,
+      anchorReserveMethodologyVersion: ANCHOR_RESERVE_METHODOLOGY_VERSION,
       handlers: {
         latest_ledger: createLatestLedgerJobHandler(persistenceRepositories, () => new Date(), {
           endpointPolicy: {
@@ -75,6 +77,9 @@ async function main() {
           resiliencePolicy,
           timeoutMs,
           maxResponseBytes,
+        }),
+        anchor_reserves: createAnchorReserveJobHandler(persistenceRepositories, () => new Date(), {
+          resiliencePolicy,
         }),
       },
     }

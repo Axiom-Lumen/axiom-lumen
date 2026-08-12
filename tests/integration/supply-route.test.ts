@@ -174,7 +174,7 @@ describe('GET /api/v1/supply/{asset}', () => {
     expect(apiErrorResponseSchema.parse(body)).toEqual(body)
   })
 
-  it.each(['native', 'usdc:not-an-issuer', `usdc:${ISSUER}`, 'USDC'])('rejects malformed or unsupported asset %s', async (asset) => {
+  it.each(['native', 'usdc:not-an-issuer', `usd-:${ISSUER}`, 'USDC'])('rejects malformed or unsupported asset %s', async (asset) => {
     const response = await request(asset)
     await expectOpenApiResponse(response.clone(), OPENAPI_PATH, 'get')
     const body = await response.json()
