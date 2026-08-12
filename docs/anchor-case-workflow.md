@@ -50,8 +50,8 @@ npm run anchor:review-case -- --case '<case-id>' --reviewer '<principal-id>' --d
 ```
 
 Approval is fail-closed unless `ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED=true`. That variable must remain false
-until the product/legal approval required by ADR 0001 is recorded. The public reserve endpoint remains ANC-04
-scope even after an internal case is approved.
+until the product/legal approval required by ADR 0001 is recorded. ANC-04 supplies the safe publication read
+model, but no public reserve route is enabled even after an internal case is approved.
 
 Notification workers use PostgreSQL leases with fencing tokens, exponential retry delays, bounded concurrency,
 and deterministic idempotency keys. Expired leases are reclaimable; stale workers cannot record delivery.

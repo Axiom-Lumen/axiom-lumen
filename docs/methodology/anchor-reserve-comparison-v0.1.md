@@ -7,7 +7,8 @@ supply for the exact same classic credit asset. It reports a measured difference
 not determine redeemability, solvency, financial health, fraud, intent, or investment suitability.
 
 No public reserve endpoint is included. ANC-03 implements notification and review controls, but results remain
-non-public until the required product/legal approval and ANC-04 public contract work are complete.
+non-public until the required product/legal approval and activation of a public route. ANC-04's internal
+claimant and correction controls are implemented.
 
 ## Attribution
 
