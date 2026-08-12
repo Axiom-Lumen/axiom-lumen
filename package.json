@@ -25,6 +25,7 @@
     "db:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "anchor:discover": "tsx scripts/discover-anchor.ts",
     "worker:once": "tsx worker/main.ts --once",
     "worker:continuous": "tsx worker/main.ts --continuous",
     "start": "next start",
@@ -33,7 +34,8 @@
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:database": "vitest run tests/database --testTimeout 15000",
-    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm test && npm run test:integration && npm run db:check && npm run build"
+    "test:database:ci": "node scripts/require-database-test-env.mjs && npm run test:database",
+    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm test && npm run test:integration && npm run test:database:ci && npm run db:check && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -43,9 +45,11 @@
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",
     "next": "16.3.0",
+    "pdfjs-dist": "^5.4.624",
     "pg": "^8.23.0",
     "react": "^19",
     "react-dom": "^19",
+    "smol-toml": "^1.8.0",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.4.0",
     "zod": "^3.25.76"

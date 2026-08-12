@@ -16,6 +16,15 @@ import {
   validateSupplyMethodologyConfig,
   TRUSTLINE_METHODOLOGY_VERSION,
   trustlineMethodologyConfig,
+  ANCHOR_RESERVE_ATTESTATION_SCHEMA,
+  ANCHOR_RESERVE_METHODOLOGY_VERSION,
+  anchorReserveMethodologyConfig,
+  validateAnchorReserveMethodologyConfig,
+  MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION,
+  MZAR_RESERVE_ATTESTATION_SCHEMA,
+  MZAR_RESERVE_CONNECTOR_PROFILE,
+  mzarAnchorReserveMethodologyConfig,
+  validateMzarAnchorReserveMethodologyConfig,
 } from '../../config/methodology'
 
 describe('methodology v1.5 configuration', () => {
@@ -197,5 +206,47 @@ describe('methodology v1.5 configuration', () => {
       freshnessHalfLifeSeconds: 300,
       maximumObservationAgeSeconds: 900,
     })
+  })
+
+  it('defines a fail-closed, publication-gated anchor reserve comparison', () => {
+    expect(ANCHOR_RESERVE_METHODOLOGY_VERSION).toBe('anchor-reserve-comparison-v0.1')
+    expect(ANCHOR_RESERVE_ATTESTATION_SCHEMA).toBe('axiom-lumen-anchor-reserve-attestation-v1')
+    expect(anchorReserveMethodologyConfig).toMatchObject({
+      unitPolicy: 'exact_asset_units_only',
+      maximumAttestationAgeSeconds: 86_400,
+      maximumReferenceAgeSeconds: 120,
+      maximumPeriodSkewSeconds: 300,
+      verificationValiditySeconds: 86_400,
+      toleranceBasisPoints: 10,
+      confidence: {
+        formulaVersion: 'anchor-reserve-confidence-v0.1', selfReportedBase: 0.25,
+        supplyReferenceCoefficient: 0.2, temporalAlignmentCoefficient: 0.05,
+        selfReportedCap: 0.5, effectiveWeight: 0.5,
+      },
+      publicEndpointPolicy: 'withheld_until_reply_and_review_controls',
+    })
+    const unsafe = structuredClone(anchorReserveMethodologyConfig)
+    unsafe.publicEndpointPolicy = 'public' as never
+    expect(() => validateAnchorReserveMethodologyConfig(unsafe)).toThrow(/withheld/)
+  })
+
+  it('adds a non-competing historical mZAR profile without changing v0.1', () => {
+    expect(MZAR_ANCHOR_RESERVE_METHODOLOGY_VERSION).toBe('anchor-reserve-comparison-v0.2')
+    expect(MZAR_RESERVE_ATTESTATION_SCHEMA).toBe('mesh-mzar-reserve-report-v1')
+    expect(MZAR_RESERVE_CONNECTOR_PROFILE).toBe('mesh_mzar_pdf_v1')
+    expect(mzarAnchorReserveMethodologyConfig).toMatchObject({
+      comparisonBoundary: 'historical_ledger_close_at_report_cutoff',
+      unitPolicy: 'documented_one_to_one_zar_to_mzar',
+      maximumReportCutoffAgeSeconds: 5_356_800,
+      maximumPublicationDelaySeconds: 3_024_000,
+      maximumReferenceSkewSeconds: 300,
+      toleranceBasisPoints: 10,
+      confidence: { formulaVersion: 'anchor-reserve-confidence-v0.2', selfReportedCap: 0.5 },
+      publicEndpointPolicy: 'withheld_until_reply_and_review_controls',
+    })
+    const unsafe = structuredClone(mzarAnchorReserveMethodologyConfig)
+    unsafe.comparisonBoundary = 'historical_ledger_close_at_report_cutoff' as never
+    unsafe.maximumPublicationDelaySeconds = 0
+    expect(() => validateMzarAnchorReserveMethodologyConfig(unsafe)).toThrow(/maximumPublicationDelaySeconds/)
   })
 })

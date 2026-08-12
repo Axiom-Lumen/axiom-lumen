@@ -103,9 +103,10 @@ describe('domain contracts', () => {
     const credit = parseAssetId(`USDC:${ISSUER}`)
     expect(credit).toEqual({ kind: 'credit', code: 'USDC', issuer: ISSUER })
     expect(formatAssetId(credit)).toBe(`USDC:${ISSUER}`)
+    expect(parseAssetId(`mZAR:${ISSUER}`)).toEqual({ kind: 'credit', code: 'mZAR', issuer: ISSUER })
   })
 
-  it.each([`usdc:${ISSUER}`, 'USDC:not-an-account', 'USDC', 'USDC:issuer:extra'])('rejects invalid asset identifier %s', (asset) => {
+  it.each([`USD-:${ISSUER}`, 'USDC:not-an-account', 'USDC', 'USDC:issuer:extra'])('rejects invalid asset identifier %s', (asset) => {
     expect(() => parseAssetId(asset)).toThrow()
   })
 

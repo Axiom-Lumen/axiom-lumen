@@ -58,6 +58,7 @@ Publication uses a separate state machine:
 | `withheld` | A reviewer prevented publication because evidence, attribution, or process requirements were not met |
 
 Info discrepancies remain `internal`. A Warning or Critical discrepancy involving a named anchor or issuer
+also remains `internal` until a successful notification is durably linked to the publication transition. It then
 enters `pending_reply`; it cannot become public automatically. The 72-hour window does not change Warning
 to Critical. Severity changes only through measured deviation and consecutive completed cycles.
 

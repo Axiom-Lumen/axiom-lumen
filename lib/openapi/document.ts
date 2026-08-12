@@ -442,13 +442,13 @@ export function createOpenApiDocument() {
           in: 'path',
           required: true,
           description: 'Canonical classic credit asset identifier CODE:ISSUER',
-          schema: { type: 'string', pattern: '^[A-Z0-9]{1,12}:G[A-Z2-7]{55}$' },
+          schema: { type: 'string', pattern: '^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$' },
           example: ASSET,
         },
         Pair: {
           name: 'pair', in: 'path', required: true,
           description: 'Canonical unordered pair as BASE~COUNTER; native sorts before credit assets',
-          schema: { type: 'string', pattern: '^(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Z0-9]{1,12}:G[A-Z2-7]{55})$' }, example: PAIR,
+          schema: { type: 'string', pattern: '^(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})$' }, example: PAIR,
         },
         RequestId: {
           name: 'X-Request-ID',

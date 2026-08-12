@@ -48,6 +48,7 @@ function dependencies(jobs: DiscoveredIngestJob[], leases: ClaimedCycle[], handl
     discoverSupplyJobs: vi.fn(async () => []),
     discoverDepthJobs: vi.fn(async () => []),
     discoverTrustlineJobs: vi.fn(async () => []),
+    discoverAnchorReserveJobs: vi.fn(async () => []),
     ensureScheduledCycle: vi.fn(async () => true),
     claimNextCycle: vi.fn(async () => queue.shift() ?? null),
     renewLease: vi.fn(async () => true),
@@ -162,6 +163,24 @@ describe('worker scheduler', () => {
 
     expect(await runSchedulerOnce(configured, options)).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
     expect(fixture.schedulerRepository.discoverTrustlineJobs).toHaveBeenCalledWith('trustline-state-v0.1')
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('discovers and dispatches internal anchor reserve comparison jobs', async () => {
+    const reserveJob: DiscoveredIngestJob = {
+      metric: 'anchor_reserves', subjectKey: `public:USDC:G${'A'.repeat(55)}`, methodologyVersion: 'anchor-reserve-comparison-v0.1', anchorId: 'anchor_1',
+      connectorProfile: 'axiom_json_v1',
+      asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+      sources: [{ id: 'anchor-source', url: 'https://anchor.example/reserve.json', sourceClass: 'anchor_self_reported', adapter: 'anchor', upstreamId: 'anchor_1', networkId: 'public', networkPassphrase: 'Public Global Stellar Network ; September 2015' }],
+    }
+    const reserveLease = leaseFor(reserveJob)
+    const handler = vi.fn(async () => ({ cycle: { id: reserveLease.id } } as never))
+    const fixture = dependencies([], [reserveLease], vi.fn())
+    vi.mocked(fixture.schedulerRepository.discoverAnchorReserveJobs).mockResolvedValue([reserveJob])
+    const configured: SchedulerDependencies = { ...fixture.value, anchorReserveMethodologyVersion: 'anchor-reserve-comparison-v0.1', handlers: { ...fixture.value.handlers, anchor_reserves: handler } }
+
+    expect(await runSchedulerOnce(configured, options)).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
+    expect(fixture.schedulerRepository.discoverAnchorReserveJobs).toHaveBeenCalledWith('anchor-reserve-comparison-v0.1')
     expect(handler).toHaveBeenCalledOnce()
   })
 

@@ -10,6 +10,7 @@ import {
   createPersistenceRepositories,
   type PersistCompletedCycleInput,
 } from '../../lib/db/repositories'
+import { createAnchorRepository } from '../../lib/db/anchor-repository'
 import * as schema from '../../lib/db/schema'
 import { queryLatestSupplyReadModel } from '../../lib/db/supply-read-model'
 import { queryLatestTrustlineReadModel } from '../../lib/db/trustline-read-model'
@@ -17,6 +18,7 @@ import { computeEvidenceSha256 } from '../../lib/evidence/json'
 import type { ClaimedCycle, DiscoveredIngestJob } from '../../lib/db/scheduler-repository'
 import { createSupplyJobHandler } from '../../lib/worker/supply-job'
 import { createTrustlineJobHandler } from '../../lib/worker/trustline-job'
+import { reconciliationSnapshotSchema } from '../../lib/contracts/domain'
 
 const adminUrl = process.env.DATABASE_TEST_ADMIN_URL
 const describeWithDatabase = adminUrl ? describe : describe.skip
@@ -242,6 +244,126 @@ describeWithDatabase('transactional persistence repositories', () => {
     vi.restoreAllMocks()
   })
 
+  it('persists verification history, rotates reserve sources, and suspends failed re-verification', async () => {
+    const pool = await createDatabase()
+    try {
+      const issuer = `G${'R'.repeat(55)}`
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+        VALUES ('asset-anchor-usdc', 'public', 'credit', 'USDC', $1, $2),
+               ('asset-anchor-eurc', 'public', 'credit', 'EURC', $1, $3)
+      `, [issuer, `USDC:${issuer}`, `EURC:${issuer}`])
+      const repository = createAnchorRepository({ pool, db: drizzle({ client: pool, schema }) })
+      const discovery = {
+        issuer,
+        asset: { kind: 'credit' as const, code: 'USDC', issuer },
+        homeDomain: 'anchor.example',
+        organizationName: 'Example Anchor',
+        stellarTomlUrl: 'https://anchor.example/.well-known/stellar.toml',
+        attestationUrl: 'https://evidence.example/reserve.json',
+        anchorAssetType: 'fiat',
+        anchorAsset: 'USD',
+        contacts: [{ kind: 'email' as const, endpoint: 'ops@anchor.example' }],
+        verifiedAt: '2026-08-11T12:00:00.000Z',
+        evidence: { accountSha256: 'a'.repeat(64), horizonRootSha256: 'c'.repeat(64), stellarTomlSha256: 'b'.repeat(64), networkPassphrase: 'Public Global Stellar Network ; September 2015' },
+      }
+      const first = await repository.persistVerifiedDiscovery({ networkId: 'public', discovery })
+      expect(await repository.persistVerifiedDiscovery({ networkId: 'public', discovery })).toEqual(first)
+      const eurcDiscovery = { ...discovery, asset: { kind: 'credit' as const, code: 'EURC', issuer }, verifiedAt: '2026-08-11T12:30:00.000Z' }
+      const eurc = await repository.persistVerifiedDiscovery({ networkId: 'public', discovery: eurcDiscovery })
+      expect(eurc.sourceId).toBe(first.sourceId)
+      expect((await pool.query('SELECT status, stellar_account FROM anchors')).rows).toEqual([{ status: 'verified', stellar_account: issuer }])
+      expect((await pool.query('SELECT verified_at, verification_expires_at, verification_evidence FROM anchor_domains')).rows[0]).toMatchObject({ verification_evidence: { asset: `EURC:${issuer}` } })
+      expect((await pool.query('SELECT verified_at FROM anchor_contact_endpoints')).rows).toEqual([{ verified_at: null }])
+      expect((await pool.query('SELECT event_type FROM anchor_verification_events ORDER BY occurred_at')).rows).toEqual([{ event_type: 'verified' }, { event_type: 'verified' }])
+      expect((await pool.query('SELECT adapter, source_class, config FROM source_definitions WHERE id = $1', [first.sourceId])).rows[0]).toEqual({
+        adapter: 'anchor', source_class: 'anchor_self_reported', config: { anchorReserves: {
+          enabled: true, assetIds: ['asset-anchor-eurc', 'asset-anchor-usdc'], verifications: { 'asset-anchor-eurc': {
+            domainId: first.domainId, verifiedAt: '2026-08-11T12:30:00.000Z', verificationExpiresAt: '2026-08-12T12:30:00.000Z',
+          }, 'asset-anchor-usdc': {
+            domainId: first.domainId, verifiedAt: '2026-08-11T12:00:00.000Z', verificationExpiresAt: '2026-08-12T12:00:00.000Z',
+          } }, profiles: { 'asset-anchor-eurc': 'axiom_json_v1', 'asset-anchor-usdc': 'axiom_json_v1' },
+        } },
+      })
+      const rotated = await repository.persistVerifiedDiscovery({
+        networkId: 'public',
+        discovery: { ...discovery, attestationUrl: 'https://evidence.example/reserve-v2.json', verifiedAt: '2026-08-11T13:00:00.000Z', evidence: { ...discovery.evidence, stellarTomlSha256: 'd'.repeat(64) } },
+      })
+      expect(rotated.sourceId).not.toBe(first.sourceId)
+      expect((await pool.query('SELECT id, enabled FROM source_definitions ORDER BY id')).rows).toEqual(expect.arrayContaining([
+        { id: first.sourceId, enabled: true }, { id: rotated.sourceId, enabled: true },
+      ]))
+      expect((await pool.query('SELECT event_type FROM anchor_verification_events ORDER BY occurred_at')).rows).toEqual([{ event_type: 'verified' }, { event_type: 'verified' }, { event_type: 'verified' }])
+      expect(await repository.suspendVerification({ networkId: 'public', issuer, asset: discovery.asset, occurredAt: '2026-08-11T14:00:00.000Z', failureCode: 'FetchError' })).toMatchObject({ status: 'suspended' })
+      expect((await pool.query('SELECT status FROM anchors')).rows).toEqual([{ status: 'verified' }])
+      expect((await pool.query('SELECT count(*)::int AS count FROM source_definitions WHERE enabled AND anchor_id = $1', [first.anchorId])).rows).toEqual([{ count: 1 }])
+      expect(await repository.suspendVerification({ networkId: 'public', issuer, asset: eurcDiscovery.asset, occurredAt: '2026-08-11T14:05:00.000Z', failureCode: 'FetchError' })).toMatchObject({ status: 'suspended' })
+      expect((await pool.query('SELECT status FROM anchors')).rows).toEqual([{ status: 'suspended' }])
+      expect((await pool.query('SELECT count(*)::int AS count FROM source_definitions WHERE enabled AND anchor_id = $1', [first.anchorId])).rows).toEqual([{ count: 0 }])
+      expect((await pool.query('SELECT event_type FROM anchor_verification_events ORDER BY occurred_at')).rows).toEqual([{ event_type: 'verified' }, { event_type: 'verified' }, { event_type: 'verified' }, { event_type: 'suspended' }, { event_type: 'suspended' }])
+    } finally {
+      await pool.end()
+    }
+  })
+
+  it('uses network and issuer identity instead of display names or globally unique domains', async () => {
+    const pool = await createDatabase()
+    try {
+      const issuerA = `G${'J'.repeat(55)}`
+      const issuerB = `G${'K'.repeat(55)}`
+      await pool.query(`INSERT INTO networks (id, passphrase, display_name) VALUES ('testnet', 'Test SDF Network ; September 2015', 'Testnet')`)
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id) VALUES
+          ('asset-public-a', 'public', 'credit', 'USD', $1, $2),
+          ('asset-public-b', 'public', 'credit', 'USD', $3, $4),
+          ('asset-testnet-a', 'testnet', 'credit', 'USD', $1, $2)
+      `, [issuerA, `USD:${issuerA}`, issuerB, `USD:${issuerB}`])
+      const repository = createAnchorRepository({ pool, db: drizzle({ client: pool, schema }) })
+      const discovery = (issuer: string, homeDomain: string, passphrase: string) => ({
+        issuer, asset: { kind: 'credit' as const, code: 'USD', issuer }, homeDomain,
+        organizationName: 'Shared Display Name', stellarTomlUrl: `https://${homeDomain}/.well-known/stellar.toml`,
+        attestationUrl: `https://${homeDomain}/reserve.json`, anchorAssetType: 'fiat', anchorAsset: 'USD', contacts: [],
+        verifiedAt: '2026-08-11T12:00:00.000Z',
+        evidence: { accountSha256: 'a'.repeat(64), horizonRootSha256: 'b'.repeat(64), stellarTomlSha256: 'c'.repeat(64), networkPassphrase: passphrase },
+      })
+      const publicA = await repository.persistVerifiedDiscovery({ networkId: 'public', discovery: discovery(issuerA, 'shared.example', 'Public Global Stellar Network ; September 2015') })
+      await repository.persistVerifiedDiscovery({ networkId: 'public', discovery: discovery(issuerB, 'other.example', 'Public Global Stellar Network ; September 2015') })
+      const testnetA = await repository.persistVerifiedDiscovery({ networkId: 'testnet', discovery: discovery(issuerA, 'shared.example', 'Test SDF Network ; September 2015') })
+      expect(publicA.anchorId).not.toBe(testnetA.anchorId)
+      expect(publicA.domainId).not.toBe(testnetA.domainId)
+      expect((await pool.query('SELECT count(*)::int AS count FROM anchors')).rows).toEqual([{ count: 3 }])
+      expect((await pool.query('SELECT count(*)::int AS count FROM anchor_domains')).rows).toEqual([{ count: 3 }])
+    } finally {
+      await pool.end()
+    }
+  })
+
+  it('assigns the mZAR provider profile only to the exact verified issuer-domain-endpoint tuple', async () => {
+    const pool = await createDatabase()
+    try {
+      const issuer = 'GCBNWTCCMC32UHZ5OCC2PNMFDGXRVPA7MFFBFFTCVW77SX5PMRB7Q4BY'
+      await pool.query(`INSERT INTO assets (id, network_id, type, code, issuer, canonical_id) VALUES ('asset-mzar', 'public', 'credit', 'mZAR', $1, $2)`, [issuer, `mZAR:${issuer}`])
+      const repository = createAnchorRepository({ pool, db: drizzle({ client: pool, schema }) })
+      const persisted = await repository.persistVerifiedDiscovery({
+        networkId: 'public',
+        discovery: {
+          issuer, asset: { kind: 'credit', code: 'mZAR', issuer }, homeDomain: 'mzar.co.za',
+          organizationName: 'Mesh Trade South Africa (Pty) Ltd', stellarTomlUrl: 'https://mzar.co.za/.well-known/stellar.toml',
+          attestationUrl: 'https://mzar.co.za/', anchorAssetType: 'fiat', anchorAsset: 'ZAR', contacts: [],
+          verifiedAt: '2026-04-01T12:00:00.000Z', evidence: {
+            accountSha256: 'a'.repeat(64), horizonRootSha256: 'b'.repeat(64), stellarTomlSha256: 'c'.repeat(64),
+            networkPassphrase: 'Public Global Stellar Network ; September 2015',
+          },
+        },
+      })
+      expect((await pool.query('SELECT config FROM source_definitions WHERE id = $1', [persisted.sourceId])).rows[0]).toMatchObject({
+        config: { anchorReserves: { profiles: { 'asset-mzar': 'mesh_mzar_pdf_v1' } } },
+      })
+    } finally {
+      await pool.end()
+    }
+  })
+
   it('persists and reconstructs finalized trustline-state evidence', async () => {
     const pool = await createDatabase()
     try {
@@ -396,6 +518,23 @@ describeWithDatabase('transactional persistence repositories', () => {
       expect(replay.events).toEqual(batch.events)
       expect(await repositories.persistCompletedCycle(batch)).toEqual({ status: 'inserted', cycleId: lease.id })
       expect(await repositories.persistCompletedCycle(replay)).toEqual({ status: 'duplicate', cycleId: lease.id })
+      const persistedSupplySnapshot = reconciliationSnapshotSchema.parse(batch.snapshot)
+      expect(await repositories.getLatestSupplyReference(subjectKey)).toMatchObject({
+        snapshotId: persistedSupplySnapshot.snapshotId,
+        cycleId: lease.id,
+        methodologyVersion: 'onchain-asset-supply-v0.1',
+        ledgerSequence: 500,
+        ledgerClosedAt: '2026-08-10T11:59:55.000Z',
+        evidence: [expect.objectContaining({ sourceId: 'source-a', ledgerSequence: 500 })],
+      })
+      // Select by the actual contributing ledger close, not the later snapshot
+      // completion timestamp (which matters for retrospective replay).
+      expect(await repositories.getSupplyReferenceAt(subjectKey, '2026-08-10T11:59:55.000Z', 5)).toMatchObject({
+        snapshotId: persistedSupplySnapshot.snapshotId,
+        ledgerSequence: 500,
+        ledgerClosedAt: '2026-08-10T11:59:55.000Z',
+      })
+      expect(await repositories.getSupplyReferenceAt(subjectKey, '2026-08-10T13:00:00.000Z', 300)).toBeNull()
 
       const databaseClient = { pool, db: drizzle({ client: pool, schema }) }
       const readModel = await queryLatestSupplyReadModel(

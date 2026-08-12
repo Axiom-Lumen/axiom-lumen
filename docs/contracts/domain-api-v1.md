@@ -74,8 +74,8 @@ or:
 }
 ```
 
-Path input uses `native` or `CODE:ISSUER`. Credit codes are canonical uppercase alphanumeric values of one
-to twelve characters. Issuers must use the canonical 56-character Stellar `G...` representation. A future
+Path input uses `native` or `CODE:ISSUER`. Credit codes preserve their case-sensitive Stellar identity and contain
+one to twelve ASCII letters or digits. Issuers must use the canonical 56-character Stellar `G...` representation. A future
 connector boundary may additionally verify the StrKey checksum when the Stellar SDK is introduced.
 
 ## Observations and retrieval attempts
