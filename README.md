@@ -70,6 +70,10 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
   generic strict exact-unit contract, and includes an isolated real-provider mZAR PDF profile matched to a
   historical supply ledger close. Named-party results remain behind the reply/review publication gate; no public
   reserve endpoint exists yet.
+- [x] **Anchor right-of-reply case workflow:** Eligible named-party reserve discrepancies create deterministic
+  internal cases; leased email/webhook notifications use bounded delivery, signed webhooks, encrypted rotatable
+  secrets, and append-only audits. Failed delivery remains internal, the 72-hour clock begins after first
+  successful notice, and scoped human review remains behind a separately disabled publication gate.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
   credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
@@ -82,7 +86,8 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
   publication controls remain planned.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
-- [ ] **Right-of-reply tooling:** Described in product documentation, but not implemented in code.
+- [ ] **Anchor claims, replies, disputes, and corrections:** ANC-04 remains planned; no public reserve endpoint or
+  claimant-facing submission surface is enabled.
 
 ---
 

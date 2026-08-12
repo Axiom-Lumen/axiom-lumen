@@ -5,7 +5,8 @@ reads the issuer account from Horizon, obtains its `home_domain`, retrieves SEP-
 matching anchored `[[CURRENCIES]]` record.
 
 The connector extracts organization metadata, same-domain email contacts, and `attestation_of_reserve`. It does
-not implement domain claims, challenge tokens, notifications, or public profiles; those belong to ANC-03/04.
+does not implement domain claims, challenge tokens, or public profiles; those belong to ANC-04. ANC-03 owns
+notification and internal review controls.
 
 DNS results are checked immediately before retrieval, every resolved address must be public, and the HTTPS
 connection is pinned to that validated address set while retaining hostname-based TLS verification. Responses are

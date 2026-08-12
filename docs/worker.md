@@ -78,7 +78,8 @@ Horizon replicas retain one derivation identity and cannot make the result verif
 Verified anchor reserve discovery is opt-in through the anchor registry. ANC-01 creates an enabled
 `anchor_self_reported` / `anchor` source only after issuer, home-domain, SEP-1 currency, and evidence URL
 verification. The worker then schedules `anchor_reserves` for its routed assets. A current persisted supply
-snapshot is required; comparison output remains internal until ANC-03 provides notification and review controls.
+snapshot is required. ANC-03 provides internal notification and review controls; comparison output remains
+non-public until an eligible case completes reply/review and the separately disabled publication gate permits it.
 
 The exact verified mZAR issuer/domain/index tuple is routed instead to the isolated `mesh_mzar_pdf_v1` profile.
 That profile reads the provider's monthly PDF report under methodology v0.2 and requires a persisted supply
@@ -135,6 +136,15 @@ After one finalized cycle, `npm run dev` serves the latest persisted Public Netw
 - `HORIZON_TIMEOUT_MS`: timeout applied to each Horizon request; defaults to `5000`.
 - `HORIZON_MAX_RESPONSE_BYTES`: maximum decoded bytes accepted from each Horizon response; defaults to
   `1000000`.
+- `ANCHOR_WORKFLOW_ENABLED`: enables automatic eligible-case creation, notification delivery, and reply-window
+  expiry; defaults to `false`.
+- `ANCHOR_NOTIFICATION_*`: bounds notification concurrency, claims, leases, retry attempts/delays, transport
+  timeout, and response size. See `.env.example` for defaults.
+- `ANCHOR_EMAIL_RELAY_URL` / `ANCHOR_EMAIL_RELAY_TOKEN`: paired HTTPS email relay settings.
+- `ANCHOR_CONTACT_SECRET_KEYS` / `ANCHOR_CONTACT_ACTIVE_KEY_ID`: AES-256-GCM webhook-secret keyring and active
+  encryption key. Old keys must remain available until stored versions are rotated.
+- `ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED`: independent reviewer approval gate; defaults to `false` and requires
+  the ADR 0001 product/legal approval before enablement.
 
 The Horizon timeout and response-size settings apply only to Horizon/archive connectors. Anchor reserve JSON is
 bounded to 256 KB. The mZAR provider profile uses a 30-second end-to-end timeout, a 2 MB index limit, and a 5 MB

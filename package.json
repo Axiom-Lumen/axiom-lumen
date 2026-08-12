@@ -26,6 +26,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "anchor:discover": "tsx scripts/discover-anchor.ts",
+    "anchor:rotate-contact-secret": "tsx scripts/rotate-anchor-contact-secret.ts",
+    "anchor:review-case": "tsx scripts/review-anchor-case.ts",
     "worker:once": "tsx worker/main.ts --once",
     "worker:continuous": "tsx worker/main.ts --continuous",
     "start": "next start",

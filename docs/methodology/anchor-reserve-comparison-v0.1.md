@@ -6,8 +6,8 @@ This profile compares one anchor-published reserve amount with Axiom Lumen's lat
 supply for the exact same classic credit asset. It reports a measured difference between two figures. It does
 not determine redeemability, solvency, financial health, fraud, intent, or investment suitability.
 
-No public reserve endpoint is included. Results remain internal until ANC-03 implements and receives approval
-for right-of-reply, notification, and human-review controls.
+No public reserve endpoint is included. ANC-03 implements notification and review controls, but results remain
+non-public until the required product/legal approval and ANC-04 public contract work are complete.
 
 ## Attribution
 

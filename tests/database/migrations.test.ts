@@ -69,8 +69,10 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
          ORDER BY table_name`,
       )
       expect(tables.rows.map((row) => row.table_name)).toEqual([
+        'anchor_case_events',
         'anchor_cases',
         'anchor_contact_endpoints',
+        'anchor_contact_secrets',
         'anchor_domains',
         'anchor_replies',
         'anchor_reviews',
@@ -88,6 +90,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'discrepancy_events',
         'ingest_cycles',
         'networks',
+        'notification_delivery_attempts',
         'notifications',
         'raw_readings',
         'reconciliation_snapshots',
@@ -101,7 +104,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(8)
+      expect(migrationRows.rows[0]?.count).toBe(10)
 
       const leaseSnapshotColumns = await pool.query<{ column_name: string; data_type: string }>(
         `SELECT column_name, data_type
@@ -147,6 +150,9 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'discrepancies_open_source_subject_uidx',
           'discrepancy_events_discrepancy_occurred_idx',
           'notifications_idempotency_uidx',
+          'notification_delivery_attempts_number_uidx',
+          'anchor_case_events_case_occurred_idx',
+          'anchor_contact_secrets_active_uidx',
           'scheduled_cycle_leases_idempotency_uidx',
           'scheduled_cycle_leases_active_subject_uidx',
           'scheduled_cycle_leases_expiry_idx',

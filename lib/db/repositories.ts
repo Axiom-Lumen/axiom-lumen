@@ -194,6 +194,9 @@ export interface NotificationRecord {
   caseId: string
   contactEndpointId: string
   idempotencyKey: string
+  channel: 'email' | 'webhook'
+  payload: Record<string, unknown>
+  payloadSha256: string
   nextAttemptAt?: string | null
 }
 

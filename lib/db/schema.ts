@@ -83,6 +83,7 @@ export const notificationStatusEnum = pgEnum('notification_status', [
   'failed',
   'cancelled',
 ])
+export const notificationDeliveryOutcomeEnum = pgEnum('notification_delivery_outcome', ['sent', 'failed'])
 export const apiPrincipalStatusEnum = pgEnum('api_principal_status', ['active', 'suspended', 'revoked'])
 
 export const networks = pgTable(
@@ -537,7 +538,6 @@ export const discrepancies = pgTable(
     check(
       'discrepancies_publication_check',
       sql`(${table.severity} <> 'info' OR ${table.publicationState} = 'internal') AND
-          NOT (${table.namedParty} AND ${table.severity} <> 'info' AND ${table.publicationState} = 'internal') AND
           (${table.publicationState} <> 'pending_reply' OR
             (${table.namedParty} AND ${table.replyReviewState} <> 'not_required'))`,
     ),
@@ -644,6 +644,31 @@ export const anchorContactEndpoints = pgTable(
     ),
     check('anchor_contact_endpoints_kind_not_blank', sql`length(btrim(${table.kind})) > 0`),
     check('anchor_contact_endpoints_endpoint_not_blank', sql`length(btrim(${table.endpoint})) > 0`),
+  ],
+)
+
+export const anchorContactSecrets = pgTable(
+  'anchor_contact_secrets',
+  {
+    id: text('id').primaryKey(),
+    contactEndpointId: text('contact_endpoint_id')
+      .notNull()
+      .references(() => anchorContactEndpoints.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    version: integer('version').notNull(),
+    keyId: text('key_id').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    initializationVector: text('initialization_vector').notNull(),
+    authenticationTag: text('authentication_tag').notNull(),
+    createdAt: createdAt(),
+    retiredAt: utcTimestamp('retired_at'),
+  },
+  (table) => [
+    uniqueIndex('anchor_contact_secrets_version_uidx').on(table.contactEndpointId, table.version),
+    uniqueIndex('anchor_contact_secrets_active_uidx').on(table.contactEndpointId).where(sql`${table.retiredAt} IS NULL`),
+    index('anchor_contact_secrets_key_idx').on(table.keyId),
+    check('anchor_contact_secrets_version_check', sql`${table.version} > 0`),
+    check('anchor_contact_secrets_key_not_blank', sql`length(btrim(${table.keyId})) > 0`),
+    check('anchor_contact_secrets_ciphertext_not_blank', sql`length(btrim(${table.ciphertext})) > 0`),
   ],
 )
 
@@ -776,11 +801,17 @@ export const notifications = pgTable(
       .notNull()
       .references(() => anchorContactEndpoints.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
     idempotencyKey: text('idempotency_key').notNull(),
+    channel: text('channel').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    payloadSha256: text('payload_sha256').notNull(),
     status: notificationStatusEnum('status').notNull().default('pending'),
     attemptCount: integer('attempt_count').notNull().default(0),
     nextAttemptAt: utcTimestamp('next_attempt_at'),
     sentAt: utcTimestamp('sent_at'),
     failure: jsonb('failure').$type<Record<string, unknown>>(),
+    leaseOwner: text('lease_owner'),
+    leaseToken: integer('lease_token').notNull().default(0),
+    leaseExpiresAt: utcTimestamp('lease_expires_at'),
     createdAt: createdAt(),
   },
   (table) => [
@@ -788,6 +819,71 @@ export const notifications = pgTable(
     index('notifications_status_next_attempt_idx').on(table.status, table.nextAttemptAt),
     index('notifications_case_idx').on(table.caseId),
     check('notifications_attempt_count_check', sql`${table.attemptCount} >= 0`),
+    check('notifications_channel_check', sql`${table.channel} IN ('email', 'webhook')`),
+    check('notifications_payload_sha256_check', sql`${table.payloadSha256} ~ '^[0-9a-f]{64}$'`),
+    check('notifications_lease_token_check', sql`${table.leaseToken} >= 0`),
+    check(
+      'notifications_lease_check',
+      sql`(${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL) OR
+          (${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)`,
+    ),
+  ],
+)
+
+export const notificationDeliveryAttempts = pgTable(
+  'notification_delivery_attempts',
+  {
+    id: text('id').primaryKey(),
+    notificationId: text('notification_id')
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    attemptNumber: integer('attempt_number').notNull(),
+    outcome: notificationDeliveryOutcomeEnum('outcome').notNull(),
+    startedAt: utcTimestamp('started_at').notNull(),
+    completedAt: utcTimestamp('completed_at').notNull(),
+    httpStatus: integer('http_status'),
+    failure: jsonb('failure').$type<Record<string, unknown>>(),
+    responseSha256: text('response_sha256'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('notification_delivery_attempts_number_uidx').on(table.notificationId, table.attemptNumber),
+    index('notification_delivery_attempts_notification_idx').on(table.notificationId, table.completedAt),
+    check('notification_delivery_attempts_number_check', sql`${table.attemptNumber} > 0`),
+    check('notification_delivery_attempts_time_check', sql`${table.completedAt} >= ${table.startedAt}`),
+    check('notification_delivery_attempts_http_check', sql`${table.httpStatus} IS NULL OR ${table.httpStatus} BETWEEN 100 AND 599`),
+    check('notification_delivery_attempts_response_hash_check', sql`${table.responseSha256} IS NULL OR ${table.responseSha256} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'notification_delivery_attempts_outcome_check',
+      sql`(${table.outcome} = 'sent' AND ${table.failure} IS NULL) OR
+          (${table.outcome} = 'failed' AND ${table.failure} IS NOT NULL)`,
+    ),
+  ],
+)
+
+export const anchorCaseEvents = pgTable(
+  'anchor_case_events',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => anchorCases.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    actorType: text('actor_type').notNull(),
+    actorId: text('actor_id'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('anchor_case_events_case_occurred_idx').on(table.caseId, table.occurredAt),
+    check('anchor_case_events_type_not_blank', sql`length(btrim(${table.eventType})) > 0`),
+    check('anchor_case_events_actor_check', sql`${table.actorType} IN ('system', 'anchor', 'reviewer')`),
+    check(
+      'anchor_case_events_actor_id_check',
+      sql`(${table.actorType} = 'system' AND ${table.actorId} IS NULL) OR
+          (${table.actorType} <> 'system' AND length(btrim(${table.actorId})) > 0)`,
+    ),
   ],
 )
 
@@ -829,6 +925,7 @@ export const anchorReviews = pgTable(
   (table) => [
     index('anchor_reviews_case_reviewed_idx').on(table.caseId, table.reviewedAt),
     check('anchor_reviews_decision_not_blank', sql`length(btrim(${table.decision})) > 0`),
+    check('anchor_reviews_decision_check', sql`${table.decision} IN ('approve_public', 'withhold')`),
   ],
 )
 

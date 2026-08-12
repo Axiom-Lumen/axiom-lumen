@@ -11,6 +11,7 @@ import {
   type PersistCompletedCycleInput,
 } from '../../lib/db/repositories'
 import { createAnchorRepository } from '../../lib/db/anchor-repository'
+import { createAnchorCaseRepository } from '../../lib/db/anchor-case-repository'
 import * as schema from '../../lib/db/schema'
 import { queryLatestSupplyReadModel } from '../../lib/db/supply-read-model'
 import { queryLatestTrustlineReadModel } from '../../lib/db/trustline-read-model'
@@ -19,6 +20,7 @@ import type { ClaimedCycle, DiscoveredIngestJob } from '../../lib/db/scheduler-r
 import { createSupplyJobHandler } from '../../lib/worker/supply-job'
 import { createTrustlineJobHandler } from '../../lib/worker/trustline-job'
 import { reconciliationSnapshotSchema } from '../../lib/contracts/domain'
+import { parseContactSecretKeyring } from '../../lib/anchor/contact-secret'
 
 const adminUrl = process.env.DATABASE_TEST_ADMIN_URL
 const describeWithDatabase = adminUrl ? describe : describe.skip
@@ -766,6 +768,9 @@ describeWithDatabase('transactional persistence repositories', () => {
           caseId: 'case-a',
           contactEndpointId: 'contact-a',
           idempotencyKey: 'case-a:initial',
+          channel: 'email',
+          payload: {},
+          payloadSha256: '44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',
         }),
       ).toEqual({ status: 'inserted', id: 'notification-a' })
       expect(
@@ -774,9 +779,197 @@ describeWithDatabase('transactional persistence repositories', () => {
           caseId: 'case-a',
           contactEndpointId: 'contact-a',
           idempotencyKey: 'case-a:initial',
+          channel: 'email',
+          payload: {},
+          payloadSha256: '44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',
         }),
       ).toEqual({ status: 'duplicate' })
       expect((await pool.query('SELECT count(*)::int AS count FROM notifications')).rows[0]?.count).toBe(1)
+    } finally {
+      await pool.end()
+    }
+  })
+
+  it('opens an anchor case idempotently and starts the reply clock only after successful delivery', async () => {
+    const pool = await createDatabase()
+    try {
+      const client = { pool, db: drizzle({ client: pool, schema }) }
+      const repositories = createPersistenceRepositories(client)
+      await repositories.persistCompletedCycle(cycleBatch('one', '2026-08-10T10:00:00.000Z'))
+      await pool.query(`
+        INSERT INTO anchors (id, network_id, name, status)
+        VALUES ('anchor-a', 'public', 'Anchor A', 'verified')
+      `)
+      await pool.query(`UPDATE source_definitions SET anchor_id = 'anchor-a' WHERE id = 'source-a'`)
+      await pool.query(`UPDATE discrepancies SET named_party = true WHERE id = 'discrepancy-a'`)
+      await pool.query(`
+        INSERT INTO anchor_contact_endpoints (id, anchor_id, kind, endpoint, verified_at)
+        VALUES ('contact-a', 'anchor-a', 'email', 'ops@example.com', '2026-08-10T09:00:00.000Z')
+      `)
+      const cases = createAnchorCaseRepository(client)
+      const opened = await cases.openEligibleCase({
+        discrepancyId: 'discrepancy-a',
+        triggeringEventId: 'event-opened-one',
+        openedAt: '2026-08-10T10:01:00.000Z',
+      })
+      expect(opened).toMatchObject({ status: 'opened' })
+      if (opened.status !== 'opened') throw new Error('expected opened case')
+      expect(await cases.openEligibleCase({
+        discrepancyId: 'discrepancy-a',
+        triggeringEventId: 'event-opened-one',
+        openedAt: '2026-08-10T10:01:00.000Z',
+      })).toMatchObject({ status: 'duplicate', caseId: opened.caseId })
+
+      const notificationId = opened.notificationIds[0]!
+      const firstClaims = await cases.claimDueNotifications({
+        workerId: 'notice-worker-1',
+        now: '2026-08-10T10:01:30.000Z',
+        leaseDurationMs: 30_000,
+        limit: 10,
+      })
+      expect(firstClaims).toHaveLength(1)
+      expect(await cases.recordDeliveryAttempt({
+        notificationId,
+        workerId: 'notice-worker-1',
+        leaseToken: firstClaims[0]!.leaseToken,
+        result: {
+          outcome: 'failed',
+          startedAt: '2026-08-10T10:02:00.000Z',
+          completedAt: '2026-08-10T10:02:01.000Z',
+          failure: { code: 'timeout', retryable: true },
+          nextAttemptAt: '2026-08-10T10:03:00.000Z',
+        },
+      })).toMatchObject({ status: 'failed', caseId: opened.caseId })
+      expect((await pool.query(`SELECT status, reply_due_at FROM anchor_cases WHERE id = $1`, [opened.caseId])).rows[0]).toEqual({
+        status: 'draft',
+        reply_due_at: null,
+      })
+      expect((await pool.query(`SELECT publication_state FROM discrepancies WHERE id = 'discrepancy-a'`)).rows[0]?.publication_state).toBe('internal')
+
+      const secondClaims = await cases.claimDueNotifications({
+        workerId: 'notice-worker-2',
+        now: '2026-08-10T10:03:00.000Z',
+        leaseDurationMs: 30_000,
+        limit: 10,
+      })
+      expect(secondClaims).toHaveLength(1)
+      const sent = await cases.recordDeliveryAttempt({
+        notificationId,
+        workerId: 'notice-worker-2',
+        leaseToken: secondClaims[0]!.leaseToken,
+        result: {
+          outcome: 'sent',
+          startedAt: '2026-08-10T10:03:00.000Z',
+          completedAt: '2026-08-10T10:03:01.000Z',
+          httpStatus: 202,
+          responseBody: new TextEncoder().encode('accepted but not retained'),
+        },
+      })
+      expect(sent).toMatchObject({
+        status: 'sent',
+        caseId: opened.caseId,
+        replyDueAt: '2026-08-13T10:03:01.000Z',
+      })
+      expect(await cases.recordDeliveryAttempt({
+        notificationId,
+        result: {
+          outcome: 'sent',
+          startedAt: '2026-08-10T10:04:00.000Z',
+          completedAt: '2026-08-10T10:04:01.000Z',
+        },
+      })).toMatchObject({ status: 'already_sent', caseId: opened.caseId })
+
+      expect((await pool.query(`
+        SELECT publication_state, reply_review_state
+        FROM discrepancies WHERE id = 'discrepancy-a'
+      `)).rows[0]).toEqual({ publication_state: 'pending_reply', reply_review_state: 'awaiting_reply' })
+      expect((await pool.query(`
+        SELECT count(*)::int AS count FROM notification_delivery_attempts
+      `)).rows[0]?.count).toBe(2)
+      expect((await pool.query(`
+        SELECT count(*)::int AS count FROM discrepancy_events WHERE event_type = 'publication_changed'
+      `)).rows[0]?.count).toBe(1)
+      await repositories.enqueueNotification({
+        id: 'notification-terminal',
+        caseId: opened.caseId,
+        contactEndpointId: 'contact-a',
+        idempotencyKey: `${opened.caseId}:terminal-test`,
+        channel: 'email',
+        payload: {},
+        payloadSha256: '44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a',
+      })
+      const terminalClaim = await cases.claimDueNotifications({ workerId: 'notice-worker-3', now: '2026-08-10T10:05:00.000Z', leaseDurationMs: 30_000, limit: 10 })
+      expect(terminalClaim.map((claim) => claim.id)).toEqual(['notification-terminal'])
+      await cases.recordDeliveryAttempt({
+        notificationId: 'notification-terminal',
+        workerId: 'notice-worker-3',
+        leaseToken: terminalClaim[0]!.leaseToken,
+        result: {
+          outcome: 'failed',
+          startedAt: '2026-08-10T10:05:00.000Z',
+          completedAt: '2026-08-10T10:05:01.000Z',
+          failure: { code: 'permanent_http_status', retryable: false },
+        },
+      })
+      expect(await cases.claimDueNotifications({ workerId: 'notice-worker-4', now: '2026-08-10T10:06:00.000Z', leaseDurationMs: 30_000, limit: 10 })).toEqual([])
+      const queue = await cases.listReviewQueue()
+      expect(queue).toHaveLength(1)
+      expect(queue[0]).toMatchObject({ caseId: opened.caseId, publicationState: 'pending_reply' })
+      const review = await cases.getReviewEvidence(opened.caseId)
+      expect(review).toMatchObject({
+        discrepancy: { methodologyVersion: 'method-v1' },
+        caseHistory: [{ eventType: 'opened' }, { eventType: 'notice_failed' }, { eventType: 'notice_delivered' }, { eventType: 'notice_failed' }],
+      })
+      expect(review?.evidence[0]).toMatchObject({ rawPayload: { Authorization: '[REDACTED]' } })
+
+      expect(await cases.expireDueReplyWindows({ now: '2026-08-13T10:03:01.000Z' })).toEqual([opened.caseId])
+      expect((await pool.query(`SELECT status FROM anchor_cases WHERE id = $1`, [opened.caseId])).rows[0]?.status).toBe('under_review')
+      await pool.query(`INSERT INTO api_plans (id, name, requests_per_window, window_seconds) VALUES ('review-plan', 'Review', 1, 60)`)
+      await pool.query(`INSERT INTO api_principals (id, plan_id, display_name) VALUES ('reviewer-1', 'review-plan', 'Reviewer')`)
+      await pool.query(`INSERT INTO api_scopes (id, description) VALUES ('anchor:review', 'Review anchor cases')`)
+      await pool.query(`INSERT INTO api_principal_scopes (principal_id, scope_id) VALUES ('reviewer-1', 'anchor:review')`)
+      await expect(cases.reviewCase({
+        caseId: opened.caseId,
+        reviewerPrincipalId: 'reviewer-1',
+        decision: 'approve_public',
+        reviewedAt: '2026-08-13T10:04:00.000Z',
+      })).rejects.toThrow(/publication is disabled/)
+      expect(await cases.reviewCase({
+        caseId: opened.caseId,
+        reviewerPrincipalId: 'reviewer-1',
+        decision: 'approve_public',
+        reviewedAt: '2026-08-13T10:04:00.000Z',
+        allowNamedPartyPublication: true,
+      })).toMatchObject({ publicationState: 'approved_public' })
+      expect((await pool.query(`SELECT status FROM anchor_cases WHERE id = $1`, [opened.caseId])).rows[0]?.status).toBe('resolved')
+
+      await pool.query(`
+        INSERT INTO anchor_contact_endpoints (id, anchor_id, kind, endpoint, verified_at)
+        VALUES ('webhook-a', 'anchor-a', 'webhook', 'https://hooks.example/notice', '2026-08-10T09:00:00.000Z')
+      `)
+      const keyring = parseContactSecretKeyring({
+        ANCHOR_CONTACT_SECRET_KEYS: `key-1:${Buffer.alloc(32, 4).toString('base64')}`,
+        ANCHOR_CONTACT_ACTIVE_KEY_ID: 'key-1',
+      })
+      expect(await cases.rotateContactSecret({
+        contactEndpointId: 'webhook-a',
+        secret: 'first-secret',
+        rotatedAt: '2026-08-13T10:05:00.000Z',
+        keyring,
+        random: () => new Uint8Array(12).fill(1),
+      })).toMatchObject({ version: 1, keyId: 'key-1' })
+      expect(await cases.rotateContactSecret({
+        contactEndpointId: 'webhook-a',
+        secret: 'second-secret',
+        rotatedAt: '2026-08-13T10:06:00.000Z',
+        keyring,
+        random: () => new Uint8Array(12).fill(2),
+      })).toMatchObject({ version: 2, keyId: 'key-1' })
+      const secrets = await pool.query(`SELECT ciphertext, retired_at FROM anchor_contact_secrets ORDER BY version`)
+      expect(secrets.rows).toHaveLength(2)
+      expect(JSON.stringify(secrets.rows)).not.toContain('first-secret')
+      expect(JSON.stringify(secrets.rows)).not.toContain('second-secret')
+      expect(secrets.rows.filter((row) => row.retired_at === null)).toHaveLength(1)
     } finally {
       await pool.end()
     }

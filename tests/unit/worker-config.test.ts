@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSourceResilienceConfig, parseWorkerConfig } from '../../lib/worker/config'
+import { parseAnchorWorkflowConfig, parseSourceResilienceConfig, parseWorkerConfig } from '../../lib/worker/config'
 import { serializeWorkerError } from '../../lib/worker/errors'
 
 describe('worker configuration', () => {
@@ -56,6 +56,25 @@ describe('worker configuration', () => {
       SOURCE_RETRY_BASE_DELAY_MS: '500',
       SOURCE_RETRY_MAX_DELAY_MS: '100',
     })).toThrow('maxDelayMs must be at least baseDelayMs')
+  })
+})
+
+describe('anchor workflow configuration', () => {
+  it('is disabled by default and validates paired email relay credentials', () => {
+    expect(parseAnchorWorkflowConfig({}).enabled).toBe(false)
+    expect(() => parseAnchorWorkflowConfig({ ANCHOR_EMAIL_RELAY_URL: 'https://mail.example/send' })).toThrow(/configured together/)
+    expect(() => parseAnchorWorkflowConfig({ ANCHOR_WORKFLOW_ENABLED: 'yes' })).toThrow(/true or false/)
+  })
+
+  it('validates bounded claim and retry settings', () => {
+    expect(parseAnchorWorkflowConfig({
+      ANCHOR_WORKFLOW_ENABLED: 'true',
+      ANCHOR_NOTIFICATION_CLAIM_LIMIT: '20',
+      ANCHOR_NOTIFICATION_RETRY_BASE_DELAY_MS: '1000',
+      ANCHOR_NOTIFICATION_RETRY_MAX_DELAY_MS: '2000',
+      ANCHOR_EMAIL_RELAY_URL: 'https://mail.example/send',
+      ANCHOR_EMAIL_RELAY_TOKEN: 'secret',
+    })).toMatchObject({ enabled: true, claimLimit: 20, retryBaseDelayMs: 1000, retryMaximumDelayMs: 2000 })
   })
 })
 

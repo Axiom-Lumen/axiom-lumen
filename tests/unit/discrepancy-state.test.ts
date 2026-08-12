@@ -33,7 +33,10 @@ function advance(
 }
 
 function pendingReplyAfterNotification(state: PersistedDiscrepancyState, second = 2): PersistedDiscrepancyState {
-  return { ...state, publicationState: 'pending_reply', replyReviewState: 'awaiting_reply', publicationUpdatedAt: timestamp(second) }
+  return transitionDiscrepancyPublication({
+    state,
+    action: { type: 'begin_reply', eventId: `notice-event-${second}`, notificationId: `notice-${second}`, occurredAt: timestamp(second) },
+  }).state
 }
 
 describe('measurement severity', () => {
@@ -190,6 +193,35 @@ describe('publication safeguards', () => {
       publicationState: 'internal',
       replyReviewState: 'not_required',
     })
+  })
+
+  it('begins the reply window only after a successful notification is identified', () => {
+    const opened = advance(null, 1, 3, { namedParty: true })
+    if (!opened.state) throw new Error('expected state')
+
+    const activated = transitionDiscrepancyPublication({
+      state: opened.state,
+      action: { type: 'begin_reply', eventId: 'pub-1', notificationId: 'notice-1', occurredAt: timestamp(2) },
+    })
+
+    expect(activated.state).toMatchObject({
+      publicationState: 'pending_reply',
+      replyReviewState: 'awaiting_reply',
+      publicationUpdatedAt: timestamp(2),
+    })
+    expect(activated.event).toMatchObject({ action: 'begin_reply', notificationId: 'notice-1' })
+  })
+
+  it('does not start reply review for Info, non-named, or resolved discrepancies', () => {
+    const info = advance(null, 1, 2, { namedParty: true })
+    const infrastructure = advance(null, 1, 3)
+    const warning = advance(null, 1, 3, { namedParty: true })
+    const resolved = advance(warning.state, 2, 0, { namedParty: true })
+    const action = { type: 'begin_reply' as const, eventId: 'pub-1', notificationId: 'notice-1', occurredAt: timestamp(3) }
+
+    expect(() => transitionDiscrepancyPublication({ state: info.state!, action })).toThrow(/open named-party/)
+    expect(() => transitionDiscrepancyPublication({ state: infrastructure.state!, action })).toThrow(/open named-party/)
+    expect(() => transitionDiscrepancyPublication({ state: resolved.state!, action })).toThrow(/open named-party/)
   })
 
   it('cannot approve a named-party record before reply review completes', () => {
