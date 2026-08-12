@@ -1,10 +1,12 @@
 import { createDatabaseClient } from '../lib/db/client'
 import { createPersistenceRepositories } from '../lib/db/repositories'
+import { createAnchorCaseRepository } from '../lib/db/anchor-case-repository'
 import { createSchedulerRepository } from '../lib/db/scheduler-repository'
 import { LATEST_LEDGER_METHODOLOGY_VERSION } from '../lib/reconcile/latest-ledger'
 import { ANCHOR_RESERVE_METHODOLOGY_VERSION, DEPTH_RECONCILIATION_METHODOLOGY_VERSION, SUPPLY_METHODOLOGY_VERSION, TRUSTLINE_METHODOLOGY_VERSION } from '../config/methodology'
 import { parseHorizonHostList } from '../lib/stellar/horizon'
-import { parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
+import { parseAnchorWorkflowConfig, parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
+import { parseContactSecretKeyring } from '../lib/anchor/contact-secret'
 import { serializeWorkerError } from '../lib/worker/errors'
 import { createLatestLedgerJobHandler } from '../lib/worker/latest-ledger-job'
 import { createSupplyJobHandler } from '../lib/worker/supply-job'
@@ -12,6 +14,7 @@ import { createDepthJobHandler } from '../lib/worker/depth-job'
 import { createTrustlineJobHandler } from '../lib/worker/trustline-job'
 import { createAnchorReserveJobHandler } from '../lib/worker/anchor-reserve-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
+import { runAnchorWorkflowContinuously, runAnchorWorkflowOnce } from '../lib/worker/anchor-case-workflow'
 
 function executionMode(arguments_: readonly string[]) {
   const once = arguments_.includes('--once')
@@ -23,10 +26,15 @@ function executionMode(arguments_: readonly string[]) {
 async function main() {
   const mode = executionMode(process.argv.slice(2))
   const options = parseWorkerConfig()
+  const anchorWorkflowConfig = parseAnchorWorkflowConfig()
+  const contactSecretKeyring = process.env.ANCHOR_CONTACT_SECRET_KEYS || process.env.ANCHOR_CONTACT_ACTIVE_KEY_ID
+    ? parseContactSecretKeyring()
+    : undefined
   const { timeoutMs, maxResponseBytes, ...resiliencePolicy } = parseSourceResilienceConfig()
   const client = createDatabaseClient()
   const persistenceRepositories = createPersistenceRepositories(client)
   const schedulerRepository = createSchedulerRepository(client)
+  const anchorCaseRepository = createAnchorCaseRepository(client)
   const controller = new AbortController()
   const stop = () => controller.abort(new DOMException('Worker shutdown requested', 'AbortError'))
   process.once('SIGINT', stop)
@@ -85,10 +93,16 @@ async function main() {
     }
     if (mode === 'once') {
       const summary = await runSchedulerOnce(dependencies, options, controller.signal)
-      console.log(JSON.stringify({ event: 'worker_cycle_complete', workerId: options.workerId, ...summary }))
+      const anchorWorkflow = await runAnchorWorkflowOnce({ repository: anchorCaseRepository, keyring: contactSecretKeyring }, anchorWorkflowConfig, options.workerId, controller.signal)
+      console.log(JSON.stringify({ event: 'worker_cycle_complete', workerId: options.workerId, ...summary, anchorWorkflow }))
     } else {
       console.log(JSON.stringify({ event: 'worker_started', workerId: options.workerId }))
-      await runSchedulerContinuously(dependencies, options, controller.signal)
+      await Promise.all([
+        runSchedulerContinuously(dependencies, options, controller.signal),
+        ...(anchorWorkflowConfig.enabled
+          ? [runAnchorWorkflowContinuously({ repository: anchorCaseRepository, keyring: contactSecretKeyring }, anchorWorkflowConfig, options.workerId, controller.signal)]
+          : []),
+      ])
     }
   } finally {
     process.off('SIGINT', stop)

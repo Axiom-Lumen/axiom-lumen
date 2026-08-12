@@ -49,5 +49,6 @@ The inclusive tolerance is 10 basis points. Confidence uses `anchor-reserve-conf
 self-reported evidence, 0.20 for an approved supply reference, and 0.05 for temporal alignment, capped at 0.50.
 The effective comparison weight is 0.50.
 
-Discrepancy state is isolated by methodology version. All named-party results remain withheld until ANC-03
-implements durable notification and human-review controls; v0.2 adds no public endpoint.
+Discrepancy state is isolated by methodology version. ANC-03 notification and review controls are implemented;
+all named-party results remain non-public until product/legal approval and ANC-04 public contract work
+are complete. Version 0.2 adds no public endpoint.

@@ -81,7 +81,11 @@ async function resolveSafePublicHttpsTarget(
 }
 
 const pinnedHttpsFetch: SafeHttpsConnect = (target, init = {}) => {
-  if (init.method && init.method !== 'GET') throw new Error('safe HTTPS transport supports GET requests only')
+  const method = init.method ?? 'GET'
+  if (!['GET', 'POST'].includes(method)) throw new Error('safe HTTPS transport supports GET and POST requests only')
+  if (init.body !== undefined && init.body !== null && typeof init.body !== 'string' && !(init.body instanceof Uint8Array)) {
+    throw new Error('safe HTTPS transport accepts only string or byte request bodies')
+  }
   const address = target.addresses[0]
   if (!address) throw new Error('safe HTTPS target has no validated address')
   return new Promise((resolve, reject) => {
@@ -92,7 +96,7 @@ const pinnedHttpsFetch: SafeHttpsConnect = (target, init = {}) => {
       hostname: address,
       port: 443,
       servername: isIP(target.url.hostname) ? undefined : target.url.hostname,
-      method: 'GET',
+      method,
       path: `${target.url.pathname}${target.url.search}`,
       headers: Object.fromEntries(headers.entries()),
     }, (incoming) => {
@@ -112,7 +116,7 @@ const pinnedHttpsFetch: SafeHttpsConnect = (target, init = {}) => {
     else init.signal?.addEventListener('abort', abort, { once: true })
     request.once('error', reject)
     request.once('close', () => init.signal?.removeEventListener('abort', abort))
-    request.end()
+    request.end(init.body === undefined || init.body === null ? undefined : init.body)
   })
 }
 

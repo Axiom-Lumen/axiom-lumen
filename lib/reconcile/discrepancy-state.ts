@@ -72,6 +72,7 @@ export interface DiscrepancyPublicationEvent {
   methodologyVersion: string
   occurredAt: string
   action: PublicationAction['type']
+  notificationId?: string
   reviewerId?: string
   before: Pick<PersistedDiscrepancyState, 'publicationState' | 'replyReviewState'>
   after: Pick<PersistedDiscrepancyState, 'publicationState' | 'replyReviewState'>
@@ -95,6 +96,7 @@ export interface AdvanceDiscrepancyResult {
 }
 
 export type PublicationAction =
+  | { type: 'begin_reply'; eventId: string; occurredAt: string; notificationId: string }
   | { type: 'record_response'; eventId: string; occurredAt: string }
   | { type: 'review_response'; eventId: string; occurredAt: string; reviewerId: string }
   | { type: 'expire_reply_window'; eventId: string; occurredAt: string }
@@ -435,6 +437,17 @@ export function transitionDiscrepancyPublication({
   let reviewerId: string | undefined
 
   switch (action.type) {
+    case 'begin_reply':
+      assertIdentifier('action.notificationId', action.notificationId)
+      if (!state.namedParty || state.lifecycleState !== 'open' || state.severity === 'info') {
+        throw new Error('reply review can only begin for an open named-party Warning or Critical discrepancy')
+      }
+      if (publicationState !== 'internal' || replyReviewState !== 'not_required') {
+        throw new Error('reply review can only begin from an internal discrepancy')
+      }
+      publicationState = 'pending_reply'
+      replyReviewState = 'awaiting_reply'
+      break
     case 'record_response':
       if (publicationState !== 'pending_reply' || replyReviewState !== 'awaiting_reply') {
         throw new Error('a response can only be recorded while awaiting reply')
@@ -497,6 +510,7 @@ export function transitionDiscrepancyPublication({
       methodologyVersion: state.methodologyVersion,
       occurredAt: action.occurredAt,
       action: action.type,
+      ...(action.type === 'begin_reply' ? { notificationId: action.notificationId } : {}),
       ...(reviewerId ? { reviewerId } : {}),
       before,
       after: { publicationState, replyReviewState },

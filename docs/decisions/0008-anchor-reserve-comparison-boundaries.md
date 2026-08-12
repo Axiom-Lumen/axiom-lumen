@@ -40,7 +40,7 @@ Issuer-to-domain verification expires after 24 hours. A route is schedulable onl
 current. Re-verification appends an immutable event; endpoint or home-domain rotation supersedes the old binding;
 failed re-verification suspends it.
 
-Named-party Warning or Critical measurements remain internal. Only the future ANC-03 notification transaction may
+Named-party Warning or Critical measurements remain internal. Only the ANC-03 notification transaction may
 start `pending_reply` and the 72-hour clock. No public reserve route exists before that workflow is approved.
 
 ## Consequences
