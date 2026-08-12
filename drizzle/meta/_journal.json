@@ -71,6 +71,34 @@
       "when": 1786509545414,
       "tag": "0009_futuristic_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786510614401,
+      "tag": "0010_fearless_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786517618887,
+      "tag": "0011_calm_shocker",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786517820183,
+      "tag": "0012_melted_loki",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786517907000,
+      "tag": "0013_lumpy_lake",
+      "breakpoints": true
     }
   ]
 }

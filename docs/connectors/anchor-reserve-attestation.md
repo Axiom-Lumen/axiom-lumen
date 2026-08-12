@@ -41,4 +41,5 @@ days after cutoff, the cycle is unavailable rather than numerically reconciled.
 The live February 2026 provider report was used to verify interoperability and create redacted parser fixtures.
 The live index currently has no newer report, so a collection performed after its 62-day cutoff window correctly
 records stale evidence. ANC-02 and ANC-03 are implemented; public disclosure remains blocked on product/legal
-approval and ANC-04's claimant-facing/public contract work.
+approval and activation of the separately disabled public route. ANC-04's internal claimant and correction
+controls are implemented.

@@ -74,6 +74,10 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
   internal cases; leased email/webhook notifications use bounded delivery, signed webhooks, encrypted rotatable
   secrets, and append-only audits. Failed delivery remains internal, the 72-hour clock begins after first
   successful notice, and scoped human review remains behind a separately disabled publication gate.
+- [x] **Verified anchor claimant workflow:** Operators can issue single-use SEP-1 domain challenges, establish
+  expiring claimant sessions, register same-domain contacts, accept immutable versioned replies and flag-ID
+  disputes, scan uploads before storage, and append reviewed corrections or retractions. The public read model
+  excludes secrets and unclean evidence and renders claimant text without raw HTML.
 - [x] **Persisted latest-ledger reads:** The public route serves finalized snapshots and never waits on Horizon.
 - [x] **Persisted supply reads:** `GET /api/v1/supply/{asset}` serves the latest finalized Public Network
   credit-asset snapshot and fails closed when that snapshot is older than the methodology's freshness bound.
@@ -82,12 +86,12 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
 
 ### Mocked, static, planned, or missing
 
-- [ ] **Public anchor reserve workflow:** Comparison ingestion exists internally; notification, review, and
-  publication controls remain planned.
+- [ ] **Public anchor reserve endpoint:** Comparison, notification, review, claimant, dispute, and correction
+  controls exist internally; the externally served reserve endpoint remains disabled.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
-- [ ] **Anchor claims, replies, disputes, and corrections:** ANC-04 remains planned; no public reserve endpoint or
-  claimant-facing submission surface is enabled.
+- [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
+  form or claimant API is enabled.
 
 ---
 
@@ -274,6 +278,9 @@ PostgreSQL schema development, migration commands, isolated database tests, and 
 runtime and migration credentials are documented in [docs/database.md](./docs/database.md).
 Worker source setup, one-shot/continuous execution, configuration, and lease recovery are documented in
 [docs/worker.md](./docs/worker.md).
+
+The internal claimant and correction operator flow is documented in
+[docs/anchor-claim-workflow.md](./docs/anchor-claim-workflow.md).
 
 ---
 

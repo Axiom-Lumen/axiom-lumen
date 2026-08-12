@@ -634,6 +634,10 @@ export const anchorContactEndpoints = pgTable(
     kind: text('kind').notNull(),
     endpoint: text('endpoint').notNull(),
     verifiedAt: utcTimestamp('verified_at'),
+    claimantId: text('claimant_id').references(() => anchorClaimants.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    domainId: text('domain_id').references(() => anchorDomains.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    verificationExpiresAt: utcTimestamp('verification_expires_at'),
+    revokedAt: utcTimestamp('revoked_at'),
     createdAt: createdAt(),
   },
   (table) => [
@@ -644,6 +648,8 @@ export const anchorContactEndpoints = pgTable(
     ),
     check('anchor_contact_endpoints_kind_not_blank', sql`length(btrim(${table.kind})) > 0`),
     check('anchor_contact_endpoints_endpoint_not_blank', sql`length(btrim(${table.endpoint})) > 0`),
+    check('anchor_contact_endpoints_verification_expiry_check', sql`${table.verificationExpiresAt} IS NULL OR (${table.verifiedAt} IS NOT NULL AND ${table.verificationExpiresAt} > ${table.verifiedAt})`),
+    check('anchor_contact_endpoints_revoked_check', sql`${table.revokedAt} IS NULL OR (${table.verifiedAt} IS NOT NULL AND ${table.revokedAt} >= ${table.verifiedAt})`),
   ],
 )
 
@@ -878,12 +884,93 @@ export const anchorCaseEvents = pgTable(
   (table) => [
     index('anchor_case_events_case_occurred_idx').on(table.caseId, table.occurredAt),
     check('anchor_case_events_type_not_blank', sql`length(btrim(${table.eventType})) > 0`),
-    check('anchor_case_events_actor_check', sql`${table.actorType} IN ('system', 'anchor', 'reviewer')`),
+    check('anchor_case_events_actor_check', sql`${table.actorType} IN ('system', 'anchor', 'reviewer', 'administrator')`),
     check(
       'anchor_case_events_actor_id_check',
       sql`(${table.actorType} = 'system' AND ${table.actorId} IS NULL) OR
           (${table.actorType} <> 'system' AND length(btrim(${table.actorId})) > 0)`,
     ),
+  ],
+)
+
+export const anchorClaimChallenges = pgTable(
+  'anchor_claim_challenges',
+  {
+    id: text('id').primaryKey(),
+    anchorId: text('anchor_id').notNull().references(() => anchors.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    domainId: text('domain_id').notNull().references(() => anchorDomains.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    verificationPath: text('verification_path').notNull(),
+    expiresAt: utcTimestamp('expires_at').notNull(),
+    consumedAt: utcTimestamp('consumed_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('anchor_claim_challenges_token_hash_uidx').on(table.tokenHash),
+    index('anchor_claim_challenges_anchor_expiry_idx').on(table.anchorId, table.expiresAt),
+    check('anchor_claim_challenges_hash_check', sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check('anchor_claim_challenges_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+    check('anchor_claim_challenges_consumed_check', sql`${table.consumedAt} IS NULL OR ${table.consumedAt} <= ${table.expiresAt}`),
+  ],
+)
+
+export const anchorClaimants = pgTable(
+  'anchor_claimants',
+  {
+    id: text('id').primaryKey(),
+    anchorId: text('anchor_id').notNull().references(() => anchors.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    domainId: text('domain_id').notNull().references(() => anchorDomains.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    verifiedAt: utcTimestamp('verified_at').notNull(),
+    verificationExpiresAt: utcTimestamp('verification_expires_at').notNull(),
+    revokedAt: utcTimestamp('revoked_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('anchor_claimants_active_domain_uidx').on(table.anchorId, table.domainId).where(sql`${table.revokedAt} IS NULL`),
+    index('anchor_claimants_anchor_idx').on(table.anchorId, table.verifiedAt),
+    check('anchor_claimants_expiry_check', sql`${table.verificationExpiresAt} > ${table.verifiedAt}`),
+    check('anchor_claimants_revoked_check', sql`${table.revokedAt} IS NULL OR ${table.revokedAt} >= ${table.verifiedAt}`),
+  ],
+)
+
+export const anchorClaimSessions = pgTable(
+  'anchor_claim_sessions',
+  {
+    id: text('id').primaryKey(),
+    claimantId: text('claimant_id').notNull().references(() => anchorClaimants.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: utcTimestamp('expires_at').notNull(),
+    lastUsedAt: utcTimestamp('last_used_at'),
+    revokedAt: utcTimestamp('revoked_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('anchor_claim_sessions_token_hash_uidx').on(table.tokenHash),
+    index('anchor_claim_sessions_claimant_expiry_idx').on(table.claimantId, table.expiresAt),
+    check('anchor_claim_sessions_hash_check', sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check('anchor_claim_sessions_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+)
+
+export const anchorClaimEvents = pgTable(
+  'anchor_claim_events',
+  {
+    id: text('id').primaryKey(),
+    anchorId: text('anchor_id').notNull().references(() => anchors.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    claimantId: text('claimant_id').references(() => anchorClaimants.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    actorType: text('actor_type').notNull(),
+    actorId: text('actor_id'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('anchor_claim_events_anchor_occurred_idx').on(table.anchorId, table.occurredAt),
+    index('anchor_claim_events_claimant_occurred_idx').on(table.claimantId, table.occurredAt),
+    check('anchor_claim_events_type_not_blank', sql`length(btrim(${table.eventType})) > 0`),
+    check('anchor_claim_events_actor_check', sql`${table.actorType} IN ('system', 'claimant')`),
+    check('anchor_claim_events_actor_id_check', sql`(${table.actorType} = 'system' AND ${table.actorId} IS NULL) OR (${table.actorType} = 'claimant' AND length(btrim(${table.actorId})) > 0)`),
   ],
 )
 
@@ -894,6 +981,9 @@ export const anchorReplies = pgTable(
     caseId: text('case_id')
       .notNull()
       .references(() => anchorCases.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    claimantId: text('claimant_id').references(() => anchorClaimants.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    supersedesReplyId: text('supersedes_reply_id'),
+    version: integer('version').notNull().default(1),
     submittedBy: text('submitted_by').notNull(),
     body: text('body').notNull(),
     evidence: jsonb('evidence').$type<Record<string, unknown>>().notNull().default({}),
@@ -902,7 +992,16 @@ export const anchorReplies = pgTable(
   },
   (table) => [
     index('anchor_replies_case_submitted_idx').on(table.caseId, table.submittedAt),
+    uniqueIndex('anchor_replies_case_version_uidx').on(table.caseId, table.version),
+    unique('anchor_replies_identity_case_unique').on(table.id, table.caseId),
+    foreignKey({
+      columns: [table.supersedesReplyId, table.caseId],
+      foreignColumns: [table.id, table.caseId],
+      name: 'anchor_replies_supersedes_case_fk',
+    }).onDelete('restrict').onUpdate('cascade'),
     check('anchor_replies_body_not_blank', sql`length(btrim(${table.body})) > 0`),
+    check('anchor_replies_version_check', sql`${table.version} > 0`),
+    check('anchor_replies_version_link_check', sql`(${table.version} = 1 AND ${table.supersedesReplyId} IS NULL) OR (${table.version} > 1 AND ${table.supersedesReplyId} IS NOT NULL)`),
   ],
 )
 
@@ -926,6 +1025,59 @@ export const anchorReviews = pgTable(
     index('anchor_reviews_case_reviewed_idx').on(table.caseId, table.reviewedAt),
     check('anchor_reviews_decision_not_blank', sql`length(btrim(${table.decision})) > 0`),
     check('anchor_reviews_decision_check', sql`${table.decision} IN ('approve_public', 'withhold')`),
+  ],
+)
+
+export const anchorDisputes = pgTable(
+  'anchor_disputes',
+  {
+    id: text('id').primaryKey(),
+    flagId: text('flag_id').notNull().references(() => discrepancies.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    caseId: text('case_id').references(() => anchorCases.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    claimantId: text('claimant_id').notNull().references(() => anchorClaimants.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    body: text('body').notNull(),
+    status: text('status').notNull().default('open'),
+    publicationState: text('publication_state').notNull().default('internal'),
+    submittedAt: utcTimestamp('submitted_at').notNull(),
+    resolvedAt: utcTimestamp('resolved_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('anchor_disputes_flag_submitted_idx').on(table.flagId, table.submittedAt),
+    index('anchor_disputes_status_submitted_idx').on(table.status, table.submittedAt),
+    check('anchor_disputes_body_not_blank', sql`length(btrim(${table.body})) > 0`),
+    check('anchor_disputes_status_check', sql`${table.status} IN ('open', 'under_review', 'resolved', 'rejected')`),
+    check('anchor_disputes_publication_check', sql`${table.publicationState} IN ('internal', 'approved_public')`),
+    check('anchor_disputes_resolution_check', sql`(${table.status} IN ('resolved', 'rejected')) = (${table.resolvedAt} IS NOT NULL)`),
+  ],
+)
+
+export const anchorEvidence = pgTable(
+  'anchor_evidence',
+  {
+    id: text('id').primaryKey(),
+    replyId: text('reply_id').references(() => anchorReplies.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    disputeId: text('dispute_id').references(() => anchorDisputes.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    kind: text('kind').notNull(),
+    url: text('url'),
+    storageReference: text('storage_reference'),
+    contentType: text('content_type'),
+    byteSize: bigint('byte_size', { mode: 'number' }),
+    sha256: text('sha256'),
+    scanStatus: text('scan_status').notNull(),
+    scanResult: jsonb('scan_result').$type<Record<string, unknown>>(),
+    scannedAt: utcTimestamp('scanned_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('anchor_evidence_reply_idx').on(table.replyId),
+    index('anchor_evidence_dispute_idx').on(table.disputeId),
+    index('anchor_evidence_scan_idx').on(table.scanStatus, table.createdAt),
+    check('anchor_evidence_parent_check', sql`(${table.replyId} IS NOT NULL)::int + (${table.disputeId} IS NOT NULL)::int = 1`),
+    check('anchor_evidence_kind_check', sql`${table.kind} IN ('link', 'upload')`),
+    check('anchor_evidence_location_check', sql`(${table.kind} = 'link' AND ${table.url} ~ '^https://' AND ${table.storageReference} IS NULL AND ${table.scanStatus} = 'not_required' AND ${table.contentType} IS NULL AND ${table.byteSize} IS NULL AND ${table.sha256} IS NULL AND ${table.scanResult} IS NULL AND ${table.scannedAt} IS NULL) OR (${table.kind} = 'upload' AND ${table.url} IS NULL AND length(${table.storageReference}) BETWEEN 1 AND 512 AND ${table.storageReference} ~ '^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$' AND ${table.scanStatus} = 'clean' AND ${table.scanResult} IS NOT NULL AND ${table.scannedAt} IS NOT NULL)`),
+    check('anchor_evidence_scan_status_check', sql`${table.scanStatus} IN ('not_required', 'pending', 'clean', 'rejected')`),
+    check('anchor_evidence_upload_metadata_check', sql`${table.kind} = 'link' OR (${table.contentType} IN ('application/pdf', 'image/jpeg', 'image/png', 'text/plain') AND ${table.byteSize} > 0 AND ${table.byteSize} <= 5000000 AND ${table.sha256} ~ '^[0-9a-f]{64}$')`),
   ],
 )
 

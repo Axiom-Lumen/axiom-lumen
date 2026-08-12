@@ -50,5 +50,5 @@ self-reported evidence, 0.20 for an approved supply reference, and 0.05 for temp
 The effective comparison weight is 0.50.
 
 Discrepancy state is isolated by methodology version. ANC-03 notification and review controls are implemented;
-all named-party results remain non-public until product/legal approval and ANC-04 public contract work
-are complete. Version 0.2 adds no public endpoint.
+ANC-04 claimant and correction controls are implemented, but all named-party results remain non-public until
+product/legal approval and activation of a public route. Version 0.2 adds no public endpoint.

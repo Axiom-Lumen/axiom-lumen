@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import type { ContactSecretKeyring } from '../anchor/contact-secret'
 import { encryptContactSecret } from '../anchor/contact-secret'
 import { planAnchorCase, replyDueAt } from '../anchor/case-workflow'
@@ -13,6 +13,7 @@ import {
   anchorContactEndpoints,
   anchorContactSecrets,
   anchorReviews,
+  anchorReplies,
   anchors,
   apiPrincipalScopes,
   apiPrincipals,
@@ -174,15 +175,26 @@ export function createAnchorCaseRepository(client: DatabaseClient) {
           id: anchorContactEndpoints.id,
           kind: anchorContactEndpoints.kind,
           verifiedAt: anchorContactEndpoints.verifiedAt,
+          verificationExpiresAt: anchorContactEndpoints.verificationExpiresAt,
         }).from(anchorContactEndpoints).where(and(
           eq(anchorContactEndpoints.anchorId, candidate.anchorId),
           inArray(anchorContactEndpoints.kind, ['email', 'webhook']),
+          isNull(anchorContactEndpoints.revokedAt),
+          or(isNull(anchorContactEndpoints.verificationExpiresAt), gt(anchorContactEndpoints.verificationExpiresAt, openedAt)),
         )).orderBy(asc(anchorContactEndpoints.id))
+        const webhookIds = contacts.filter((contact) => contact.kind === 'webhook').map((contact) => contact.id)
+        const activeWebhookSecretRows = webhookIds.length > 0 ? await tx.select({ contactEndpointId: anchorContactSecrets.contactEndpointId })
+          .from(anchorContactSecrets).where(and(
+            inArray(anchorContactSecrets.contactEndpointId, webhookIds), isNull(anchorContactSecrets.retiredAt),
+          )) : []
+        const activeWebhookSecretIds = new Set(activeWebhookSecretRows.map((row) => row.contactEndpointId))
         const plan = planAnchorCase({
           anchorId: candidate.anchorId,
           discrepancyState: stateFromRow(candidate.discrepancy),
           triggeringEventId: triggeringEvent.id,
-          contacts: contacts.flatMap((contact) => contact.verifiedAt ? [{ ...contact, kind: contact.kind as 'email' | 'webhook', verifiedAt: new Date(contact.verifiedAt).toISOString() }] : []),
+          contacts: contacts.flatMap((contact) => contact.verifiedAt && (contact.kind === 'email' || activeWebhookSecretIds.has(contact.id))
+            ? [{ id: contact.id, kind: contact.kind as 'email' | 'webhook', verifiedAt: new Date(contact.verifiedAt).toISOString() }]
+            : []),
           openedAt,
         })
         await tx.insert(anchorCases).values(plan.caseRecord)
@@ -422,8 +434,19 @@ export function createAnchorCaseRepository(client: DatabaseClient) {
           .innerJoin(discrepancies, eq(discrepancies.id, anchorCases.discrepancyId))
           .where(eq(anchorCases.id, input.caseId)).for('update').limit(1))[0]
         if (!row || !['awaiting_reply', 'under_review'].includes(row.anchorCase.status)) throw new Error('anchor case is not reviewable')
+        const latestReply = (await tx.select({ id: anchorReplies.id }).from(anchorReplies)
+          .where(eq(anchorReplies.caseId, row.anchorCase.id)).orderBy(sql`${anchorReplies.version} DESC`).limit(1))[0]
+        let reviewableState = stateFromRow(row.discrepancy)
+        if (reviewableState.replyReviewState === 'response_received') {
+          const responseReview = transitionDiscrepancyPublication({
+            state: reviewableState,
+            action: { type: 'review_response', eventId: durableId('discrepancy_event', row.discrepancy.id, 'review_response', reviewedAt), occurredAt: reviewedAt, reviewerId: reviewer.id },
+          })
+          reviewableState = responseReview.state
+          await tx.insert(discrepancyEvents).values(publicationEventRow(responseReview.event))
+        }
         const transition = transitionDiscrepancyPublication({
-          state: stateFromRow(row.discrepancy),
+          state: reviewableState,
           action: input.decision === 'approve_public'
             ? { type: 'approve', eventId: durableId('discrepancy_event', row.discrepancy.id, 'approve', reviewedAt), occurredAt: reviewedAt, reviewerId: reviewer.id }
             : { type: 'withhold', eventId: durableId('discrepancy_event', row.discrepancy.id, 'withhold', reviewedAt), occurredAt: reviewedAt, reviewerId: reviewer.id },
@@ -432,7 +455,7 @@ export function createAnchorCaseRepository(client: DatabaseClient) {
         await tx.insert(anchorReviews).values({
           id: reviewId,
           caseId: row.anchorCase.id,
-          replyId: null,
+          replyId: latestReply?.id ?? null,
           reviewerPrincipalId: reviewer.id,
           decision: input.decision,
           notes,
