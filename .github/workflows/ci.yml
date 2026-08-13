@@ -62,6 +62,9 @@ jobs:
       - name: Verify generated OpenAPI contract
         run: npm run openapi:check
 
+      - name: Verify production-readiness record
+        run: npm run release:readiness-verify
+
       - name: Run tests
         run: npm test
 

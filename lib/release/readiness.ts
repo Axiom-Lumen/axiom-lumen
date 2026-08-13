@@ -90,3 +90,46 @@ export function evaluateProductionReadiness(record: ProductionReadinessRecord) {
     blockers,
   }
 }
+
+export interface PromotionPolicyInput {
+  environment: string
+  namedPartyPublicationEnabled: boolean
+}
+
+export function assertPromotionPolicy(
+  record: ProductionReadinessRecord,
+  input: PromotionPolicyInput,
+) {
+  if (input.namedPartyPublicationEnabled && record.sign_offs.publication_legal_review.status !== 'accepted') {
+    throw new Error('named-party publication requires an accepted publication_legal_review sign-off')
+  }
+  if (record.public_v1_declared && !evaluateProductionReadiness(record).ready) {
+    throw new Error('public v1 is declared while production-readiness sign-offs remain unsigned')
+  }
+}
+
+export function acceptReadinessSignOff(
+  record: ProductionReadinessRecord,
+  input: {
+    id: ProductionReadinessSignOffId
+    reviewer: string
+    evidenceRef: string
+    recordedAt?: string
+    notes?: string | null
+  },
+): ProductionReadinessRecord {
+  const recordedAt = input.recordedAt ?? new Date().toISOString()
+  return parseProductionReadinessRecord({
+    ...record,
+    sign_offs: {
+      ...record.sign_offs,
+      [input.id]: {
+        status: 'accepted',
+        reviewer: input.reviewer,
+        recorded_at: recordedAt,
+        evidence_ref: input.evidenceRef,
+        notes: input.notes ?? record.sign_offs[input.id].notes,
+      },
+    },
+  })
+}

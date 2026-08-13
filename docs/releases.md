@@ -106,4 +106,5 @@ record is unsigned. See the [production-readiness guide](./releases/production-r
 [threat model](./security/threat-model.md).
 
 Release smoke also exercises `/status` and `GET /api/v1/events/snapshots` so documented public reads are not
-labeled available without a promotion check.
+labeled available without a promotion check. Promotion and CI call `release:promotion-policy-verify` to reject
+named-party publication without legal review and to reject `public_v1_declared` while sign-offs remain unsigned.

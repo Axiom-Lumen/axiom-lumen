@@ -37,5 +37,11 @@ Do not publish 99.9% or similar commercial SLAs until hosted operations and the 
 
 ```bash
 npm run release:readiness-verify
+npm run release:promotion-policy-verify
+npm run release:methodology-fixture-report
+npm run release:readiness-signoff -- --id <sign_off_id> --reviewer "<name>" --evidence-ref "<record>"
 npm test -- tests/unit/release-readiness.test.ts tests/unit/public-claims.test.ts tests/unit/release-smoke.test.ts
 ```
+
+Restore-drill evidence is recorded after `npm run ops:restore-drill` using the data-protection runbook. Incident
+exercise evidence uses [incident-exercise.md](../runbooks/incident-exercise.md).

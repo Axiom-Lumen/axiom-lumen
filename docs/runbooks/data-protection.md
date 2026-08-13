@@ -40,6 +40,16 @@ source instance, exercise immutable-trigger rejection, and run a representative 
 actual recovery points, RPO, RTO, checksum, backup identifier, migration version, tester, and result. Target RTO is
 four hours. Two consecutive failed drills page the service owner and block production promotion.
 
+After a successful isolated drill, record the `restore_drill` production-readiness sign-off:
+
+```bash
+npm run release:readiness-signoff -- \
+  --id restore_drill \
+  --reviewer "<tester>" \
+  --evidence-ref "<private drill record with checksum and migration version>" \
+  --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+```
+
 The command rejects a restore server with the same host/port or environment identity recorded in the authenticated
 manifest. Never override this guard outside the database integration test. Never restore over the existing production database. For disaster recovery, restore/PITR to a new instance,
 validate it, fence writers, rotate database credentials, switch traffic, and retain the old instance read-only

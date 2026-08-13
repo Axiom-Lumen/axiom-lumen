@@ -18,6 +18,7 @@ export const PUBLIC_CLAIM_SURFACES = [
   'app/pricing/page.tsx',
   'app/docs/page.tsx',
   'app/page.tsx',
+  'app/dashboard/page.tsx',
   'lib/home/data.ts',
   'components/ui/home/hero.tsx',
   'components/nav.tsx',
