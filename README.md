@@ -299,7 +299,9 @@ npm run lint
 npm run typecheck
 npm test
 npm run test:integration
+npm run test:quality
 npm run test:database
+npm run security:secrets
 npm run build
 ```
 
@@ -321,6 +323,8 @@ Operational probes, metrics, thresholds, structured-log redaction, and status be
 [docs/operations.md](./docs/operations.md).
 Backup/PITR policy, restore drills, retention, credential rotation, and incident recovery are indexed in the
 [operations runbooks](./docs/runbooks/README.md).
+Property, replay, load, failure-injection, security, database, and scheduled smoke coverage are documented in the
+[quality strategy](./docs/quality-strategy.md).
 
 ---
 

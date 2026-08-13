@@ -1,0 +1,16 @@
+[
+  {
+    "methodology_version": "latest-ledger-v0.1",
+    "confidence_formula_version": "latest-ledger-confidence-v0.1",
+    "status": "verified",
+    "confidence": 1,
+    "caps": []
+  },
+  {
+    "methodology_version": "latest-ledger-v0.2",
+    "confidence_formula_version": "latest-ledger-confidence-v0.2",
+    "status": "degraded",
+    "confidence": 0.7,
+    "caps": ["same_upstream_replicas"]
+  }
+]

@@ -46,6 +46,9 @@
     "ops:backup": "tsx scripts/backup-database.ts",
     "ops:backup-check": "tsx scripts/check-database-backup.ts",
     "ops:restore-drill": "tsx scripts/restore-database-drill.ts",
+    "security:secrets": "git ls-files --cached --others --exclude-standard -z | node scripts/check-secrets.mjs",
+    "security:dependencies": "npm audit --audit-level=high",
+    "smoke:horizon": "tsx scripts/horizon-smoke.ts",
     "worker:once": "tsx worker/main.ts --once",
     "worker:continuous": "tsx worker/main.ts --continuous",
     "start": "next start",
@@ -53,9 +56,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "test:quality": "vitest run tests/quality",
     "test:database": "vitest run tests/database --testTimeout 15000",
     "test:database:ci": "node scripts/require-database-test-env.mjs && npm run test:database",
-    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm test && npm run test:integration && npm run test:database:ci && npm run db:check && npm run build"
+    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm run security:secrets && npm test && npm run test:integration && npm run test:quality && npm run test:database:ci && npm run db:check && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

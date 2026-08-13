@@ -41,7 +41,7 @@ describeWithDatabase('public API authentication and quota', () => {
     try {
       const issued = issueApiKey()
       const replacement = issueApiKey()
-      await pool.query(`INSERT INTO api_plans (id, name, requests_per_window, window_seconds) VALUES ('developer', 'Developer', 2, 60)`)
+      await pool.query(`INSERT INTO api_plans (id, name, requests_per_window, window_seconds) VALUES ('developer', 'Developer', 20, 60)`)
       await pool.query(`INSERT INTO api_principals (id, plan_id, display_name) VALUES ('client-a', 'developer', 'Client A')`)
       await pool.query(`INSERT INTO api_scopes (id, description) VALUES ('metrics:read', 'Read public metrics'), ('anchors:read', 'Read anchor disclosures')`)
       await pool.query(`INSERT INTO api_principal_scopes (principal_id, scope_id) VALUES ('client-a', 'metrics:read')`)
@@ -59,14 +59,16 @@ describeWithDatabase('public API authentication and quota', () => {
       await pool.query(`INSERT INTO api_plan_route_limits (plan_id, route_id, requests_per_window, window_seconds, burst_requests, burst_window_seconds, enabled) VALUES ('developer', 'anchors.reserves', 2, 60, 1, 1, false)`)
       expect(await repository.authorizeAndConsume(issued.key, anchorPolicy)).toEqual({ status: 'forbidden' })
 
-      const concurrent = await Promise.all([
-        repository.authorizeAndConsume(issued.key, latestPolicy),
-        repository.authorizeAndConsume(issued.key, latestPolicy),
-        repository.authorizeAndConsume(issued.key, latestPolicy),
-      ])
-      expect(concurrent.filter((item) => item.status === 'allowed')).toHaveLength(2)
-      expect(concurrent.filter((item) => item.status === 'rate_limited')).toHaveLength(1)
-      expect((await pool.query(`SELECT request_count::int AS count FROM api_quota_usage WHERE principal_id = 'client-a' AND route_id = 'stellar.latest-ledger' AND quota_kind = 'sustained'`)).rows[0]?.count).toBe(2)
+      const concurrent = await Promise.all(Array.from(
+        { length: 25 },
+        () => repository.authorizeAndConsume(issued.key, latestPolicy),
+      ))
+      expect(concurrent.filter((item) => item.status === 'allowed')).toHaveLength(10)
+      expect(concurrent.filter((item) => item.status === 'rate_limited')).toHaveLength(15)
+      expect(concurrent.filter((item) => item.status === 'rate_limited')).toEqual(expect.arrayContaining([
+        expect.objectContaining({ quotaKind: 'burst', limit: 10 }),
+      ]))
+      expect((await pool.query(`SELECT request_count::int AS count FROM api_quota_usage WHERE principal_id = 'client-a' AND route_id = 'stellar.latest-ledger' AND quota_kind = 'sustained'`)).rows[0]?.count).toBe(10)
       expect((await pool.query(`SELECT last_used_at FROM api_keys WHERE key_prefix = $1`, [issued.keyPrefix])).rows[0]?.last_used_at).not.toBeNull()
 
       const rotated = await repository.rotateKey({ keyPrefix: issued.keyPrefix, issuer: () => replacement, actor: 'security-admin' })

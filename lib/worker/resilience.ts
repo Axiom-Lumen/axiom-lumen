@@ -168,7 +168,12 @@ export function sourceHealthState(error: RetryableSourceError | undefined): Sour
 }
 
 export function sourceCanAttempt(projection: SourceHealthProjection | undefined, now: string) {
-  return !projection?.nextAttemptAt || Date.parse(projection.nextAttemptAt) <= Date.parse(now)
+  const nowMs = Date.parse(now)
+  if (!Number.isFinite(nowMs)) throw new Error('now must be a valid timestamp')
+  if (!projection?.nextAttemptAt) return true
+  const nextAttemptMs = Date.parse(projection.nextAttemptAt)
+  if (!Number.isFinite(nextAttemptMs)) throw new Error('source-health nextAttemptAt must be a valid timestamp')
+  return nextAttemptMs <= nowMs
 }
 
 export function transitionSourceHealth({
@@ -185,6 +190,17 @@ export function transitionSourceHealth({
   policy: SourceResiliencePolicy
 }): SourceHealthProjection {
   assertSourceResiliencePolicy(policy)
+  const observedAtMs = Date.parse(observedAt)
+  if (!Number.isFinite(observedAtMs)) throw new Error('observedAt must be a valid timestamp')
+  if (previous) {
+    if (previous.sourceId !== sourceId) throw new Error('previous source-health state belongs to another source')
+    const previousObservedAtMs = Date.parse(previous.lastObservedAt)
+    if (!Number.isFinite(previousObservedAtMs)) {
+      throw new Error('previous source-health lastObservedAt must be a valid timestamp')
+    }
+    // A delayed result or a backward wall-clock adjustment cannot replace newer durable health state.
+    if (observedAtMs < previousObservedAtMs) return { ...previous }
+  }
   if (!error) {
     return {
       sourceId,

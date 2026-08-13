@@ -37,7 +37,8 @@ Items below are directional and are not commitments to a particular scope or rel
   stale, unavailable, and empty states.
 - An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy
   context.
-- Automated lint, type, unit, integration, database, contract, and production-build checks.
+- Automated static analysis, secret/dependency checks, property, fuzz, replay, load, failure-injection, unit,
+  integration, database, contract, and production-build checks, plus a separate scheduled Horizon smoke test.
 
 ## Direction
 
