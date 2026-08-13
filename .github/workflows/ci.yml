@@ -68,6 +68,15 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
+      - name: Run deterministic quality suites
+        run: npm run test:quality
+
+      - name: Scan production sources for committed secrets
+        run: npm run security:secrets
+
+      - name: Audit production dependencies
+        run: npm run security:dependencies
+
       - name: Validate migration metadata
         run: npm run db:check
 

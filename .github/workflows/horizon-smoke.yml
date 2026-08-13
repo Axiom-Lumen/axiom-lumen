@@ -1,0 +1,31 @@
+name: Scheduled Horizon smoke
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horizon-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Public Network connector smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - name: Check live Horizon contracts
+        run: npm run smoke:horizon
+        env:
+          STELLAR_HORIZON_URLS: https://horizon.stellar.org
+          STELLAR_HORIZON_ALLOWED_HOSTS: horizon.stellar.org

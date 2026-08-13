@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { ConfidenceArtifactView } from '../../components/confidence-json'
 import {
   computePayloadSha256,
   createPersistenceRepositories,
@@ -20,6 +23,8 @@ import type { ClaimedCycle, DiscoveredIngestJob } from '../../lib/db/scheduler-r
 import { createSupplyJobHandler } from '../../lib/worker/supply-job'
 import { createTrustlineJobHandler } from '../../lib/worker/trustline-job'
 import { reconciliationSnapshotSchema } from '../../lib/contracts/domain'
+import { loadConfidenceArtifact } from '../../lib/home/confidence-artifact'
+import { createSupplyGetHandler } from '../../lib/http/supply-route'
 import { parseContactSecretKeyring } from '../../lib/anchor/contact-secret'
 
 const adminUrl = process.env.DATABASE_TEST_ADMIN_URL
@@ -615,6 +620,34 @@ describeWithDatabase('transactional persistence repositories', () => {
         reference: '700',
         absoluteDelta: '1',
       }])
+
+      // QUA-01 vertical proof: connector/worker -> transactional database -> HTTP route -> loader -> UI artifact.
+      if (!publicReadModel) throw new Error('expected a persisted public read model')
+      const getSupply = createSupplyGetHandler({
+        clock: () => new Date('2026-08-10T12:00:05.000Z'),
+        loadReadModel: (asset, now) => queryLatestSupplyReadModel(databaseClient, asset, now),
+      })
+      const state = await loadConfidenceArtifact({
+        asset: assetId,
+        appUrl: 'https://axiom.example',
+        fetcher: async (input, init) => getSupply(new Request(input, {
+          ...init,
+          headers: { ...Object.fromEntries(new Headers(init?.headers).entries()), 'X-Request-ID': 'request-e2e' },
+        }), { params: Promise.resolve({ asset: assetId }) }),
+      })
+      if (state.kind !== 'degraded') throw new Error(`expected degraded HTTP artifact, received ${state.kind}`)
+      const markup = renderToStaticMarkup(React.createElement(ConfidenceArtifactView, {
+        state,
+      }))
+      expect(state.snapshot).toMatchObject({
+        metric: 'onchain_asset_supply',
+        subject: { kind: 'asset', asset: assetId },
+        request_id: 'request-e2e',
+        discrepancies: [expect.objectContaining({ publication_state: 'approved_public' })],
+      })
+      expect(markup).toContain('data-artifact-state="live"')
+      expect(markup).toContain('Live degraded supply snapshot')
+      expect(markup).toContain(assetId)
 
       const counts = await pool.query(`
         SELECT
