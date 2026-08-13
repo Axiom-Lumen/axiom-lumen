@@ -133,7 +133,7 @@ export default function PricingPage() {
       <DocSection num="—" label="Notes to the schedule">
         <ol className="max-w-[620px]">
           {[
-            'Rate limits are enforced per API key and returned in the X-RateLimit-* response headers on every request.',
+            'Hosted API rate limits are enforced per API key and returned in X-RateLimit-* headers on authenticated application responses.',
             'Discrepancy visibility governs how much of the corroboration record is returned — never whether a discrepancy exists. A deviation that crosses a public threshold is public at every tier.',
             'Institutional terms, including custom endpoints and retention, are set in the annual agreement.',
           ].map((note, i) => (

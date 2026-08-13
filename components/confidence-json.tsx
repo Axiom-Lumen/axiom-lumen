@@ -1,9 +1,9 @@
 import React, { Suspense, type ReactNode } from 'react'
 import {
   createIllustrativeSupplyArtifact,
-  loadConfidenceArtifact,
   type ConfidenceArtifactState,
 } from '../lib/home/confidence-artifact'
+import { loadSiteConfidenceArtifact } from '../lib/home/site-confidence-artifact'
 
 export function K({ children }: { children: ReactNode }) {
   return <span className="text-cyan">{children}</span>
@@ -156,7 +156,7 @@ async function ConfidenceJsonContent({
 }
 
 export function ConfidenceJson({
-  load = loadConfidenceArtifact,
+  load = loadSiteConfidenceArtifact,
 }: {
   load?: () => Promise<ConfidenceArtifactState>
 } = {}) {

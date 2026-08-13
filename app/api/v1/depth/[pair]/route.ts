@@ -1,7 +1,7 @@
 import { depthReconciliationMethodologyConfig } from '../../../../../config/methodology'
 import { apiReconciliationSnapshotSchema, parseTradingPairId, serializePublicReconciliationSnapshot, type ApiReconciliationSnapshot } from '../../../../../lib/contracts'
 import { loadLatestDepthReadModel } from '../../../../../lib/db/depth-read-model'
-import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId } from '../../../../../lib/http/api'
+import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
 
 export const dynamic = 'force-dynamic'
 interface Context { params: Promise<{ pair: string }> }
@@ -23,19 +23,21 @@ function cachePolicy(freshForSeconds: number) { const budget = Math.max(0, Math.
 export async function GET(request: Request, context: Context) {
   const now = new Date(); const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
-  const queryError = rejectUnexpectedQueryParameters(request)
-  if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId: resolved.requestId, asOf: now })
-  let pair
-  try { pair = parseTradingPairId((await context.params).pair) } catch { return apiErrorResponse({ request, status: 400, code: 'invalid_pair', message: 'Pair must be two different Stellar asset identifiers separated by ~', requestId: resolved.requestId, asOf: now }) }
-  try {
-    const readModel = await loadLatestDepthReadModel(pair, now)
-    if (!readModel) return apiErrorResponse({ request, status: 404, code: 'depth_snapshot_not_found', message: 'No finalized depth snapshot is available', requestId: resolved.requestId, asOf: now })
-    const response = serializePublicReconciliationSnapshot(readModel.snapshot, resolved.requestId)
-    if (readModel.stale) return apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' })
-    const status = response.status === 'unavailable' ? 503 : 200
-    return apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
-  } catch (error) {
-    console.error('Unable to load depth read model', { name: error instanceof Error ? error.name : 'Error' })
-    return apiErrorResponse({ request, status: 503, code: 'depth_read_unavailable', message: 'The depth read model is temporarily unavailable', requestId: resolved.requestId, asOf: now })
-  }
+  return withPublicApiAccess(request, resolved.requestId, async () => {
+    const queryError = rejectUnexpectedQueryParameters(request)
+    if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId: resolved.requestId, asOf: now })
+    let pair
+    try { pair = parseTradingPairId((await context.params).pair) } catch { return apiErrorResponse({ request, status: 400, code: 'invalid_pair', message: 'Pair must be two different Stellar asset identifiers separated by ~', requestId: resolved.requestId, asOf: now }) }
+    try {
+      const readModel = await loadLatestDepthReadModel(pair, now)
+      if (!readModel) return apiErrorResponse({ request, status: 404, code: 'depth_snapshot_not_found', message: 'No finalized depth snapshot is available', requestId: resolved.requestId, asOf: now })
+      const response = serializePublicReconciliationSnapshot(readModel.snapshot, resolved.requestId)
+      if (readModel.stale) return apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' })
+      const status = response.status === 'unavailable' ? 503 : 200
+      return apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
+    } catch (error) {
+      console.error('Unable to load depth read model', { name: error instanceof Error ? error.name : 'Error' })
+      return apiErrorResponse({ request, status: 503, code: 'depth_read_unavailable', message: 'The depth read model is temporarily unavailable', requestId: resolved.requestId, asOf: now })
+    }
+  })
 }

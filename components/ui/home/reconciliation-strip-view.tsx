@@ -79,10 +79,12 @@ export function ReconciliationStripView({
   initialState,
   endpoint,
   refreshIntervalMs = RECONCILIATION_REFRESH_INTERVAL_MS,
+  refreshEnabled = true,
 }: {
   initialState: ConfidenceArtifactState
   endpoint: string
   refreshIntervalMs?: number
+  refreshEnabled?: boolean
 }) {
   const [state, setState] = useState(initialState)
   const [refreshing, setRefreshing] = useState(false)
@@ -95,6 +97,7 @@ export function ReconciliationStripView({
   }, [state])
 
   const refresh = useCallback(async (requestedByUser = false) => {
+    if (!refreshEnabled) return
     if (refreshingRef.current) return
     refreshingRef.current = true
     setRefreshing(true)
@@ -116,9 +119,10 @@ export function ReconciliationStripView({
 
     refreshingRef.current = false
     setRefreshing(false)
-  }, [endpoint])
+  }, [endpoint, refreshEnabled])
 
   useEffect(() => {
+    if (!refreshEnabled) return
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refresh()
     }
@@ -128,7 +132,7 @@ export function ReconciliationStripView({
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [refresh, refreshIntervalMs])
+  }, [refresh, refreshEnabled, refreshIntervalMs])
 
   const snapshot = snapshotFromState(state)
   const asOf = asOfFromState(state)
@@ -153,14 +157,14 @@ export function ReconciliationStripView({
           </div>
           <div className="flex items-center gap-4">
             <span className={stateTone(state)}>{status}</span>
-            <button
+            {refreshEnabled && <button
               type="button"
               className="border-b border-dim pb-0.5 text-dim transition-colors hover:border-cyan hover:text-cyan disabled:cursor-wait disabled:opacity-60"
               disabled={refreshing}
               onClick={() => void refresh(true)}
             >
               {refreshing ? 'Refreshing…' : 'Refresh now'}
-            </button>
+            </button>}
           </div>
         </div>
 

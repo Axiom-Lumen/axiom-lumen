@@ -13,6 +13,7 @@ import {
   createIllustrativeSupplyArtifact,
   type ConfidenceArtifactState,
 } from '../../lib/home/confidence-artifact'
+import { issueApiKey } from '../../lib/api-access/key'
 
 const AS_OF = '2026-08-11T12:00:00.000Z'
 
@@ -85,6 +86,17 @@ describe('reconciliation dashboard', () => {
     expect(markup).toContain('Aug 11, 2026')
   })
 
+  it('uses the server-only site key and disables browser refresh in required-auth mode', async () => {
+    vi.stubEnv('AXIOM_API_AUTH_REQUIRED', 'true')
+    const siteKey = issueApiKey().key
+    vi.stubEnv('AXIOM_SITE_API_KEY', siteKey)
+    const load = vi.fn(async () => snapshotState())
+    const markup = renderToStaticMarkup(await ReconciliationDashboard({ load }))
+    expect(load).toHaveBeenCalledWith({ apiKey: siteKey })
+    expect(markup).not.toContain('Refresh snapshot')
+    vi.unstubAllEnvs()
+  })
+
   it('renders confidence, partial-source, failure, and approved discrepancy context', () => {
     const markup = render(snapshotState('degraded'))
 
@@ -129,6 +141,11 @@ describe('reconciliation dashboard', () => {
     expect(markup).toContain('role="status"')
     expect(markup).toContain('aria-atomic="true"')
     expect(markup).toContain('href="/methodology"')
+  })
+
+  it('omits browser refresh controls when hosted authentication is required', () => {
+    const markup = renderToStaticMarkup(<ReconciliationDashboardView initialState={snapshotState()} endpoint="/api/v1/supply/example" refreshEnabled={false} />)
+    expect(markup).not.toContain('Refresh snapshot')
   })
 
   it('derives dashboard data from the API loader without database imports', () => {

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createApiErrorResponse, identifierSchema } from '../contracts'
+import { apiAuthenticationRequired } from '../api-access/key'
 
 export const PUBLIC_API_PREFIX = '/api/v1' as const
 export const DEFAULT_PAGE_SIZE = 25
@@ -9,8 +10,9 @@ export const MAXIMUM_PAGE_SIZE = 100
 
 const REQUEST_ID_HEADER = 'x-request-id'
 const ALLOWED_METHODS = 'GET, OPTIONS'
-const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, X-Request-ID'
-const EXPOSED_HEADERS = 'Deprecation, ETag, Link, Sunset, X-Request-ID'
+const API_KEY_HEADER = 'x-axiom-key'
+const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, X-Axiom-Key, X-Request-ID'
+const EXPOSED_HEADERS = 'Deprecation, ETag, Link, Retry-After, Sunset, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID'
 
 export interface ApiDeprecationPolicy {
   deprecatedAt: string
@@ -103,7 +105,7 @@ function baseHeaders(requestId: string, cache: ApiResponseOptions['cache'], depr
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Expose-Headers': EXPOSED_HEADERS,
     'Cache-Control': cacheControl(cache),
-    Vary: 'X-Request-ID',
+    Vary: 'X-Request-ID, X-Axiom-Key',
     'X-Content-Type-Options': 'nosniff',
     'X-Request-ID': requestId,
     ...(deprecation ? deprecationHeaders(deprecation) : {}),
@@ -227,4 +229,66 @@ export function apiMethodNotAllowedResponse(request: Request) {
   })
   response.headers.set('Allow', ALLOWED_METHODS)
   return response
+}
+
+function applyRateLimitHeaders(response: Response, limit: number, remaining: number, resetAt: string) {
+  response.headers.set('X-RateLimit-Limit', String(limit))
+  response.headers.set('X-RateLimit-Remaining', String(remaining))
+  response.headers.set('X-RateLimit-Reset', String(Math.floor(Date.parse(resetAt) / 1_000)))
+  return response
+}
+
+/** Authenticates and atomically consumes one plan quota unit before public route work begins. */
+export async function withPublicApiAccess(
+  request: Request,
+  requestId: string,
+  handler: () => Promise<Response>,
+) {
+  try {
+    if (!apiAuthenticationRequired()) return handler()
+  } catch (error) {
+    console.error('Unable to read public API access policy', { name: error instanceof Error ? error.name : 'Error' })
+    return apiErrorResponse({ request, status: 503, code: 'api_access_unavailable', message: 'API access verification is temporarily unavailable', requestId })
+  }
+  let decision
+  try {
+    const { authorizePublicApiKey } = await import('../db/api-access-repository')
+    decision = await authorizePublicApiKey(request.headers.get(API_KEY_HEADER))
+  } catch (error) {
+    console.error('Unable to authorize public API access', { name: error instanceof Error ? error.name : 'Error' })
+    return apiErrorResponse({
+      request,
+      status: 503,
+      code: 'api_access_unavailable',
+      message: 'API access verification is temporarily unavailable',
+      requestId,
+    })
+  }
+
+  if (decision.status === 'unauthorized') {
+    return apiErrorResponse({
+      request,
+      status: 401,
+      code: 'authentication_required',
+      message: 'A valid API key is required',
+      requestId,
+    })
+  }
+  if (decision.status === 'rate_limited') {
+    const response = apiErrorResponse({
+      request,
+      status: 429,
+      code: 'rate_limit_exceeded',
+      message: 'The request quota has been exceeded',
+      requestId,
+    })
+    response.headers.set('Retry-After', String(decision.retryAfterSeconds))
+    return applyRateLimitHeaders(response, decision.limit, decision.remaining, decision.resetAt)
+  }
+  return applyRateLimitHeaders(
+    await handler(),
+    decision.grant.limit,
+    decision.grant.remaining,
+    decision.grant.resetAt,
+  )
 }

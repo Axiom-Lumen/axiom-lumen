@@ -15,6 +15,8 @@ import {
   resolveConfidenceAsset,
 } from '../../lib/home/confidence-artifact'
 import { createOpenApiDocument } from '../../lib/openapi/document'
+import { issueApiKey } from '../../lib/api-access/key'
+import { loadFirstPartyConfidenceArtifact, resolveSiteApiAccess } from '../../lib/home/site-confidence-artifact'
 
 const AS_OF = '2026-08-10T12:00:00.000Z'
 
@@ -70,6 +72,22 @@ describe('confidence artifact data source', () => {
     const [url, init] = fetcher.mock.calls[0]!
     expect(String(url)).toBe(`https://axiom.example/api/v1/supply/${encodeURIComponent(DEFAULT_ASSET)}`)
     expect(init).toMatchObject({ cache: 'no-store', headers: { Accept: 'application/json' } })
+  })
+
+  it('adds a site API key only when explicitly supplied by the server caller', async () => {
+    const fetcher = fetchReturning(jsonResponse(availableSnapshot('verified'), 200))
+    await loadConfidenceArtifact({ fetcher: fetcher as unknown as typeof fetch, appUrl: 'https://axiom.example', apiKey: 'server-secret' })
+    expect(fetcher.mock.calls[0]?.[1]?.headers).toEqual({ Accept: 'application/json', 'X-Axiom-Key': 'server-secret' })
+  })
+
+  it('requires a valid server-only site key and forwards it for every first-party loader', async () => {
+    const siteKey = issueApiKey().key
+    expect(() => resolveSiteApiAccess({ NODE_ENV: 'production', AXIOM_API_AUTH_REQUIRED: 'true' })).toThrow(/AXIOM_SITE_API_KEY/)
+    const load = vi.fn(async () => ({ kind: 'empty' as const, asset: DEFAULT_ASSET }))
+    await expect(loadFirstPartyConfidenceArtifact(load, {
+      NODE_ENV: 'production', AXIOM_API_AUTH_REQUIRED: 'true', AXIOM_SITE_API_KEY: siteKey,
+    })).resolves.toMatchObject({ refreshEnabled: false, state: { kind: 'empty' } })
+    expect(load).toHaveBeenCalledWith({ apiKey: siteKey })
   })
 
   it('distinguishes stale and currently unavailable 503 snapshots', async () => {

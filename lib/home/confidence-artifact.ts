@@ -37,6 +37,7 @@ interface LoadConfidenceArtifactOptions {
   appUrl?: string
   fetcher?: typeof fetch
   timeoutMs?: number
+  apiKey?: string
 }
 
 export function resolveConfidenceAsset(value = process.env.AXIOM_DEFAULT_ASSET ?? DEFAULT_ASSET) {
@@ -87,7 +88,7 @@ export async function loadConfidenceArtifact(
   try {
     response = await (options.fetcher ?? fetch)(endpoint, {
       cache: 'no-store',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', ...(options.apiKey ? { 'X-Axiom-Key': options.apiKey } : {}) },
       signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
     })
   } catch {

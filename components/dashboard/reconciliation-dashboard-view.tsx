@@ -101,10 +101,12 @@ export function ReconciliationDashboardView({
   initialState,
   endpoint,
   refreshIntervalMs = REFRESH_INTERVAL_MS,
+  refreshEnabled = true,
 }: {
   initialState: ConfidenceArtifactState
   endpoint: string
   refreshIntervalMs?: number
+  refreshEnabled?: boolean
 }) {
   const [state, setState] = useState(initialState)
   const [refreshing, setRefreshing] = useState(false)
@@ -115,6 +117,7 @@ export function ReconciliationDashboardView({
   useEffect(() => { stateRef.current = state }, [state])
 
   const refresh = useCallback(async (requestedByUser = false) => {
+    if (!refreshEnabled) return
     if (refreshingRef.current) return
     refreshingRef.current = true
     setRefreshing(true)
@@ -132,9 +135,10 @@ export function ReconciliationDashboardView({
     }
     refreshingRef.current = false
     setRefreshing(false)
-  }, [endpoint])
+  }, [endpoint, refreshEnabled])
 
   useEffect(() => {
+    if (!refreshEnabled) return
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refresh()
     }
@@ -144,7 +148,7 @@ export function ReconciliationDashboardView({
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [refresh, refreshIntervalMs])
+  }, [refresh, refreshEnabled, refreshIntervalMs])
 
   const snapshot = snapshotFromState(state)
   const asOf = asOfFromState(state)
@@ -162,14 +166,14 @@ export function ReconciliationDashboardView({
               </h2>
               <p className="mt-2 break-all font-mono text-[11px] text-muted">{shortAsset(state.asset)}</p>
             </div>
-            <button
+            {refreshEnabled && <button
               type="button"
               disabled={refreshing}
               onClick={() => void refresh(true)}
               className="border border-golddim px-4 py-2 font-mono text-[11px] uppercase tracking-widest text-gold hover:border-gold disabled:cursor-wait disabled:opacity-60"
             >
               {refreshing ? 'Refreshing…' : 'Refresh snapshot'}
-            </button>
+            </button>}
           </div>
 
           <dl className="grid gap-8 py-8 sm:grid-cols-2 lg:grid-cols-4">

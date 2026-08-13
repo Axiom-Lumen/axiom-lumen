@@ -1,4 +1,5 @@
 import { loadConfidenceArtifact, resolveConfidenceAsset } from '../../lib/home/confidence-artifact'
+import { loadFirstPartyConfidenceArtifact } from '../../lib/home/site-confidence-artifact'
 import { ReconciliationDashboardView } from './reconciliation-dashboard-view'
 
 export function ReconciliationDashboardLoading() {
@@ -24,12 +25,13 @@ export async function ReconciliationDashboard({
 }: {
   load?: typeof loadConfidenceArtifact
 } = {}) {
-  const state = await load()
+  const { state, refreshEnabled } = await loadFirstPartyConfidenceArtifact(load)
   const asset = resolveConfidenceAsset(state.asset)
   return (
     <ReconciliationDashboardView
       initialState={state}
       endpoint={`/api/v1/supply/${encodeURIComponent(asset)}`}
+      refreshEnabled={refreshEnabled}
     />
   )
 }

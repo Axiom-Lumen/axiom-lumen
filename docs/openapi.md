@@ -7,11 +7,13 @@ implemented public operations:
 - `GET` and `OPTIONS /api/v1/supply/{asset}`
 - `GET` and `OPTIONS /api/v1/depth/{pair}`
 - `GET` and `OPTIONS /api/v1/trustlines/{asset}`
+- `GET` and `OPTIONS /api/v1/anchors/{anchor}/reserves`
 
-Planned anchor, authentication, quota, and event endpoints are excluded. Authentication and
-rate-limit failures are retained as unreferenced reusable response components for the future policies that
-introduce those responses; their presence does not claim that current public operations enforce authentication
-or quotas.
+Every GET operation documents required `X-Axiom-Key` authentication for the hosted contract. Local development's
+explicit anonymous mode is a deployment convenience, not a weaker hosted contract. Normal application responses
+document conditionally present quota metadata because anonymous local responses omit it; authenticated hosted
+responses always emit it. The shared `401` and `429` components describe authentication and quota failures.
+`OPTIONS` remains unauthenticated.
 
 ## Source and generation
 

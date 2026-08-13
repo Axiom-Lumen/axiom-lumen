@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiErrorResponseSchema, apiReconciliationSnapshotSchema, reconciliationSnapshotSchema } from '../../lib/contracts'
 import type { TrustlineReadModel } from '../../lib/db/trustline-read-model'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
+
+vi.mock('../../lib/db/api-access-repository', () => ({ authorizePublicApiKey: vi.fn(async () => ({ status: 'allowed', grant: { principalId: 'test', planId: 'developer', limit: 60, remaining: 59, resetAt: '2026-08-10T10:01:00.000Z' } })) }))
 const readModel = vi.hoisted(() => ({ load: vi.fn() })); vi.mock('../../lib/db/trustline-read-model', () => ({ loadLatestTrustlineReadModel: readModel.load }))
 import { GET, OPTIONS, POST } from '../../app/api/v1/trustlines/[asset]/route'
 const ISSUER = `G${'A'.repeat(55)}`; const ASSET = `USDC:${ISSUER}`; const NOW = '2026-08-10T12:00:00.000Z'
