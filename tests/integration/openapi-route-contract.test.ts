@@ -10,6 +10,7 @@ import {
 import { GET as depthGet, OPTIONS as depthOptions } from '../../app/api/v1/depth/[pair]/route'
 import { GET as trustlineGet, OPTIONS as trustlineOptions } from '../../app/api/v1/trustlines/[asset]/route'
 import { GET as anchorReservesGet, OPTIONS as anchorReservesOptions } from '../../app/api/v1/anchors/[anchor]/reserves/route'
+import { GET as snapshotEventsGet, OPTIONS as snapshotEventsOptions } from '../../app/api/v1/events/snapshots/route'
 import { IMPLEMENTED_PUBLIC_OPERATIONS } from '../../lib/openapi/document'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
@@ -43,6 +44,8 @@ const contractRequests: Record<OperationId, () => Response | Promise<Response>> 
   trustlineOptions: () => trustlineOptions(new Request(`https://axiom.example/api/v1/trustlines/${ASSET}`, { method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_trustline_options' } })),
   getAnchorReserves: () => anchorReservesGet(new Request('https://axiom.example/api/v1/anchors/anchor-a/reserves', { headers: { 'X-Request-ID': 'invalid request id' } }), { params: Promise.resolve({ anchor: 'anchor-a' }) }),
   anchorReservesOptions: () => anchorReservesOptions(new Request('https://axiom.example/api/v1/anchors/anchor-a/reserves', { method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_anchor_options' } })),
+  streamSnapshotEvents: () => snapshotEventsGet(new Request('https://axiom.example/api/v1/events/snapshots', { headers: { 'X-Request-ID': 'invalid request id' } })),
+  snapshotEventsOptions: () => snapshotEventsOptions(new Request('https://axiom.example/api/v1/events/snapshots', { method: 'OPTIONS', headers: { 'X-Request-ID': 'contract_events_options' } })),
 }
 
 describe('implemented OpenAPI operation coverage', () => {

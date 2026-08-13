@@ -35,6 +35,7 @@ describe('public API keys', () => {
       { routeId: 'stellar.depth', requiredScope: 'metrics:read' },
       { routeId: 'stellar.trustlines', requiredScope: 'metrics:read' },
       { routeId: 'anchors.reserves', requiredScope: 'anchors:read' },
+      { routeId: 'events.snapshots', requiredScope: 'events:read' },
     ])
     expect(() => parsePublicApiAccessPolicy({ routeId: '../supply', requiredScope: 'metrics:read' })).toThrow()
   })

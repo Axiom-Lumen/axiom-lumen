@@ -12,6 +12,7 @@ import {
   reconciliationSnapshotSchema,
   retrievalAttemptSchema,
   serializePublicReconciliationSnapshot,
+  serializePublicSnapshotEvent,
   sourceErrorCodeSchema,
   tradingPairSchema,
 } from '../../lib/contracts'
@@ -239,6 +240,33 @@ describe('API contracts', () => {
     const snapshot = reconciliationSnapshotSchema.parse(snapshotInput())
 
     expect(serializePublicReconciliationSnapshot(snapshot, 'req_1')).toEqual(parsedFixture)
+  })
+
+  it('creates public-safe stream pointers and excludes gated anchor comparisons', () => {
+    const snapshot = reconciliationSnapshotSchema.parse(snapshotInput())
+    expect(serializePublicSnapshotEvent(snapshot, 'public')).toEqual({
+      snapshot_id: 'snapshot_1',
+      metric: 'latest_ledger',
+      subject: { kind: 'network', network: 'public' },
+      status: snapshot.status,
+      as_of: snapshot.asOf,
+      methodology_version: snapshot.methodologyVersion,
+      resource: '/api/v1/stellar/latest-ledger',
+    })
+    const anchorSnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      metric: 'anchor_reserves',
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: { kind: 'amount', value: '1000' },
+      discrepancies: [],
+      methodologyVersion: 'anchor-reserve-comparison-v0.1',
+    })
+    expect(() => serializePublicSnapshotEvent(anchorSnapshot, `public:USDC:${ISSUER}`)).toThrow(/publication-state filtering/)
+    const testnetSnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      subject: { kind: 'network', network: { id: 'testnet', passphrase: 'Test SDF Network ; September 2015' } },
+    })
+    expect(() => serializePublicSnapshotEvent(testnetSnapshot, 'testnet')).toThrow(/Public Network/)
   })
 
   it('omits discrepancies that have not been approved for publication', () => {

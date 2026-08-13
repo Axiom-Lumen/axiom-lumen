@@ -35,6 +35,10 @@
     {
       "name": "Anchors",
       "description": "Reviewed, publication-approved anchor reserve disclosures"
+    },
+    {
+      "name": "Events",
+      "description": "Authorized live and replayed public snapshot notifications"
     }
   ],
   "paths": {
@@ -1624,6 +1628,287 @@
       },
       "options": {
         "operationId": "anchorReservesOptions",
+        "summary": "Inspect public read-only CORS policy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "CORS preflight accepted",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "Access-Control-Allow-Headers": {
+                "$ref": "#/components/headers/CorsAllowHeaders"
+              },
+              "Access-Control-Allow-Methods": {
+                "$ref": "#/components/headers/CorsAllowMethods"
+              },
+              "Access-Control-Max-Age": {
+                "$ref": "#/components/headers/CorsMaxAge"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/snapshots": {
+      "get": {
+        "operationId": "streamSnapshotEvents",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "Events"
+        ],
+        "summary": "Stream completed public snapshot events",
+        "description": "Opens a server-sent event stream. Reconnect with the last received event ID to replay without silent gaps. Anchor reserve comparison snapshots are excluded because they require separate publication-state filtering.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/LastEventId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream containing snapshot events, heartbeat comments, and terminal error events",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "id: 42\nevent: snapshot\ndata: {\"snapshot_id\":\"snapshot_example\",\"metric\":\"onchain_asset_supply\",\"subject\":{\"kind\":\"asset\",\"asset\":\"USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},\"status\":\"verified\",\"as_of\":\"2026-08-10T12:00:00.000Z\",\"methodology_version\":\"onchain-asset-supply-v0.1\",\"resource\":\"/api/v1/supply/USDC:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}\n\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request identifier, Last-Event-ID, or query parameter",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "invalidRequestId": {
+                    "$ref": "#/components/examples/InvalidRequestId"
+                  },
+                  "invalidLastEventId": {
+                    "$ref": "#/components/examples/InvalidLastEventId"
+                  },
+                  "invalidQueryParameter": {
+                    "$ref": "#/components/examples/InvalidQueryParameter"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
+          "409": {
+            "description": "The requested cursor cannot be resumed within the bounded replay window",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "replayWindow": {
+                    "$ref": "#/components/examples/ReplayWindowExceeded"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
+          "503": {
+            "description": "Event storage, stream configuration, or API access verification is unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/CorsOrigin"
+              },
+              "Access-Control-Expose-Headers": {
+                "$ref": "#/components/headers/CorsExposeHeaders"
+              },
+              "Vary": {
+                "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "unavailable": {
+                    "$ref": "#/components/examples/StreamUnavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "snapshotEventsOptions",
         "summary": "Inspect public read-only CORS policy",
         "parameters": [
           {
@@ -3906,6 +4191,122 @@
         ],
         "additionalProperties": false
       },
+      "SnapshotEvent": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "latest_ledger",
+              "onchain_asset_supply",
+              "order_book_depth",
+              "trustline_state"
+            ]
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "network"
+                  },
+                  "network": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "testnet",
+                      "futurenet",
+                      "standalone"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "network"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "asset"
+                  },
+                  "asset": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "asset"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "pair"
+                  },
+                  "base": {
+                    "type": "string"
+                  },
+                  "counter": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "base",
+                  "counter"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "methodology_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resource": {
+            "type": "string",
+            "pattern": "^\\/api\\/v1\\/[A-Za-z0-9._~:%/-]+$"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "metric",
+          "subject",
+          "status",
+          "as_of",
+          "methodology_version",
+          "resource"
+        ],
+        "additionalProperties": false
+      },
       "ApiErrorResponse": {
         "type": "object",
         "properties": {
@@ -4144,6 +4545,16 @@
         "required": false,
         "schema": {
           "type": "string"
+        }
+      },
+      "LastEventId": {
+        "name": "Last-Event-ID",
+        "in": "header",
+        "required": false,
+        "description": "Decimal ID of the last fully processed snapshot event; omitted connections begin live at the current tail",
+        "schema": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]{0,18})$"
         }
       }
     },
@@ -5081,6 +5492,42 @@
           "error": {
             "code": "rate_limit_exceeded",
             "message": "The request quota has been exceeded"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "InvalidLastEventId": {
+        "summary": "Malformed or future resume cursor",
+        "value": {
+          "error": {
+            "code": "invalid_last_event_id",
+            "message": "Last-Event-ID must be a non-negative decimal event ID"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "ReplayWindowExceeded": {
+        "summary": "Resume cursor is outside the bounded replay window",
+        "value": {
+          "error": {
+            "code": "replay_window_exceeded",
+            "message": "More events are pending than the bounded replay window permits"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "StreamUnavailable": {
+        "summary": "Durable event stream storage is unavailable",
+        "value": {
+          "error": {
+            "code": "stream_unavailable",
+            "message": "The snapshot event stream is temporarily unavailable"
           },
           "request_id": "example_request",
           "as_of": "2026-08-10T12:00:00.000Z",

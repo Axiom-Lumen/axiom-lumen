@@ -24,6 +24,10 @@ API access uses immutable `api_key_events`, principal scope grants, optional `ap
 `api_quota_usage` buckets partitioned by principal, route, sustained/burst kind, and fixed-window start. Key
 rotation replaces and revokes credentials transactionally; audit rows reject update, delete, and truncate.
 
+Completed public-metric cycles append `snapshot_events` in the same transaction as their immutable snapshot.
+The monotonic event ID is the cross-instance SSE cursor; payloads are validated public pointers rather than raw
+evidence. The table is append-only, and gated anchor comparison snapshots are deliberately excluded.
+
 Never commit real URLs or log them. Aggregate pool capacity across all process instances must remain below the
 database provider's connection limit.
 

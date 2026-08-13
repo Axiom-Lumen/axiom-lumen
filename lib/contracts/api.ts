@@ -49,6 +49,17 @@ const apiMetricSubjectSchema = z.discriminatedUnion('kind', [
   }
 })
 
+export const apiSnapshotEventSchema = z.object({
+  snapshot_id: identifierSchema,
+  metric: z.enum(['latest_ledger', 'onchain_asset_supply', 'order_book_depth', 'trustline_state']),
+  subject: apiMetricSubjectSchema,
+  status: z.enum(['verified', 'degraded', 'unavailable']),
+  as_of: utcTimestampSchema,
+  methodology_version: z.string().min(1).max(128),
+  resource: z.string().regex(/^\/api\/v1\/[A-Za-z0-9._~:%/-]+$/),
+}).strict()
+export type ApiSnapshotEvent = z.infer<typeof apiSnapshotEventSchema>
+
 const apiMetricValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ledger'), value: z.number().int().safe().positive() }).strict(),
   z.object({ kind: z.literal('amount'), value: z.string().regex(/^(0|[1-9]\d*)(?:\.\d{1,7})?$/) }).strict(),
@@ -575,6 +586,38 @@ function serializeMetricId(metric: MetricId): z.infer<typeof apiMetricIdSchema> 
   if (metric === 'circulating_supply') return 'onchain_asset_supply'
   if (metric === 'trustline_count') return 'trustline_state'
   return metric
+}
+
+/** Creates the durable public-safe payload shared by live and replayed snapshot events. */
+export function serializePublicSnapshotEvent(snapshot: ReconciliationSnapshot, cycleSubjectKey: string): ApiSnapshotEvent {
+  if (snapshot.metric === 'anchor_reserves') {
+    throw new Error('anchor reserve snapshots require publication-state filtering and are not stream events')
+  }
+  const networkId = snapshot.subject.kind === 'network'
+    ? snapshot.subject.network.id
+    : cycleSubjectKey.split(':', 1)[0]
+  if (networkId !== 'public') throw new Error('only Public Network snapshots may enter the public event stream')
+  const metric = serializeMetricId(snapshot.metric)
+  const subject = serializeMetricSubject(snapshot.subject)
+  const resource = metric === 'latest_ledger'
+    ? '/api/v1/stellar/latest-ledger'
+    : metric === 'onchain_asset_supply' && snapshot.subject.kind === 'asset'
+      ? `/api/v1/supply/${formatAssetId(snapshot.subject.asset)}`
+      : metric === 'order_book_depth' && snapshot.subject.kind === 'pair'
+        ? `/api/v1/depth/${formatAssetId(snapshot.subject.pair.base)}~${formatAssetId(snapshot.subject.pair.counter)}`
+        : metric === 'trustline_state' && snapshot.subject.kind === 'asset'
+          ? `/api/v1/trustlines/${formatAssetId(snapshot.subject.asset)}`
+          : null
+  if (!resource) throw new Error('snapshot metric and subject cannot produce a public stream resource')
+  return apiSnapshotEventSchema.parse({
+    snapshot_id: snapshot.snapshotId,
+    metric,
+    subject,
+    status: snapshot.status,
+    as_of: snapshot.asOf,
+    methodology_version: snapshot.methodologyVersion,
+    resource,
+  })
 }
 
 /** The only domain camelCase → public snake_case adapter; non-public discrepancies are omitted. */

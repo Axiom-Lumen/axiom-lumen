@@ -15,6 +15,7 @@ import {
   type SourceIdentity,
 } from '../contracts/domain'
 import type { DiscrepancyAmendmentEvent, DiscrepancyMeasurementEvent } from '../reconcile/discrepancy-state'
+import { serializePublicSnapshotEvent } from '../contracts/api'
 import { StellarAmount } from '../stellar/amount'
 import type { DatabaseClient } from './client'
 import {
@@ -26,6 +27,7 @@ import {
   reconciliationSnapshots,
   retrievalAttempts,
   snapshotContributions,
+  snapshotEvents,
   sourceHealthSamples,
   sourceHealthStates,
 } from './schema'
@@ -456,6 +458,17 @@ export function createPersistenceRepositories(client: DatabaseClient) {
           methodologyVersion: snapshot.methodologyVersion,
           asOf: snapshot.asOf,
         })
+
+        const snapshotNetworkId = snapshot.subject.kind === 'network'
+          ? snapshot.subject.network.id
+          : input.cycle.subjectKey.split(':', 1)[0]
+        if (snapshot.metric !== 'anchor_reserves' && snapshotNetworkId === 'public') {
+          await tx.insert(snapshotEvents).values({
+            snapshotId: snapshot.snapshotId,
+            payload: serializePublicSnapshotEvent(snapshot, input.cycle.subjectKey),
+            occurredAt: snapshot.asOf,
+          })
+        }
 
         const readingIdByObservation = new Map(input.readings.map((reading) => [reading.observationId, reading.id]))
         if (snapshot.contributions.length > 0) {

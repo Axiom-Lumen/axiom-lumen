@@ -105,6 +105,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'retrieval_attempts',
         'scheduled_cycle_leases',
         'snapshot_contributions',
+        'snapshot_events',
         'source_credential_references',
         'source_definitions',
         'source_health_samples',
@@ -112,7 +113,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(15)
+      expect(migrationRows.rows[0]?.count).toBe(16)
 
       const leaseSnapshotColumns = await pool.query<{ column_name: string; data_type: string }>(
         `SELECT column_name, data_type
@@ -175,6 +176,8 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'api_key_events_key_occurred_idx',
           'api_plan_route_limits_route_idx',
           'api_quota_usage_route_window_idx',
+          'snapshot_events_snapshot_uidx',
+          'snapshot_events_occurred_idx',
         ]),
       )
 

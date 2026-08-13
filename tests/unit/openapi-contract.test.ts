@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import SwaggerParser from '@apidevtools/swagger-parser'
 import { describe, expect, it } from 'vitest'
-import { apiErrorResponseSchema, apiReconciliationSnapshotSchema } from '../../lib/contracts'
+import { apiErrorResponseSchema, apiReconciliationSnapshotSchema, apiSnapshotEventSchema } from '../../lib/contracts'
 import {
   IMPLEMENTED_PUBLIC_OPERATIONS,
   OPENAPI_EXAMPLES,
@@ -33,6 +33,7 @@ describe('OpenAPI 3.1 contract', () => {
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineVerified)).toEqual(OPENAPI_EXAMPLES.trustlineVerified)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineDegraded)).toEqual(OPENAPI_EXAMPLES.trustlineDegraded)
     expect(apiReconciliationSnapshotSchema.parse(OPENAPI_EXAMPLES.trustlineUnavailable)).toEqual(OPENAPI_EXAMPLES.trustlineUnavailable)
+    expect(apiSnapshotEventSchema.parse(OPENAPI_EXAMPLES.snapshotEvent)).toEqual(OPENAPI_EXAMPLES.snapshotEvent)
     const errorExamples = [
       OPENAPI_EXAMPLES.invalidRequestId,
       OPENAPI_EXAMPLES.invalidQueryParameter,
@@ -49,6 +50,9 @@ describe('OpenAPI 3.1 contract', () => {
       OPENAPI_EXAMPLES.authenticationError,
       OPENAPI_EXAMPLES.insufficientScope,
       OPENAPI_EXAMPLES.rateLimitError,
+      OPENAPI_EXAMPLES.invalidLastEventId,
+      OPENAPI_EXAMPLES.replayWindowExceeded,
+      OPENAPI_EXAMPLES.streamUnavailable,
     ]
     for (const example of errorExamples) {
       expect(apiErrorResponseSchema.parse(example)).toEqual(example)

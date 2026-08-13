@@ -27,7 +27,7 @@ const schedule: { feature: string; note?: string; values: [string, string, strin
   { feature: 'Verified values + confidence scores', values: ['Included', 'Included', 'Included'] },
   { feature: 'REST API rate limit', values: ['60 req/min', '1,000 req/min', 'Custom'] },
   { feature: 'All v1 endpoints', values: ['Included', 'Included', 'Included'] },
-  { feature: 'WebSocket streams', values: ['—', 'Included', 'Included'] },
+  { feature: 'Snapshot SSE', values: ['Included', 'Included', 'Included'] },
   {
     feature: 'Discrepancy visibility',
     note: 'source classes shown in the discrepancies array',

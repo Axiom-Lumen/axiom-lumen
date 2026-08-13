@@ -8,6 +8,7 @@ implemented public operations:
 - `GET` and `OPTIONS /api/v1/depth/{pair}`
 - `GET` and `OPTIONS /api/v1/trustlines/{asset}`
 - `GET` and `OPTIONS /api/v1/anchors/{anchor}/reserves`
+- `GET` and `OPTIONS /api/v1/events/snapshots`
 
 Every GET operation documents required `X-Axiom-Key` authentication for the hosted contract. Local development's
 explicit anonymous mode is a deployment convenience, not a weaker hosted contract. Normal application responses

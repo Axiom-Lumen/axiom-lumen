@@ -621,9 +621,20 @@ describeWithDatabase('transactional persistence repositories', () => {
           (SELECT count(*)::int FROM ingest_cycles) AS cycles,
           (SELECT count(*)::int FROM raw_readings) AS readings,
           (SELECT count(*)::int FROM reconciliation_snapshots) AS snapshots,
+          (SELECT count(*)::int FROM snapshot_events) AS stream_events,
           (SELECT count(*)::int FROM discrepancy_events) AS events
       `)
-      expect(counts.rows[0]).toEqual({ cycles: 1, readings: 2, snapshots: 1, events: 1 })
+      expect(counts.rows[0]).toEqual({ cycles: 1, readings: 2, snapshots: 1, stream_events: 1, events: 1 })
+      const streamEvent = await pool.query(`SELECT id::text, snapshot_id, payload FROM snapshot_events`)
+      expect(streamEvent.rows).toEqual([expect.objectContaining({
+        id: '1',
+        snapshot_id: persistedSupplySnapshot.snapshotId,
+        payload: expect.objectContaining({
+          snapshot_id: persistedSupplySnapshot.snapshotId,
+          metric: 'onchain_asset_supply',
+          resource: expect.stringContaining('/api/v1/supply/'),
+        }),
+      })])
       expect(await repositories.getRawReadings(lease.id)).toEqual(expect.arrayContaining([
         expect.objectContaining({
           metric: 'circulating_supply',
@@ -749,9 +760,10 @@ describeWithDatabase('transactional persistence repositories', () => {
           (SELECT count(*)::int FROM ingest_cycles) AS cycles,
           (SELECT count(*)::int FROM raw_readings) AS readings,
           (SELECT count(*)::int FROM reconciliation_snapshots) AS snapshots,
+          (SELECT count(*)::int FROM snapshot_events) AS stream_events,
           (SELECT count(*)::int FROM discrepancy_events) AS events
       `)
-      expect(counts.rows[0]).toEqual({ cycles: 1, readings: 1, snapshots: 1, events: 1 })
+      expect(counts.rows[0]).toEqual({ cycles: 1, readings: 1, snapshots: 1, stream_events: 1, events: 1 })
 
       await pool.query(`INSERT INTO anchors (id, network_id, name) VALUES ('anchor-a', 'public', 'Anchor A')`)
       await pool.query(`
