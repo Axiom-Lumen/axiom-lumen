@@ -30,9 +30,11 @@ All implemented v1 snapshot routes:
 
 The hosted contract requires `X-Axiom-Key` with `AXIOM_API_AUTH_REQUIRED=true`; local development remains
 anonymous by default, while production requires an explicit true/false choice and fails closed if it is absent.
-Required authentication consumes one atomic PostgreSQL fixed-window quota unit before
-route validation/read work. Unusable credentials share one `401`, exhausted windows return `429` with
-`Retry-After`, and CORS preflight is unauthenticated.
+Required authentication enforces the route's principal scope, then consumes sustained and burst PostgreSQL
+fixed-window quota units for the principal and stable route ID before route validation/read work. Unusable
+credentials share one `401`, insufficient scope or a disabled plan/route policy returns `403`, and exhausted
+windows return `429` with `Retry-After`. CORS preflight is unauthenticated. Lifecycle changes are transactional
+and append immutable key audit events; rotation revokes the replaced key as it creates the replacement.
 
 ETags cover the complete representation, including supply's `request_id`, so a validator can return `304` only
 when the caller reuses the same correlation ID. Weak comparison accepts either weak or strong syntax for the same

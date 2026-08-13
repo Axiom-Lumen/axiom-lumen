@@ -1,4 +1,5 @@
 import { identifierSchema, serializePublicAnchorReserves } from '../../../../../../lib/contracts'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../../lib/api-access/policy'
 import { InvalidAnchorReserveCursorError, loadPublicAnchorReserves } from '../../../../../../lib/db/anchor-public-read-model'
 import {
   ApiParameterError,
@@ -34,7 +35,7 @@ export async function GET(request: Request, context: AnchorReserveRouteContext) 
     return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
   }
   const requestId = resolved.requestId
-  return withPublicApiAccess(request, requestId, async () => {
+  return withPublicApiAccess(request, requestId, PUBLIC_API_ACCESS_POLICIES.anchorReserves, async () => {
     let pagination
     try {
       pagination = parseApiPagination(new URL(request.url).searchParams)

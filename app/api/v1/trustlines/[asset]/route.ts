@@ -1,4 +1,5 @@
 import { trustlineMethodologyConfig } from '../../../../../config/methodology'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import { apiReconciliationSnapshotSchema, parseAssetId, serializePublicReconciliationSnapshot, type ApiReconciliationSnapshot } from '../../../../../lib/contracts'
 import { loadLatestTrustlineReadModel } from '../../../../../lib/db/trustline-read-model'
 import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
@@ -16,7 +17,7 @@ function cachePolicy(freshForSeconds: number) { const budget = Math.max(0, Math.
 export async function GET(request: Request, context: Context) {
   const now = new Date(); const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
-  return withPublicApiAccess(request, resolved.requestId, async () => {
+  return withPublicApiAccess(request, resolved.requestId, PUBLIC_API_ACCESS_POLICIES.trustlines, async () => {
     const queryError = rejectUnexpectedQueryParameters(request); if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId: resolved.requestId, asOf: now })
     let asset
     try { const parsed = parseAssetId((await context.params).asset); if (parsed.kind !== 'credit') throw new Error('unsupported'); asset = parsed } catch { return apiErrorResponse({ request, status: 400, code: 'invalid_asset', message: 'Asset must be a canonical CODE:ISSUER credit-asset identifier', requestId: resolved.requestId, asOf: now }) }

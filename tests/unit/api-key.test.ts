@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { apiAuthenticationRequired, apiKeyHashMatches, hashApiKey, issueApiKey, parseApiKey } from '../../lib/api-access/key'
+import { PUBLIC_API_ACCESS_POLICIES, parsePublicApiAccessPolicy } from '../../lib/api-access/policy'
 
 describe('public API keys', () => {
   it('issues a parseable opaque key and stores only its SHA-256 digest', () => {
@@ -25,5 +26,16 @@ describe('public API keys', () => {
     expect(apiAuthenticationRequired({ AXIOM_API_AUTH_REQUIRED: 'true' })).toBe(true)
     expect(apiAuthenticationRequired({ AXIOM_API_AUTH_REQUIRED: 'false' })).toBe(false)
     expect(() => apiAuthenticationRequired({ AXIOM_API_AUTH_REQUIRED: 'yes' })).toThrow(/must be true or false/)
+  })
+
+  it('defines validated stable route and scope identifiers for every public GET', () => {
+    expect(Object.values(PUBLIC_API_ACCESS_POLICIES).map(parsePublicApiAccessPolicy)).toEqual([
+      { routeId: 'stellar.latest-ledger', requiredScope: 'metrics:read' },
+      { routeId: 'stellar.supply', requiredScope: 'metrics:read' },
+      { routeId: 'stellar.depth', requiredScope: 'metrics:read' },
+      { routeId: 'stellar.trustlines', requiredScope: 'metrics:read' },
+      { routeId: 'anchors.reserves', requiredScope: 'anchors:read' },
+    ])
+    expect(() => parsePublicApiAccessPolicy({ routeId: '../supply', requiredScope: 'metrics:read' })).toThrow()
   })
 })

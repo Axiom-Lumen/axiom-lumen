@@ -1,4 +1,5 @@
 import { loadLatestLedgerReadModel } from '../../../../../lib/db/latest-ledger-read-model'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import {
   apiErrorResponse,
   apiJsonResponse,
@@ -28,7 +29,7 @@ export const DELETE = apiMethodNotAllowedResponse
 export async function GET(request: Request) {
   const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return requestError(request, 400, resolved.code, resolved.message, resolved.requestId)
-  return withPublicApiAccess(request, resolved.requestId, async () => {
+  return withPublicApiAccess(request, resolved.requestId, PUBLIC_API_ACCESS_POLICIES.latestLedger, async () => {
     const queryError = rejectUnexpectedQueryParameters(request)
     if (queryError) return requestError(request, 400, queryError.code, queryError.message, resolved.requestId)
 

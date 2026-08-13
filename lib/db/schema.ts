@@ -85,6 +85,8 @@ export const notificationStatusEnum = pgEnum('notification_status', [
 ])
 export const notificationDeliveryOutcomeEnum = pgEnum('notification_delivery_outcome', ['sent', 'failed'])
 export const apiPrincipalStatusEnum = pgEnum('api_principal_status', ['active', 'suspended', 'revoked'])
+export const apiKeyEventTypeEnum = pgEnum('api_key_event_type', ['created', 'rotated', 'revoked'])
+export const apiQuotaKindEnum = pgEnum('api_quota_kind', ['sustained', 'burst'])
 
 export const networks = pgTable(
   'networks',
@@ -695,6 +697,32 @@ export const apiPlans = pgTable(
   ],
 )
 
+export const apiPlanRouteLimits = pgTable(
+  'api_plan_route_limits',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => apiPlans.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    routeId: text('route_id').notNull(),
+    requestsPerWindow: integer('requests_per_window').notNull(),
+    windowSeconds: integer('window_seconds').notNull(),
+    burstRequests: integer('burst_requests').notNull(),
+    burstWindowSeconds: integer('burst_window_seconds').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: utcTimestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.planId, table.routeId], name: 'api_plan_route_limits_pk' }),
+    index('api_plan_route_limits_route_idx').on(table.routeId),
+    check('api_plan_route_limits_route_not_blank', sql`length(btrim(${table.routeId})) > 0`),
+    check(
+      'api_plan_route_limits_quota_check',
+      sql`${table.requestsPerWindow} > 0 AND ${table.windowSeconds} > 0 AND ${table.burstRequests} > 0 AND ${table.burstWindowSeconds} > 0 AND ${table.burstWindowSeconds} <= ${table.windowSeconds}`,
+    ),
+  ],
+)
+
 export const apiPrincipals = pgTable(
   'api_principals',
   {
@@ -753,19 +781,46 @@ export const apiKeys = pgTable(
   ],
 )
 
+export const apiKeyEvents = pgTable(
+  'api_key_events',
+  {
+    id: text('id').primaryKey(),
+    keyId: text('key_id')
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    principalId: text('principal_id')
+      .notNull()
+      .references(() => apiPrincipals.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    eventType: apiKeyEventTypeEnum('event_type').notNull(),
+    actor: text('actor').notNull(),
+    relatedKeyId: text('related_key_id').references(() => apiKeys.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+  },
+  (table) => [
+    index('api_key_events_key_occurred_idx').on(table.keyId, table.occurredAt),
+    index('api_key_events_principal_occurred_idx').on(table.principalId, table.occurredAt),
+    check('api_key_events_actor_not_blank', sql`length(btrim(${table.actor})) > 0`),
+    check('api_key_events_rotation_relation_check', sql`(${table.eventType} = 'rotated') = (${table.relatedKeyId} IS NOT NULL)`),
+  ],
+)
+
 export const apiQuotaUsage = pgTable(
   'api_quota_usage',
   {
     principalId: text('principal_id')
       .notNull()
       .references(() => apiPrincipals.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    routeId: text('route_id').notNull(),
+    quotaKind: apiQuotaKindEnum('quota_kind').notNull(),
     windowStartedAt: utcTimestamp('window_started_at').notNull(),
     requestCount: bigint('request_count', { mode: 'bigint' }).notNull().default(sql`0`),
     updatedAt: utcTimestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.principalId, table.windowStartedAt], name: 'api_quota_usage_pk' }),
+    primaryKey({ columns: [table.principalId, table.routeId, table.quotaKind, table.windowStartedAt], name: 'api_quota_usage_pk' }),
     index('api_quota_usage_window_idx').on(table.windowStartedAt),
+    index('api_quota_usage_route_window_idx').on(table.routeId, table.windowStartedAt),
+    check('api_quota_usage_route_not_blank', sql`length(btrim(${table.routeId})) > 0`),
     check('api_quota_usage_count_check', sql`${table.requestCount} >= 0`),
   ],
 )

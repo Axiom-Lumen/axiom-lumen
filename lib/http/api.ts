@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createApiErrorResponse, identifierSchema } from '../contracts'
 import { apiAuthenticationRequired } from '../api-access/key'
+import type { PublicApiAccessPolicy } from '../api-access/policy'
 
 export const PUBLIC_API_PREFIX = '/api/v1' as const
 export const DEFAULT_PAGE_SIZE = 25
@@ -242,6 +243,7 @@ function applyRateLimitHeaders(response: Response, limit: number, remaining: num
 export async function withPublicApiAccess(
   request: Request,
   requestId: string,
+  policy: PublicApiAccessPolicy,
   handler: () => Promise<Response>,
 ) {
   try {
@@ -253,7 +255,7 @@ export async function withPublicApiAccess(
   let decision
   try {
     const { authorizePublicApiKey } = await import('../db/api-access-repository')
-    decision = await authorizePublicApiKey(request.headers.get(API_KEY_HEADER))
+    decision = await authorizePublicApiKey(request.headers.get(API_KEY_HEADER), policy)
   } catch (error) {
     console.error('Unable to authorize public API access', { name: error instanceof Error ? error.name : 'Error' })
     return apiErrorResponse({
@@ -271,6 +273,15 @@ export async function withPublicApiAccess(
       status: 401,
       code: 'authentication_required',
       message: 'A valid API key is required',
+      requestId,
+    })
+  }
+  if (decision.status === 'forbidden') {
+    return apiErrorResponse({
+      request,
+      status: 403,
+      code: 'insufficient_scope',
+      message: 'The API key is not authorized for this route',
       requestId,
     })
   }

@@ -14,8 +14,20 @@ disabled in required-auth mode.
 
 ## Provisioning
 
-Plans define a positive `requests_per_window` and `window_seconds`. Principals belong to one enabled plan. Create
-those operator-controlled records through the deployment's database administration workflow, then issue a key:
+Plans define a positive `requests_per_window` and `window_seconds`. Principals belong to one enabled plan and
+must be granted the scopes used by their routes: `metrics:read` for ledger, supply, depth, and trustline reads;
+`anchors:read` for public anchor reserve disclosures. Create those operator-controlled records through the
+deployment's database administration workflow, then issue a key:
+
+```sql
+INSERT INTO api_scopes (id, description) VALUES
+  ('metrics:read', 'Read public reconciliation metrics'),
+  ('anchors:read', 'Read public anchor reserve disclosures')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO api_principal_scopes (principal_id, scope_id)
+VALUES ('<principal-id>', 'metrics:read');
+```
 
 ```bash
 npm run api:key-create -- --principal '<principal-id>'
@@ -30,8 +42,13 @@ lookup prefix are persisted. Store the plaintext in the caller's secret manager;
 PostgreSQL. Revoke without supplying the secret:
 
 ```bash
+npm run api:key-rotate -- --prefix '<12-character-prefix>'
 npm run api:key-revoke -- --prefix '<12-character-prefix>'
 ```
+
+Rotation creates and displays one replacement secret and revokes the old key in the same transaction. Creation,
+rotation, and revocation append immutable `api_key_events`; pass `--actor '<operator-id>'` to any lifecycle
+command to attribute the operation. Key and audit records contain no plaintext secret.
 
 Send the key as `X-Axiom-Key`. CORS preflight remains unauthenticated and permits that header. Authenticated
 application responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
@@ -41,9 +58,27 @@ headers, and integer-seconds `Retry-After`.
 ## Quota semantics
 
 One request consumes one unit before route validation or read-model work begins. Invalid correlation IDs are
-rejected before authentication, and `OPTIONS` does not consume quota. PostgreSQL performs the fixed-window
-increment atomically and refuses increments beyond the plan limit, so concurrent application replicas cannot
-oversubscribe a quota. A denied request never reaches the metric read model.
+rejected before authentication, and `OPTIONS` does not consume quota. PostgreSQL performs sustained and burst
+increments in one transaction and refuses increments beyond either limit, so concurrent application replicas
+cannot oversubscribe a quota. Usage is isolated by principal and stable route ID; consuming supply quota cannot
+consume depth quota. A denied request never reaches the metric read model.
+
+Without a route override, each route receives the plan's sustained window independently and a burst allowance
+of up to 10 requests per second, or the smaller sustained limit. Configure an explicit per-plan route policy
+when a route needs different sustained or burst behavior:
+
+```sql
+INSERT INTO api_plan_route_limits
+  (plan_id, route_id, requests_per_window, window_seconds, burst_requests, burst_window_seconds)
+VALUES
+  ('developer', 'stellar.supply', 600, 60, 20, 1);
+```
+
+Stable route IDs are `stellar.latest-ledger`, `stellar.supply`, `stellar.depth`, `stellar.trustlines`, and
+`anchors.reserves`. Setting an override's `enabled` field to `false` denies that plan access to the route.
+Scope or route-policy denials return `403` without consuming quota. Authentication, scope, plan, and quota-store
+failures are fail-closed when hosted authentication is enabled; explicitly anonymous local mode does not access
+or mutate quota state.
 
 Quota windows are operational counters rather than permanent audit evidence. Schedule bounded cleanup; the
 default retention is seven days and each invocation deletes at most 1,000 rows:

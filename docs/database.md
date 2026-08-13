@@ -20,6 +20,10 @@ from that finalized snapshot, its immutable contribution readings, and approved 
 - `API_QUOTA_RETENTION_HOURS`: completed quota-window retention used by `npm run api:quota-prune`; defaults to
   `168` hours.
 
+API access uses immutable `api_key_events`, principal scope grants, optional `api_plan_route_limits`, and
+`api_quota_usage` buckets partitioned by principal, route, sustained/burst kind, and fixed-window start. Key
+rotation replaces and revokes credentials transactionally; audit rows reject update, delete, and truncate.
+
 Never commit real URLs or log them. Aggregate pool capacity across all process instances must remain below the
 database provider's connection limit.
 
