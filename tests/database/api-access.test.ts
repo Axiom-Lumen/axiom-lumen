@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { issueApiKey } from '../../lib/api-access/key'
 import { createApiAccessRepository } from '../../lib/db/api-access-repository'
 import * as schema from '../../lib/db/schema'
+import { apiKeyWithTamperedSecret } from '../helpers/api-key'
 
 const latestPolicy = { routeId: 'stellar.latest-ledger', requiredScope: 'metrics:read' }
 const depthPolicy = { routeId: 'stellar.depth', requiredScope: 'metrics:read' }
@@ -53,7 +54,7 @@ describeWithDatabase('public API authentication and quota', () => {
       await expect(repository.createKey({ principalId: 'client-disabled' })).rejects.toThrow(/disabled plan/)
       await repository.createKey({ principalId: 'client-a', expiresAt: '2026-09-01T00:00:00.000Z', issuer: () => issued })
       expect(await repository.authorizeAndConsume(null, latestPolicy)).toEqual({ status: 'unauthorized' })
-      expect(await repository.authorizeAndConsume(issued.key.replace(/.$/, 'A'), latestPolicy)).toEqual({ status: 'unauthorized' })
+      expect(await repository.authorizeAndConsume(apiKeyWithTamperedSecret(issued.key), latestPolicy)).toEqual({ status: 'unauthorized' })
       expect(await repository.authorizeAndConsume(issued.key, anchorPolicy)).toEqual({ status: 'forbidden' })
       await pool.query(`INSERT INTO api_principal_scopes (principal_id, scope_id) VALUES ('client-a', 'anchors:read')`)
       await pool.query(`INSERT INTO api_plan_route_limits (plan_id, route_id, requests_per_window, window_seconds, burst_requests, burst_window_seconds, enabled) VALUES ('developer', 'anchors.reserves', 2, 60, 1, 1, false)`)

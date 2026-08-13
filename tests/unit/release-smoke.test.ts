@@ -32,6 +32,18 @@ function responseFor(path: string) {
   if (path.startsWith('/api/v1/depth/')) return Response.json(OPENAPI_EXAMPLES.depthVerified)
   if (path.startsWith('/api/v1/trustlines/')) return Response.json(OPENAPI_EXAMPLES.trustlineVerified)
   if (path.startsWith('/api/v1/anchors/')) return Response.json(OPENAPI_EXAMPLES.anchorReserves)
+  if (path === '/status') {
+    return new Response('<html>AL-OPS-01 · SYSTEM STATUS</html>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  }
+  if (path === '/api/v1/events/snapshots') {
+    return new Response('retry: 1000\n\n: heartbeat 2026-08-13T12:00:00.000Z\n\n', {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+    })
+  }
   return Response.json({ error: 'unexpected path' }, { status: 500 })
 }
 
@@ -57,7 +69,7 @@ describe('release smoke checks', () => {
       return responseFor(new URL(request instanceof Request ? request.url : request).pathname)
     })
     await expect(runReleaseSmoke(input(fetchClient))).resolves.toEqual({ status: 'passed', image_digest: digest })
-    expect(fetchClient).toHaveBeenCalledTimes(7)
+    expect(fetchClient).toHaveBeenCalledTimes(9)
   })
 
   it.each([401, 403, 404, 429])('rejects an enabled representative read returning %s', async (status) => {
@@ -160,5 +172,25 @@ describe('release smoke checks', () => {
       sleep,
     })).resolves.toMatchObject({ status: 'passed' })
     expect(sleep).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a status page that is not the persisted operational surface', async () => {
+    const fetchClient = vi.fn(async (request: string | URL | Request) => {
+      const path = new URL(request instanceof Request ? request.url : request).pathname
+      if (path === '/status') return new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } })
+      return responseFor(path)
+    })
+    await expect(runReleaseSmoke(input(fetchClient))).rejects.toThrow(/status did not return the persisted operational status page/)
+  })
+
+  it('rejects a snapshot stream that does not emit an SSE preface', async () => {
+    const fetchClient = vi.fn(async (request: string | URL | Request) => {
+      const path = new URL(request instanceof Request ? request.url : request).pathname
+      if (path === '/api/v1/events/snapshots') {
+        return new Response('not a stream', { status: 200, headers: { 'Content-Type': 'text/event-stream; charset=utf-8' } })
+      }
+      return responseFor(path)
+    })
+    await expect(runReleaseSmoke(input(fetchClient))).rejects.toThrow(/did not emit a contract-valid stream preface/)
   })
 })

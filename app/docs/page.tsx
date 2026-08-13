@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const anchorEndpoints = [
   {
     method: 'GET',
-    path: '/v1/anchors/{anchor}/reserves',
+    path: '/api/v1/anchors/{anchor}/reserves',
     name: 'Anchor reserve comparison',
     desc: 'Reviewed public reserve disclosures; internal and pending named-party cases remain undisclosed.',
   },
@@ -35,10 +35,9 @@ export default function DocsPage() {
         <div className="grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_460px]">
           <div className="max-w-[560px]">
             <p className="mb-4 text-[15px] leading-relaxed text-muted">
-              Configure comma-separated Horizon endpoints with{' '}
-              <code className="font-mono text-[13px] text-cyan">STELLAR_HORIZON_URLS</code>. The
-              endpoint trims, validates endpoint format, deduplicates, and caps configured sources,
-              then reports source availability separately from data discrepancies.
+              Register enabled Public Network Horizon sources in PostgreSQL, then run the ingestion
+              worker. The latest-ledger route reads a finalized snapshot and reports source
+              availability separately from data discrepancies.
             </p>
             <p className="mb-4 text-[15px] leading-relaxed text-muted">
               All configured Horizon endpoints must serve the same Stellar network. Do not reconcile

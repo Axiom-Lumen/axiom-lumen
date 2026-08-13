@@ -50,7 +50,7 @@ contract. This live check is intentionally absent from ordinary pull requests.
 
 Encrypted database restore drills remain governed by the [data-protection runbook](./runbooks/data-protection.md).
 Operational load tests prove bounded fan-out and atomic limits in CI; environment capacity and latency targets
-must be exercised against staging again during REL-01 because those results depend on deployment topology.
+must be exercised against staging again during environment promotion because those results depend on deployment topology.
 
 ## Adding coverage
 

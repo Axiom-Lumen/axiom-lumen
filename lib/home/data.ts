@@ -18,12 +18,12 @@ export const pipeline = [
   {
     tag: 'INGEST',
     term: 'Aggregation',
-    def: 'Real-time ingestion from every major Stellar endpoint: Horizon, Archive, path-finding, DEX, and ecosystem APIs.',
+    def: 'Background ingestion from registered Horizon, history-archive, SDEX, and verified anchor attestation sources.',
   },
   {
     tag: 'RECONCILE',
     term: 'Cross-verification',
-    def: 'Multi-source reconciliation flags discrepancies and computes a weighted, probabilistic ground truth.',
+    def: 'Weighted reconciliation records discrepancies and a bounded confidence score — not a probability of correctness.',
   },
   {
     tag: 'SERVE',

@@ -39,6 +39,8 @@ Items below are directional and are not commitments to a particular scope or rel
   context.
 - Automated static analysis, secret/dependency checks, property, fuzz, replay, load, failure-injection, unit,
   integration, database, contract, and production-build checks, plus a separate scheduled Horizon smoke test.
+- Immutable release artifacts and digest-pinned promotion. Public v1 remains unsigned until the production-readiness
+  record is complete.
 
 ## Direction
 
@@ -47,7 +49,7 @@ Future work may broaden the product in these areas:
 - Additional reconciliation views where the public contract exposes sufficient evidence.
 - Additional Stellar network metrics where semantics and independent evidence can be defined precisely.
 - Carefully governed issuer and anchor comparison workflows.
-- Additional production reliability and release capabilities.
+- Additional production reliability once the production-readiness record is signed.
 - Expanded replay, load, failure, and end-to-end verification.
 
 New public capabilities will be documented only after their contracts, methodology, failure behavior, and

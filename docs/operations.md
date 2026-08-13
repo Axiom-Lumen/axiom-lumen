@@ -40,3 +40,17 @@ Telemetry recursively redacts authorization, cookies, API keys, credentials, pas
 HTTP and PostgreSQL URLs have user information and sensitive query parameters replaced before serialization.
 Logs record error type/code rather than exception messages or stacks, preventing credential-bearing upstream
 URLs from being copied into operational output.
+
+## Service objectives and ownership
+
+Internal objectives use the `OPS_*` thresholds and the data-protection RPO/RTO. They are not a commercial SLA:
+
+- Readiness means the API can query PostgreSQL and validate threshold configuration.
+- Freshness warning at 100% of a metric's methodology bound and critical at 300%.
+- Cycle-lag warning at 120 seconds and critical at 300 seconds.
+- Backup RPO of five minutes; restore RTO of four hours.
+
+On-call rotation, paging destinations, and rollback authority are named only in the private operator system and
+the [production-readiness record](./releases/production-readiness.record.json). Until that sign-off is accepted,
+public copy must not claim a hosted uptime SLA. Rollback of application units uses `release-rollback.yml`;
+database recovery uses PITR or restore into a new instance.

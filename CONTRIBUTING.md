@@ -18,8 +18,9 @@ The current repository supports:
 - unit, property, fuzz, replay, load, failure-injection, route integration, and real PostgreSQL tests
 - CI for static analysis, contracts, security gates, tests, migration validation, and production build
 
-Automated deployment environments and production promotion remain roadmap work. Keep every contribution honest
-about the difference between repository capability and deployed production behavior.
+Immutable release builds and digest-pinned promotion exist in this repository. Public v1 general availability
+remains unsigned until the production-readiness record is complete. Keep every contribution honest about the
+difference between repository capability and a declared public v1.
 
 ## 2. Target architecture
 

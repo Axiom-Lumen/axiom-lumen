@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apiAuthenticationRequired, apiKeyHashMatches, hashApiKey, issueApiKey, parseApiKey } from '../../lib/api-access/key'
 import { PUBLIC_API_ACCESS_POLICIES, parsePublicApiAccessPolicy } from '../../lib/api-access/policy'
+import { apiKeyWithTamperedSecret } from '../helpers/api-key'
 
 describe('public API keys', () => {
   it('issues a parseable opaque key and stores only its SHA-256 digest', () => {
@@ -11,7 +12,7 @@ describe('public API keys', () => {
     expect(issued.keyHash).toBe(hashApiKey(issued.key))
     expect(issued.keyHash).not.toContain(issued.key)
     expect(apiKeyHashMatches(issued.key, issued.keyHash)).toBe(true)
-    expect(apiKeyHashMatches(issued.key.replace(/.$/, 'A'), issued.keyHash)).toBe(false)
+    expect(apiKeyHashMatches(apiKeyWithTamperedSecret(issued.key), issued.keyHash)).toBe(false)
   })
 
   it('rejects malformed keys without exposing format details to callers', () => {
