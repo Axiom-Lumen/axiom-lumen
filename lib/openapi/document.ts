@@ -1,5 +1,6 @@
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import {
+  apiAnchorReservesResponseSchema,
   apiErrorResponseSchema,
   apiReconciliationSnapshotSchema,
   type ApiErrorResponse,
@@ -42,6 +43,8 @@ export const IMPLEMENTED_PUBLIC_OPERATIONS = [
   { operationId: 'depthOptions', method: 'options', path: '/api/v1/depth/{pair}' },
   { operationId: 'getTrustlines', method: 'get', path: '/api/v1/trustlines/{asset}' },
   { operationId: 'trustlineOptions', method: 'options', path: '/api/v1/trustlines/{asset}' },
+  { operationId: 'getAnchorReserves', method: 'get', path: '/api/v1/anchors/{anchor}/reserves' },
+  { operationId: 'anchorReservesOptions', method: 'options', path: '/api/v1/anchors/{anchor}/reserves' },
 ] as const
 
 function latestExample(status: 'verified' | 'degraded' | 'unavailable'): LatestLedgerReconciliationResult {
@@ -160,6 +163,28 @@ function errorExample(code: string, message: string): ApiErrorResponse {
   })
 }
 
+function anchorReservesExample() {
+  return apiAnchorReservesResponseSchema.parse({
+    anchor: { id: 'anchor_example', name: 'Example Anchor', network: 'public', stellar_account: ISSUER, status: 'verified' },
+    disclosures: [{
+      flag_id: 'anchor_flag_example', severity: 'warning', lifecycle_state: 'open', publication_state: 'approved_public',
+      methodology_version: 'anchor-reserve-comparison-v0.1', approved_at: AS_OF,
+      first_observed_at: AS_OF, last_observed_at: AS_OF,
+      measurement: {
+        event_id: 'anchor_measurement_example', measured_at: AS_OF, asset: ASSET,
+        reserve_amount: '970', onchain_supply: '1000', absolute_delta: '30', delta_basis_points: 300,
+        attestation_period_start: '2026-08-10T11:00:00.000Z', attestation_period_end: AS_OF, published_at: AS_OF,
+        attestation: { schema: 'axiom-lumen-anchor-reserve-attestation-v1', document_url: 'https://anchor.example/reserves', evidence_sha256: 'a'.repeat(64) },
+        source: { id: 'anchor_source_example', url: 'https://anchor.example/reserves', source_class: 'anchor_self_reported' },
+        supply_reference: { snapshot_id: 'supply_snapshot_example', amount: '1000', as_of: AS_OF, ledger_sequence: 58_000_000, ledger_closed_at: AS_OF, status: 'verified', confidence: 0.95, methodology_version: 'onchain-asset-supply-v0.1' },
+        confidence: { score: 0.49, formula_version: 'anchor-reserve-confidence-v0.1', components: { attestation: 1, reference: 0.95, temporal_alignment: 1 }, caps_applied: ['anchor_self_reported'] },
+      },
+      response: null, disputes: [], corrections: [],
+    }],
+    page: { next_cursor: null }, as_of: AS_OF, request_id: 'example_request', api_version: 'v1',
+  })
+}
+
 export const OPENAPI_EXAMPLES = {
   latestVerified: latestExample('verified'),
   latestDegraded: latestExample('degraded'),
@@ -173,6 +198,7 @@ export const OPENAPI_EXAMPLES = {
   trustlineVerified: trustlineExample('verified'),
   trustlineDegraded: trustlineExample('degraded'),
   trustlineUnavailable: trustlineExample('unavailable'),
+  anchorReserves: anchorReservesExample(),
   invalidRequestId: errorExample(
     'invalid_request_id',
     'X-Request-ID must be a valid identifier of at most 128 characters',
@@ -180,6 +206,7 @@ export const OPENAPI_EXAMPLES = {
   invalidQueryParameter: errorExample('invalid_query_parameter', 'Unsupported query parameter: limit'),
   invalidAsset: errorExample('invalid_asset', 'Asset must be a canonical CODE:ISSUER credit-asset identifier'),
   invalidPair: errorExample('invalid_pair', 'Pair must be two different Stellar asset identifiers separated by ~'),
+  invalidPagination: errorExample('invalid_pagination', 'anchor reserve cursor is invalid'),
   latestMissingSnapshot: errorExample(
     'latest_ledger_snapshot_not_found',
     'No finalized latest-ledger snapshot is available',
@@ -267,6 +294,7 @@ export function createOpenApiDocument() {
       { name: 'Supply', description: 'Classic credit-asset on-chain supply reconciliation' },
       { name: 'Depth', description: 'Classic SDEX cumulative order-book depth reconciliation' },
       { name: 'Trustlines', description: 'Classic credit-asset trustline authorization-state reconciliation' },
+      { name: 'Anchors', description: 'Reviewed, publication-approved anchor reserve disclosures' },
     ],
     paths: {
       '/api/v1/stellar/latest-ledger': {
@@ -414,11 +442,27 @@ export function createOpenApiDocument() {
         },
         options: publicOptionsOperation('trustlineOptions'),
       },
+      '/api/v1/anchors/{anchor}/reserves': {
+        get: {
+          operationId: 'getAnchorReserves', tags: ['Anchors'], summary: 'Get reviewed public reserve disclosures for a verified anchor',
+          description: 'Returns only publication-approved named-party flags and public corrections. An empty disclosures array does not reveal whether internal cases exist.',
+          parameters: [{ $ref: '#/components/parameters/Anchor' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          responses: {
+            200: { description: 'Public disclosures, possibly empty', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/AnchorReservesResponse' }, examples: { reviewedComparison: { $ref: '#/components/examples/AnchorReserves' } } } } },
+            304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
+            400: { description: 'Invalid anchor, pagination, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidAnchor: { $ref: '#/components/examples/InvalidAnchor' }, invalidPagination: { $ref: '#/components/examples/InvalidPagination' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No verified anchor exists for the identifier', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/AnchorMissing' } }) },
+            503: { description: 'The persisted public read model is unavailable', headers: responseHeaders, content: errorContent({ readUnavailable: { $ref: '#/components/examples/AnchorReadUnavailable' } }) },
+          },
+        },
+        options: publicOptionsOperation('anchorReservesOptions'),
+      },
     },
     components: {
       schemas: {
         LatestLedgerResponse: componentSchema(latestLedgerResponseSchema, 'LatestLedgerResponse'),
         ReconciliationSnapshot: componentSchema(apiReconciliationSnapshotSchema, 'ReconciliationSnapshot'),
+        AnchorReservesResponse: componentSchema(apiAnchorReservesResponseSchema, 'AnchorReservesResponse'),
         ApiErrorResponse: componentSchema(apiErrorResponseSchema, 'ApiErrorResponse'),
       },
       responses: {
@@ -449,6 +493,21 @@ export function createOpenApiDocument() {
           name: 'pair', in: 'path', required: true,
           description: 'Canonical unordered pair as BASE~COUNTER; native sorts before credit assets',
           schema: { type: 'string', pattern: '^(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})~(?:native|[A-Za-z0-9]{1,12}:G[A-Z2-7]{55})$' }, example: PAIR,
+        },
+        Anchor: {
+          name: 'anchor', in: 'path', required: true,
+          description: 'Canonical verified anchor identifier',
+          schema: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._:-]*$' }, example: 'anchor_example',
+        },
+        Cursor: {
+          name: 'cursor', in: 'query', required: false,
+          description: 'Opaque cursor returned by the preceding anchor disclosure page',
+          schema: { type: 'string', minLength: 1, maxLength: 512 },
+        },
+        Limit: {
+          name: 'limit', in: 'query', required: false,
+          description: 'Disclosure page size; defaults to 25 and cannot exceed 100',
+          schema: { type: 'integer', minimum: 1, maximum: 100, default: 25 },
         },
         RequestId: {
           name: 'X-Request-ID',
@@ -489,18 +548,23 @@ export function createOpenApiDocument() {
         TrustlineVerified: { summary: 'Verified trustline state', value: OPENAPI_EXAMPLES.trustlineVerified },
         TrustlineDegraded: { summary: 'Degraded trustline state', value: OPENAPI_EXAMPLES.trustlineDegraded },
         TrustlineUnavailable: { summary: 'Unavailable or stale trustline state', value: OPENAPI_EXAMPLES.trustlineUnavailable },
+        AnchorReserves: { summary: 'Reviewed reserve comparison disclosure', value: OPENAPI_EXAMPLES.anchorReserves },
         InvalidRequestId: { summary: 'Invalid request identifier', value: OPENAPI_EXAMPLES.invalidRequestId },
         InvalidQueryParameter: { summary: 'Unsupported query parameter', value: OPENAPI_EXAMPLES.invalidQueryParameter },
         InvalidAsset: { summary: 'Invalid supply asset', value: OPENAPI_EXAMPLES.invalidAsset },
         InvalidPair: { summary: 'Invalid depth pair', value: OPENAPI_EXAMPLES.invalidPair },
+        InvalidAnchor: { summary: 'Invalid anchor identifier', value: errorExample('invalid_anchor', 'Anchor must be a valid canonical identifier') },
+        InvalidPagination: { summary: 'Invalid anchor disclosure pagination', value: OPENAPI_EXAMPLES.invalidPagination },
         LatestMissingSnapshot: { summary: 'No finalized latest-ledger snapshot', value: OPENAPI_EXAMPLES.latestMissingSnapshot },
         SupplyMissingSnapshot: { summary: 'No finalized supply snapshot', value: OPENAPI_EXAMPLES.supplyMissingSnapshot },
         DepthMissingSnapshot: { summary: 'No finalized depth snapshot', value: OPENAPI_EXAMPLES.depthMissingSnapshot },
         TrustlineMissingSnapshot: { summary: 'No finalized trustline snapshot', value: OPENAPI_EXAMPLES.trustlineMissingSnapshot },
+        AnchorMissing: { summary: 'No verified anchor', value: errorExample('anchor_not_found', 'No verified anchor is available for this identifier') },
         LatestReadUnavailable: { summary: 'Latest-ledger read storage unavailable', value: OPENAPI_EXAMPLES.latestReadUnavailable },
         SupplyReadUnavailable: { summary: 'Supply read storage unavailable', value: OPENAPI_EXAMPLES.supplyReadUnavailable },
         DepthReadUnavailable: { summary: 'Depth read storage unavailable', value: OPENAPI_EXAMPLES.depthReadUnavailable },
         TrustlineReadUnavailable: { summary: 'Trustline read storage unavailable', value: OPENAPI_EXAMPLES.trustlineReadUnavailable },
+        AnchorReadUnavailable: { summary: 'Anchor reserve read storage unavailable', value: errorExample('anchor_reserves_read_unavailable', 'The anchor reserve read model is temporarily unavailable') },
         AuthenticationError: {
           summary: 'Reserved example for future authenticated operations; no production path currently references it',
           value: OPENAPI_EXAMPLES.authenticationError,

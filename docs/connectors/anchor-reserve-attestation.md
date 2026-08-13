@@ -11,7 +11,8 @@ Incompatible scope, units, or periods become explicit unavailable states.
 Evidence, attempts, source health, comparison snapshots, and discrepancy events persist atomically. The exact
 approved supply snapshot, cycle, ledger checkpoint, close time, and contributing evidence identifiers are retained
 with every usable reserve reading. Warning and Critical named-party discrepancies remain internal until the ANC-03
-workflow durably records successful notification and activates `pending_reply`; no public route exists.
+workflow durably records successful notification and activates `pending_reply`. The public route reconstructs
+only a measurement tied to a later immutable `approve_public` review.
 
 The v0.1 JSON shape is an explicit producer contract because SEP-1 does not standardize a numeric attestation
 body. A discovered source is usable only when the endpoint returns that self-identifying schema; PDFs, HTML, and
@@ -40,6 +41,5 @@ days after cutoff, the cycle is unavailable rather than numerically reconciled.
 
 The live February 2026 provider report was used to verify interoperability and create redacted parser fixtures.
 The live index currently has no newer report, so a collection performed after its 62-day cutoff window correctly
-records stale evidence. ANC-02 and ANC-03 are implemented; public disclosure remains blocked on product/legal
-approval and activation of the separately disabled public route. ANC-04's internal claimant and correction
-controls are implemented.
+records stale evidence. ANC-02 through ANC-04 are implemented. The public route remains fail-closed per record:
+only results with explicit product/legal publication approval and their public corrections are served.

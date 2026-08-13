@@ -118,6 +118,14 @@ age plus time elapsed since finalization exceeds the supply methodology's 120-se
 snapshot is serialized as `unavailable` with a null value and an explicit `stale_observation` source error; its
 original `as_of` remains visible.
 
+`GET /api/v1/anchors/{anchor}/reserves` uses a separate historical-disclosure contract. A mutable
+`approved_public` projection is not sufficient: each item requires a matching immutable `approve_public` review
+and publication event, and is reconstructed from the last completed numeric measurement at or before that
+review. The response retains exact decimal reserve/supply values, delta, asset, attestation and ledger times,
+source/evidence identity, confidence, methodology, approved claimant material, and later public amendments.
+Pages use opaque cursor pagination with a default of 25 and maximum of 100. Internal recurrences are excluded;
+prior public corrections and retractions remain readable after anchor suspension.
+
 ## HTTP policy
 
 The canonical prefix is `/api/v1`; the application does not expose `/v1` as an alias. Snapshot routes share

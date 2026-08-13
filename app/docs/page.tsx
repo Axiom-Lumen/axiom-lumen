@@ -5,15 +5,15 @@ import { PageHero, DocSection, CodePanel, ConfidenceJson, K, S } from '@/compone
 export const metadata: Metadata = {
   title: 'API documentation',
   description:
-    'Implemented and planned API surfaces for Axiom Lumen, including persisted ledger, supply, depth, and trustline reconciliation endpoints.',
+    'Implemented API surfaces for persisted ledger, supply, depth, trustline, and reviewed anchor reserve disclosures.',
 }
 
-const plannedEndpoints = [
+const anchorEndpoints = [
   {
     method: 'GET',
     path: '/v1/anchors/{anchor}/reserves',
     name: 'Anchor reserve comparison',
-    desc: 'Planned: anchor self-reported reserves compared against on-chain supply with active discrepancies.',
+    desc: 'Reviewed public reserve disclosures; internal and pending named-party cases remain undisclosed.',
   },
 ]
 
@@ -23,9 +23,10 @@ export default function DocsPage() {
       <PageHero
         docCode="AL-API-03 · API STATUS"
         kicker="Developer documentation"
-        title="Four implemented endpoints. One machine-readable contract."
+        title="Five implemented endpoints. One machine-readable contract."
       >
-        The current API serves persisted latest-ledger, supply, classic SDEX depth, and trustline-state snapshots.
+        The current API serves persisted latest-ledger, supply, classic SDEX depth, trustline-state snapshots,
+        and immutable reviewed anchor reserve comparisons.
         Authenticated hosted APIs, paid tiers, WebSocket streams, and additional metrics remain
         planned work.
       </PageHero>
@@ -137,9 +138,9 @@ export default function DocsPage() {
         </div>
       </DocSection>
 
-      <DocSection num="04" label="Planned" title="Target v1 API surfaces." wide>
+      <DocSection num="04" label="Anchors" title="Publication-gated reserve disclosures." wide>
         <div className="border-t-2 border-line">
-          {plannedEndpoints.map((ep) => (
+          {anchorEndpoints.map((ep) => (
             <div
               key={ep.path}
               className="grid gap-x-8 gap-y-2 border-b border-linesoft py-6 md:grid-cols-[56px_360px_minmax(0,1fr)]"
@@ -156,9 +157,10 @@ export default function DocsPage() {
           ))}
         </div>
         <p className="mt-8 max-w-[620px] text-sm leading-relaxed text-muted">
-          API keys, rate limits, paid tiers, SSE/WebSocket streams, persistent audit logs, and
-          anchor right-of-reply tooling are not implemented in this repository yet. The broader
-          methodology remains described on the{' '}
+          Each item retains the exact reviewed reserve and on-chain supply values, delta, evidence, and time
+          boundary. The endpoint returns an empty collection for a verified anchor without publishable disclosures,
+          so it does not reveal internal case existence. API keys, rate limits, paid tiers, and SSE/WebSocket streams
+          remain planned. The broader methodology is described on the{' '}
           <Link href="/methodology" className="text-gold underline-offset-4 hover:underline">
             methodology page
           </Link>

@@ -30,8 +30,7 @@ Implemented in this repository today:
    confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: public anchor reserve disclosure, authenticated public API keys, rate limits,
-SSE/WebSocket streams, and anchor right-of-reply workflows.
+Planned but not implemented yet: authenticated public API keys, rate limits, and SSE/WebSocket streams.
 
 ---
 
@@ -68,8 +67,7 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
   `GET /api/v1/trustlines/{asset}` without presenting trustlines as funded holders or users.
 - [x] **Internal anchor reserve comparison:** Verifies issuer-to-domain attribution through SEP-1, ingests the
   generic strict exact-unit contract, and includes an isolated real-provider mZAR PDF profile matched to a
-  historical supply ledger close. Named-party results remain behind the reply/review publication gate; no public
-  reserve endpoint exists yet.
+  historical supply ledger close. Named-party results remain behind the reply/review publication gate.
 - [x] **Anchor right-of-reply case workflow:** Eligible named-party reserve discrepancies create deterministic
   internal cases; leased email/webhook notifications use bounded delivery, signed webhooks, encrypted rotatable
   secrets, and append-only audits. Failed delivery remains internal, the 72-hour clock begins after first
@@ -86,8 +84,8 @@ SSE/WebSocket streams, and anchor right-of-reply workflows.
 
 ### Mocked, static, planned, or missing
 
-- [ ] **Public anchor reserve endpoint:** Comparison, notification, review, claimant, dispute, and correction
-  controls exist internally; the externally served reserve endpoint remains disabled.
+- [x] **Public anchor reserve disclosures:** `GET /api/v1/anchors/{anchor}/reserves` serves only reviewed,
+  publication-approved flags and public corrections. Empty collections do not reveal internal cases.
 - [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
@@ -210,19 +208,33 @@ Returns exact `authorized`, `authorized_to_maintain_liabilities`, and `unauthori
 sum for a classic `CODE:ISSUER` asset. This is trustline authorization state—not funded holders, wallet users, or
 beneficial owners. Native XLM is unsupported because it has no trustline.
 
+### `GET /api/v1/anchors/{anchor}/reserves`
+
+Returns immutable reviewed reserve comparisons for an anchor identifier. Each disclosure includes the exact
+asset, anchor-reported reserve amount, on-chain supply reference, absolute and basis-point delta, reporting and
+ledger boundaries, source, evidence digest, confidence, methodology, approved response/disputes, and public
+corrections or retractions. It is a historical disclosure collection: `measured_at` is the comparison boundary
+and the response does not imply that the attestation remains current.
+
+A verified anchor with no publishable disclosures returns `200` with an empty `disclosures` array without
+revealing internal cases. Suspended anchors remain readable only when they have prior public disclosures, so
+corrections and retractions cannot disappear with a later verification-state change. Unknown anchors return
+`404`. Results use opaque cursor pagination with a default of 25 and maximum of 100.
+
 ### Shared HTTP behavior
 
-`/api/v1` is the canonical public prefix. All four implemented routes accept `GET` and `OPTIONS`, echo or generate
+`/api/v1` is the canonical public prefix. All five implemented routes accept `GET` and `OPTIONS`, echo or generate
 `X-Request-ID`, expose public read-only CORS, reject undeclared query parameters, and return a shared error
 envelope for invalid requests, unsupported methods, missing snapshots, and read-store failures. Current `200`
 snapshots use private, request-ID-varying caches and complete-representation weak ETags; errors and unavailable
 responses use `Cache-Control: no-store`. Matching `If-None-Match` requests return `304`.
 
-Each route caps caching at its remaining evidence lifetime. Supply uses at most 15 seconds plus 45 seconds of
-stale-while-revalidate, depth uses 5 plus 15 seconds, and trustline state uses 60 plus 300 seconds.
+Current-metric routes cap caching at their remaining evidence lifetime. Supply uses at most 15 seconds plus 45
+seconds of stale-while-revalidate, depth uses 5 plus 15 seconds, and trustline state uses 60 plus 300 seconds.
+Historical anchor disclosures use stable persisted event timestamps and a 15 plus 45 second cache policy.
 
-Shared cursor pagination defaults to 25 and is capped at 100 for future list endpoints. The current snapshot
-routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route
+Shared cursor pagination defaults to 25 and is capped at 100. Anchor disclosures are paginated; the current
+snapshot routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route
 has an explicit sunset policy. See [ADR 0006](./docs/decisions/0006-public-http-api-policy.md).
 
 The generated production OpenAPI 3.1 contract is available at

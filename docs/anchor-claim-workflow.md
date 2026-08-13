@@ -1,7 +1,8 @@
 # Anchor claims, replies, disputes, and corrections
 
-ANC-04 provides an internal operator workflow. It does not enable a public reserve route, web form, or claimant
-API. Named-party material remains fail-closed behind the existing product/legal publication gate.
+ANC-04 provides an internal operator workflow. It does not enable a public web form or claimant API.
+Named-party material remains fail-closed behind the existing product/legal publication gate; the public reserve
+route reads only approved output.
 
 ## Domain claim
 
