@@ -106,6 +106,12 @@ jobs:
           EXPECTED_RELEASE_REPOSITORY: ${{ github.repository }}
           EXPECTED_RELEASE_RUN_ID: ${{ inputs.release_run_id }}
           EXPECTED_RELEASE_IMAGE_REPOSITORY: ${{ steps.release.outputs.image_repository }}
+      - name: Enforce production-readiness promotion policy
+        run: npm run release:promotion-policy-verify
+        working-directory: source
+        env:
+          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
+          ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED: "false"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:

@@ -30,7 +30,7 @@ export default function MethodologyPage() {
   return (
     <main>
       <PageHero
-        docCode="AL-SPEC-01 · METHODOLOGY V1.4"
+        docCode="AL-SPEC-01 · METHODOLOGY V1.5"
         kicker="Methodology"
         title="How Axiom Lumen decides what to report."
       >

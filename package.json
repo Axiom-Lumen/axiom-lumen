@@ -54,6 +54,9 @@
     "release:render-kubernetes": "tsx scripts/release/render-kubernetes.ts",
     "release:smoke": "tsx scripts/release/smoke.ts",
     "release:readiness-verify": "tsx scripts/release/verify-readiness.ts",
+    "release:promotion-policy-verify": "tsx scripts/release/verify-promotion-policy.ts",
+    "release:readiness-signoff": "tsx scripts/release/record-readiness-signoff.ts",
+    "release:methodology-fixture-report": "tsx scripts/release/methodology-fixture-report.ts",
     "worker:once": "tsx worker/main.ts --once",
     "worker:continuous": "tsx worker/main.ts --continuous",
     "start": "next start",
@@ -64,7 +67,7 @@
     "test:quality": "vitest run tests/quality",
     "test:database": "vitest run tests/database --testTimeout 15000",
     "test:database:ci": "node scripts/require-database-test-env.mjs && npm run test:database",
-    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm run security:secrets && npm test && npm run test:integration && npm run test:quality && npm run test:database:ci && npm run db:check && npm run build"
+    "ci": "npm run lint && npm run typecheck && npm run openapi:check && npm run release:readiness-verify && npm run security:secrets && npm test && npm run test:integration && npm run test:quality && npm run test:database:ci && npm run db:check && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

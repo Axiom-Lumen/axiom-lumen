@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  acceptReadinessSignOff,
+  assertPromotionPolicy,
   evaluateProductionReadiness,
   parseProductionReadinessRecord,
   PRODUCTION_READINESS_SCHEMA_VERSION,
@@ -88,6 +90,34 @@ describe('production readiness record', () => {
       ready: true,
       public_v1_declared: true,
       blockers: [],
+    })
+  })
+
+  it('blocks named-party publication until legal review is accepted', () => {
+    expect(() => assertPromotionPolicy(record(), {
+      namedPartyPublicationEnabled: true,
+    })).toThrow(/publication_legal_review/)
+    expect(() => assertPromotionPolicy(record({
+      sign_offs: {
+        ...record().sign_offs,
+        publication_legal_review: accepted,
+      },
+    }), {
+      namedPartyPublicationEnabled: true,
+    })).not.toThrow()
+  })
+
+  it('records an accepted sign-off with reviewer evidence', () => {
+    const updated = acceptReadinessSignOff(record(), {
+      id: 'restore_drill',
+      reviewer: 'ops-owner',
+      evidenceRef: 'restore-drill-2026-08',
+      recordedAt: '2026-08-13T23:00:00.000Z',
+    })
+    expect(updated.sign_offs.restore_drill).toMatchObject({
+      status: 'accepted',
+      reviewer: 'ops-owner',
+      evidence_ref: 'restore-drill-2026-08',
     })
   })
 })

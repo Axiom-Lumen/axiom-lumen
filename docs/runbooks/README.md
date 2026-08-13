@@ -21,6 +21,7 @@ raw evidence, claimant material, database URLs, or unpublished named-party cases
 - [Upstream outage and stuck worker](./ingestion-recovery.md)
 - [Bad migration and application rollback](./release-recovery.md)
 - [Notification failure and public correction](./publication-recovery.md)
+- [Incident exercise and rollback rehearsal](./incident-exercise.md)
 
 Production ownership, paging destinations, database-provider commands, deployment commands, and communication
 channels are environment-specific controlled configuration. A production environment is not ready until those

@@ -109,6 +109,7 @@ describe('release automation', () => {
 
   it('defines a single-build promotion and an explicit schema-compatible rollback', () => {
     const build = readFileSync(new URL('../../.github/workflows/release-build.yml', import.meta.url), 'utf8')
+    const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
     const promotion = readFileSync(new URL('../../.github/workflows/release-promote.yml', import.meta.url), 'utf8')
     const rollback = readFileSync(new URL('../../.github/workflows/release-rollback.yml', import.meta.url), 'utf8')
     const imageBuild = build.indexOf('Build and push once')
@@ -129,8 +130,11 @@ describe('release automation', () => {
     expect(promotion).toContain('.SBOM.SPDX')
     expect(promotion).toContain('RELEASE_EXECUTION_ID: ${{ github.run_id }}-${{ github.run_attempt }}')
     expect(promotion).toContain('RELEASE_WORKER_PROGRESS_AFTER: ${{ steps.rollout.outputs.worker_progress_after }}')
+    expect(promotion).toContain('release:promotion-policy-verify')
+    expect(ci).toContain('release:readiness-verify')
     expect(promotion).not.toContain('<<:')
     expect(rollback).toContain('schema_compatible_ack')
+    expect(rollback).toContain('release:promotion-policy-verify')
     expect(rollback).toContain('inputs.supply_enabled')
     expect(rollback).toContain('ref: ${{ steps.release.outputs.commit }}')
     expect(rollback).toContain('gh attestation verify')

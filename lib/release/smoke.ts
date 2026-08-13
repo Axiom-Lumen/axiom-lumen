@@ -3,12 +3,27 @@ import {
   apiAnchorReservesResponseSchema,
   apiErrorResponseSchema,
   apiReconciliationSnapshotSchema,
+  apiSnapshotEventSchema,
 } from '../contracts'
 import { latestLedgerResponseSchema } from '../reconcile/latest-ledger'
 import { parseReleaseFeatureFlags, type ReleaseFeatureFlags } from './config'
 import { parseReleaseManifest, promotableEnvironmentSchema, type ReleaseManifest } from './manifest'
 
 type FetchClient = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+
+export function parseSnapshotEventPayload(buffer: string) {
+  for (const block of buffer.split('\n\n')) {
+    if (!block.trim()) continue
+    let event: string | undefined
+    let data: string | undefined
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event: ')) event = line.slice(7)
+      if (line.startsWith('data: ')) data = line.slice(6)
+    }
+    if (event === 'snapshot' && data) return JSON.parse(data) as unknown
+  }
+  return null
+}
 
 export interface ReleaseSmokeInput {
   baseUrl: URL
@@ -124,6 +139,18 @@ export async function runReleaseSmoke(input: ReleaseSmokeInput) {
     await sleep(input.pollIntervalMs ?? 5_000)
   }
 
+  const latestFinal = await request('/api/v1/stellar/latest-ledger')
+  if (latestFinal.response.status !== 200) {
+    throw new Error('latest-ledger did not return a successful representative read')
+  }
+  const latestParsed = latestLedgerResponseSchema.safeParse(latestFinal.body)
+  if (!latestParsed.success) {
+    throw new Error('latest-ledger returned an invalid response contract')
+  }
+  if (Date.parse(latestParsed.data.as_of) <= input.workerProgressAfter.getTime()) {
+    throw new Error('latest-ledger did not return a post-rollout snapshot')
+  }
+
   const checks = [
     { path: `/api/v1/supply/${encodeURIComponent(input.asset)}`, enabled: input.features.supply, schema: apiReconciliationSnapshotSchema, metric: 'onchain_asset_supply' },
     { path: `/api/v1/depth/${encodeURIComponent(input.pair)}`, enabled: input.features.depth, schema: apiReconciliationSnapshotSchema, metric: 'order_book_depth' },
@@ -185,8 +212,9 @@ export async function runReleaseSmoke(input: ReleaseSmokeInput) {
     }
     await reader.cancel().catch(() => undefined)
     streamController.abort()
-    if (!/(?:^|\n)(?:retry:|: heartbeat|event: snapshot|id: )/m.test(buffer)) {
-      throw new Error('/api/v1/events/snapshots did not emit a contract-valid stream preface')
+    const snapshotPayload = parseSnapshotEventPayload(buffer)
+    if (!snapshotPayload || !apiSnapshotEventSchema.safeParse(snapshotPayload).success) {
+      throw new Error('/api/v1/events/snapshots did not emit a contract-valid snapshot event')
     }
   } finally {
     clearTimeout(streamTimeout)

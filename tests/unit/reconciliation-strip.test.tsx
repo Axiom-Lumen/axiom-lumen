@@ -61,7 +61,7 @@ describe('homepage reconciliation strip', () => {
     const markup = renderToStaticMarkup(await ReconciliationStrip({ load }))
 
     expect(load).toHaveBeenCalledOnce()
-    expect(markup).toContain('Verified live snapshot')
+    expect(markup).toContain('Verified persisted snapshot')
     expect(markup).toContain('48,213,091.02')
     expect(markup).toContain('94%')
     expect(markup).toContain('2 usable / 3 configured')
@@ -71,7 +71,7 @@ describe('homepage reconciliation strip', () => {
   it('shows safe contribution context without inventing per-source values', () => {
     const markup = render(availableState('degraded'))
 
-    expect(markup).toContain('Degraded live snapshot')
+    expect(markup).toContain('Degraded persisted snapshot')
     expect(markup).toContain('public_horizon')
     expect(markup).toContain('canonical ledger · agrees · age 9s')
     expect(markup).toContain('trusted_archive')
@@ -82,7 +82,7 @@ describe('homepage reconciliation strip', () => {
 
   it.each([
     [{ kind: 'empty', asset: DEFAULT_ASSET } as ConfidenceArtifactState, 'No finalized snapshot'],
-    [{ kind: 'error', asset: DEFAULT_ASSET, reason: 'request_failed' } as ConfidenceArtifactState, 'Live snapshot could not be loaded'],
+    [{ kind: 'error', asset: DEFAULT_ASSET, reason: 'request_failed' } as ConfidenceArtifactState, 'Persisted snapshot could not be loaded'],
     [{ kind: 'stale', asset: DEFAULT_ASSET, snapshot: createIllustrativeSupplyArtifact() } as ConfidenceArtifactState, 'Stale snapshot — not current'],
     [{ kind: 'unavailable', asset: DEFAULT_ASSET, response: createIllustrativeSupplyArtifact() } as ConfidenceArtifactState, 'Current snapshot unavailable'],
   ])('renders the %s failure state without a fabricated value', (state, label) => {

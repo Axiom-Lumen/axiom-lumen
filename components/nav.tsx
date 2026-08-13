@@ -45,10 +45,10 @@ export function Nav() {
               )
             })}
             <Link
-              href="/pricing"
+              href="/docs"
               className="ml-5 border border-golddim px-4 py-2 font-mono text-[12px] uppercase tracking-widest text-gold transition-colors hover:border-gold hover:bg-gold hover:text-[#201404]"
             >
-              Get access
+              Read the API
             </Link>
           </div>
 
@@ -114,11 +114,11 @@ export function Nav() {
 
         <div className="pt-6 border-t border-linesoft">
           <Link
-            href="/pricing"
+            href="/docs"
             onClick={() => setOpen(false)}
             className="block w-full text-center border border-golddim py-3 font-mono text-[12px] uppercase tracking-widest text-gold transition-colors hover:border-gold hover:bg-gold hover:text-[#201404]"
           >
-            Get access
+            Read the API
           </Link>
         </div>
       </div>
