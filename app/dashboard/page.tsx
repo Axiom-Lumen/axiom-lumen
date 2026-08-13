@@ -15,7 +15,7 @@ export default function DashboardPage() {
   return (
     <main>
       <PageHero
-        docCode="AL-DATA-01 · LIVE SNAPSHOT"
+        docCode="AL-DATA-01 · PERSISTED SNAPSHOT"
         kicker="Reconciliation dashboard"
         title="One value, with the evidence left attached."
       >

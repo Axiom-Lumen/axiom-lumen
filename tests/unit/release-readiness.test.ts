@@ -95,7 +95,6 @@ describe('production readiness record', () => {
 
   it('blocks named-party publication until legal review is accepted', () => {
     expect(() => assertPromotionPolicy(record(), {
-      environment: 'staging',
       namedPartyPublicationEnabled: true,
     })).toThrow(/publication_legal_review/)
     expect(() => assertPromotionPolicy(record({
@@ -104,7 +103,6 @@ describe('production readiness record', () => {
         publication_legal_review: accepted,
       },
     }), {
-      environment: 'production',
       namedPartyPublicationEnabled: true,
     })).not.toThrow()
   })

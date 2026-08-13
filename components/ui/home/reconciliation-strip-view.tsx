@@ -26,12 +26,12 @@ function asOfFromState(state: ConfidenceArtifactState) {
 
 function stateLabel(state: ConfidenceArtifactState) {
   switch (state.kind) {
-    case 'verified': return 'Verified live snapshot'
-    case 'degraded': return 'Degraded live snapshot'
+    case 'verified': return 'Verified persisted snapshot'
+    case 'degraded': return 'Degraded persisted snapshot'
     case 'stale': return 'Stale snapshot — not current'
     case 'unavailable': return 'Current snapshot unavailable'
     case 'empty': return 'No finalized snapshot'
-    case 'error': return 'Live snapshot could not be loaded'
+    case 'error': return 'Persisted snapshot could not be loaded'
   }
 }
 

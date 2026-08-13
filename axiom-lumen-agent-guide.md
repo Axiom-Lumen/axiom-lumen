@@ -39,8 +39,8 @@ INGEST  →  RECONCILE  →  SERVE
 ```
 
 1. **Ingest (Aggregation).** Real-time ingestion from every major Stellar endpoint: Horizon, Archive, path-finding, DEX/SDEX, and third-party ecosystem/anchor APIs.
-2. **Reconcile (Cross-verification).** Multi-source reconciliation. Discrepancies between sources are flagged, not silently averaged away. A weighted, probabilistic reference value is computed — see Section 4.
-3. **Serve (Actionable output).** Verified data exposed via REST API, WebSocket streams, and a dashboard. Every value returned carries a confidence score and its supporting/conflicting sources — see Section 5.
+2. **Reconcile (Cross-verification).** Multi-source reconciliation. Discrepancies between sources are flagged, not silently averaged away. A weighted reference value and bounded confidence score are computed — see Section 4.
+3. **Serve (Actionable output).** Verified data exposed via REST API, resumable snapshot events, and a dashboard. Every value returned carries a confidence score and its supporting/conflicting sources — see Section 5.
 
 Any new module or endpoint should be placed in one of these three stages. If it doesn't fit, question whether it belongs in this product at all.
 

@@ -12,6 +12,17 @@ function listFiles(directory: string, extension: string): string[] {
     .sort()
 }
 
+function listFixtureFiles(directory: string): string[] {
+  const absolute = join(root, directory)
+  const entries = readdirSync(absolute, { withFileTypes: true })
+  return entries.flatMap((entry) => {
+    const relativePath = join(directory, entry.name)
+    if (entry.isDirectory()) return listFixtureFiles(relativePath)
+    if (entry.isFile()) return [relativePath]
+    return []
+  }).sort()
+}
+
 const report = {
   generated_at: new Date().toISOString(),
   methodology_version: METHODOLOGY_VERSION,
@@ -20,10 +31,7 @@ const report = {
     'tests/quality/methodology-replay.test.ts',
   ],
   replay_fixtures: listFiles('tests/fixtures/replay', '.json'),
-  connector_fixtures: readdirSync(join(root, 'tests/fixtures'), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort(),
+  connector_fixture_files: listFixtureFiles('tests/fixtures'),
   changelog: readFileSync(join(root, 'docs/methodology/changelog.md'), 'utf8').split('\n').slice(0, 12),
 }
 

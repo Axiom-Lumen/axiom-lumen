@@ -92,7 +92,6 @@ export function evaluateProductionReadiness(record: ProductionReadinessRecord) {
 }
 
 export interface PromotionPolicyInput {
-  environment: string
   namedPartyPublicationEnabled: boolean
 }
 

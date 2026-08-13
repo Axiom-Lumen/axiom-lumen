@@ -14,7 +14,6 @@ const environment = process.env.RELEASE_ENVIRONMENT
 if (!environment) throw new Error('RELEASE_ENVIRONMENT is required')
 
 assertPromotionPolicy(loadProductionReadinessRecord(process.argv[2] ?? PRODUCTION_READINESS_RECORD_PATH), {
-  environment,
   namedPartyPublicationEnabled: booleanFlag(
     process.env.ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED,
     'ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED',

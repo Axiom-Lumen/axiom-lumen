@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FORBIDDEN_PUBLIC_CLAIM_PATTERNS,
   PUBLIC_CLAIM_SURFACES,
-  RELEASE_SMOKE_GET_PATHS,
+  smokeSourceCoversDocumentedGets,
   undocumentedSmokeGaps,
 } from '../../lib/release/claims'
 import { loadProductionReadinessRecord } from '../../lib/release/readiness'
@@ -15,9 +15,7 @@ describe('public claims', () => {
   it('covers every documented public GET in release smoke', () => {
     expect(undocumentedSmokeGaps()).toEqual([])
     const smoke = readFileSync(fileURLToPath(new URL('../../lib/release/smoke.ts', import.meta.url)), 'utf8')
-    for (const path of RELEASE_SMOKE_GET_PATHS) {
-      expect(smoke).toContain(path.split('{')[0])
-    }
+    expect(smokeSourceCoversDocumentedGets(smoke)).toBe(true)
   })
 
   it('keeps marketing and status copy from claiming unshipped paid or live capabilities', () => {
