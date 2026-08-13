@@ -6,9 +6,23 @@ This profile compares one anchor-published reserve amount with Axiom Lumen's lat
 supply for the exact same classic credit asset. It reports a measured difference between two figures. It does
 not determine redeemability, solvency, financial health, fraud, intent, or investment suitability.
 
-No public reserve endpoint is included. ANC-03 implements notification and review controls, but results remain
-non-public until the required product/legal approval and activation of a public route. ANC-04's internal
-claimant and correction controls are implemented.
+The public reserve endpoint serves only results that complete ANC-03 notification/review and explicit
+product/legal approval. ANC-04's claimant and correction controls are internal; pending material is not exposed,
+and a public retraction remains visible after the underlying disclosure is withdrawn.
+
+## Public disclosure contract
+
+`GET /api/v1/anchors/{anchor}/reserves` is a paginated historical disclosure collection, not a live reserve
+status claim. Every item is pinned to the last completed numeric measurement at or before its immutable human
+approval. It includes the exact asset, reported reserve amount, persisted on-chain supply reference, absolute and
+basis-point delta, attestation and ledger time boundaries, source/evidence identity, confidence, methodology,
+approved response and dispute evidence, and subsequent public corrections or retractions.
+
+The mutable discrepancy row cannot authorize publication by itself. A durable `approve_public` review is
+required. Internal or pending recurrences are not exposed, while prior public corrections and retractions remain
+visible even if the anchor is later suspended. A verified anchor with no public history returns an empty page;
+this does not distinguish no discrepancy from an internal case. Missing reviewed evidence or inconsistent audit
+identity fails closed as `503`; invalid identifiers or cursors return `400`; unknown anchors return `404`.
 
 ## Attribution
 

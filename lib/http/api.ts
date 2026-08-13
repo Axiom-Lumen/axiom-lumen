@@ -23,6 +23,7 @@ export interface ApiResponseOptions {
   requestId: string
   cache?: ApiCachePolicy
   etag?: boolean
+  etagValue?: unknown
   deprecation?: ApiDeprecationPolicy
 }
 
@@ -164,7 +165,7 @@ export function parseApiPagination(searchParams: URLSearchParams): ApiPagination
 export function apiJsonResponse(request: Request, body: unknown, options: ApiResponseOptions) {
   const headers = baseHeaders(options.requestId, options.cache ?? 'no-store', options.deprecation)
   if (options.etag && options.status === 200) {
-    const etag = weakEtag(body)
+    const etag = weakEtag(options.etagValue ?? body)
     headers.set('ETag', etag)
     if (etagMatches(request, etag)) return new NextResponse(null, { status: 304, headers })
   }

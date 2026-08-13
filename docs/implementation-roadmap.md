@@ -21,6 +21,8 @@ Items below are directional and are not commitments to a particular scope or rel
   fail-closed notification/review workflow whose reply clock starts only after successful notice.
 - Expiring SEP-1 domain claims, authenticated immutable replies, evidence controls, flag-ID disputes, and
   append-only corrections/retractions behind the internal publication gate.
+- A fail-closed public anchor reserve disclosure endpoint that exposes only reviewed publication-approved
+  material and returns empty collections without revealing internal cases.
 - Runtime-validated public API contracts, consistent HTTP behavior, OpenAPI 3.1 documentation, and contract
   parity checks.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,

@@ -1,6 +1,7 @@
 # Anchor case workflow
 
-> Implementation status: ANC-03 complete. This is an internal workflow; no public named-party reserve endpoint is enabled.
+> Implementation status: ANC-03 complete. The workflow remains internal; the public endpoint reads only its
+> explicitly publication-approved output.
 
 The case workflow consumes an open, named-party Warning or Critical discrepancy that is attributed to a
 currently verified anchor. It creates one deterministic case and one initial notification record for each
@@ -50,8 +51,8 @@ npm run anchor:review-case -- --case '<case-id>' --reviewer '<principal-id>' --d
 ```
 
 Approval is fail-closed unless `ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED=true`. That variable must remain false
-until the product/legal approval required by ADR 0001 is recorded. ANC-04 supplies the safe publication read
-model, but no public reserve route is enabled even after an internal case is approved.
+until the product/legal approval required by ADR 0001 is recorded. The public reserve route cannot enable or
+advance publication; it only serves material that has already completed this approval path.
 
 Notification workers use PostgreSQL leases with fencing tokens, exponential retry delays, bounded concurrency,
 and deterministic idempotency keys. Expired leases are reclaimable; stale workers cannot record delivery.

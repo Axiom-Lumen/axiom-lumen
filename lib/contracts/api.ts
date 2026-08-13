@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DEPTH_PRICE_BANDS_BPS, SUPPLY_COMPONENT_IDS, TRUSTLINE_STATE_IDS } from '../../config/methodology'
 import {
+  type AssetId,
   type MetricValue,
   type MetricId,
   type MetricSubject,
@@ -292,6 +293,235 @@ export const apiErrorResponseSchema = z
   })
   .strict()
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>
+
+const apiPublicHttpsUrlSchema = httpUrlSchema.refine((value) => new URL(value).protocol === 'https:', 'public anchor evidence must use HTTPS')
+
+const apiAnchorEvidenceSchema = z.discriminatedUnion('kind', [
+  z.object({ id: identifierSchema, kind: z.literal('link'), url: apiPublicHttpsUrlSchema }).strict(),
+  z.object({
+    id: identifierSchema,
+    kind: z.literal('upload'),
+    content_type: z.enum(['application/pdf', 'image/jpeg', 'image/png', 'text/plain']),
+    byte_size: z.number().int().positive().max(5_000_000),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }).strict(),
+])
+
+const apiAnchorDisclosureSchema = z.object({
+  flag_id: identifierSchema,
+  severity: z.enum(['warning', 'critical']),
+  lifecycle_state: z.literal('open'),
+  publication_state: z.enum(['approved_public', 'withheld']),
+  methodology_version: z.string().min(1).max(100),
+  approved_at: utcTimestampSchema,
+  first_observed_at: utcTimestampSchema,
+  last_observed_at: utcTimestampSchema,
+  measurement: z.object({
+    event_id: identifierSchema,
+    measured_at: utcTimestampSchema,
+    asset: apiAssetIdSchema,
+    reserve_amount: apiStellarAmountSchema,
+    onchain_supply: apiStellarAmountSchema,
+    absolute_delta: apiStellarAmountSchema,
+    delta_basis_points: z.number().finite().nonnegative().max(10_000),
+    attestation_period_start: utcTimestampSchema,
+    attestation_period_end: utcTimestampSchema,
+    published_at: utcTimestampSchema,
+    attestation: z.object({
+      schema: z.string().min(1).max(100),
+      document_url: apiPublicHttpsUrlSchema,
+      evidence_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    }).strict(),
+    source: z.object({
+      id: identifierSchema,
+      url: apiPublicHttpsUrlSchema,
+      source_class: z.literal('anchor_self_reported'),
+    }).strict(),
+    supply_reference: z.object({
+      snapshot_id: identifierSchema,
+      amount: apiStellarAmountSchema,
+      as_of: utcTimestampSchema,
+      ledger_sequence: z.number().int().safe().positive(),
+      ledger_closed_at: utcTimestampSchema,
+      status: z.enum(['verified', 'degraded']),
+      confidence: z.number().finite().min(0).max(1),
+      methodology_version: z.string().min(1).max(100),
+    }).strict(),
+    confidence: z.object({
+      score: z.number().finite().min(0).max(1),
+      formula_version: z.string().min(1).max(100),
+      components: z.record(z.number().finite().min(0).max(1)),
+      caps_applied: z.array(z.string().min(1).max(100)),
+    }).strict(),
+  }).strict(),
+  response: z.object({
+    body: z.string().min(1),
+    version: z.number().int().positive(),
+    submitted_at: utcTimestampSchema,
+    reviewed_at: utcTimestampSchema,
+    evidence: z.array(apiAnchorEvidenceSchema),
+  }).strict().nullable(),
+  disputes: z.array(z.object({
+    id: identifierSchema,
+    body: z.string().min(1),
+    status: z.enum(['resolved', 'rejected']),
+    submitted_at: utcTimestampSchema,
+    resolved_at: utcTimestampSchema,
+    evidence: z.array(apiAnchorEvidenceSchema),
+  }).strict()),
+  corrections: z.array(z.object({
+    id: identifierSchema,
+    target_event_id: identifierSchema,
+    type: z.enum(['corrected', 'retracted']),
+    reason: z.string().min(1),
+    corrected_deviation_band: z.enum(['within_tolerance', 'info', 'above_info']).nullable(),
+    occurred_at: utcTimestampSchema,
+  }).strict()),
+}).strict().superRefine((disclosure, context) => {
+  if (Date.parse(disclosure.last_observed_at) < Date.parse(disclosure.first_observed_at)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['last_observed_at'], message: 'last observation cannot precede first observation' })
+  }
+  if (disclosure.publication_state === 'withheld' && !disclosure.corrections.some((item) => item.type === 'retracted')) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['corrections'], message: 'withheld disclosure requires a public retraction' })
+  }
+})
+
+export const apiAnchorReservesResponseSchema = z.object({
+  anchor: z.object({
+    id: identifierSchema,
+    name: z.string().min(1),
+    network: networkIdSchema,
+    stellar_account: z.string().nullable(),
+    status: z.enum(['verified', 'suspended']),
+  }).strict(),
+  disclosures: z.array(apiAnchorDisclosureSchema),
+  page: z.object({ next_cursor: z.string().min(1).max(512).nullable() }).strict(),
+  as_of: utcTimestampSchema,
+  request_id: identifierSchema,
+  api_version: z.literal('v1'),
+}).strict()
+export type ApiAnchorReservesResponse = z.infer<typeof apiAnchorReservesResponseSchema>
+
+export function serializePublicAnchorReserves(
+  model: {
+    anchor: { id: string; name: string; networkId: string; stellarAccount: string | null; status: string }
+    asOf: string
+    nextCursor: string | null
+    disclosures: readonly {
+      flagId: string
+      severity: string
+      lifecycleState: string
+      publicationState: string
+      methodologyVersion: string
+      approvedAt: string
+      firstObservedAt: string
+      lastObservedAt: string
+      measurement: {
+        eventId: string; measuredAt: string; asset: AssetId; reserveAmount: { toString(): string }; onchainSupply: { toString(): string }
+        absoluteDelta: { toString(): string }; deltaBasisPoints: number; attestationPeriodStart: string; attestationPeriodEnd: string
+        publishedAt: string; attestation: { schema: string; documentUrl: string; evidenceSha256: string }
+        source: { id: string; url: string; sourceClass: string }
+        supplyReference: { snapshotId: string; amount: string; asOf: string; ledgerSequence: number; ledgerClosedAt: string; status: string; confidence: number; methodologyVersion: string }
+        confidence: { score: number; formulaVersion: string; components: Record<string, number>; capsApplied: string[] }
+      }
+      response: null | { body: string; version: number; submittedAt: string; reviewedAt: string; evidence: readonly Record<string, unknown>[] }
+      disputes: readonly { id: string; body: string; status: string; submittedAt: string; resolvedAt: string | null; evidence: readonly Record<string, unknown>[] }[]
+      corrections: readonly { id: string; targetEventId: string; type: string; reason: string; replacement: Record<string, unknown> | null; occurredAt: string }[]
+    }[]
+  },
+  requestId: string,
+): ApiAnchorReservesResponse {
+  return apiAnchorReservesResponseSchema.parse({
+    anchor: {
+      id: model.anchor.id,
+      name: model.anchor.name,
+      network: model.anchor.networkId,
+      stellar_account: model.anchor.stellarAccount,
+      status: model.anchor.status,
+    },
+    disclosures: model.disclosures.map((flag) => ({
+      flag_id: flag.flagId,
+      severity: flag.severity,
+      lifecycle_state: flag.lifecycleState,
+      publication_state: flag.publicationState,
+      methodology_version: flag.methodologyVersion,
+      approved_at: flag.approvedAt,
+      first_observed_at: flag.firstObservedAt,
+      last_observed_at: flag.lastObservedAt,
+      measurement: {
+        event_id: flag.measurement.eventId,
+        measured_at: flag.measurement.measuredAt,
+        asset: formatAssetId(flag.measurement.asset),
+        reserve_amount: flag.measurement.reserveAmount.toString(),
+        onchain_supply: flag.measurement.onchainSupply.toString(),
+        absolute_delta: flag.measurement.absoluteDelta.toString(),
+        delta_basis_points: flag.measurement.deltaBasisPoints,
+        attestation_period_start: flag.measurement.attestationPeriodStart,
+        attestation_period_end: flag.measurement.attestationPeriodEnd,
+        published_at: flag.measurement.publishedAt,
+        attestation: {
+          schema: flag.measurement.attestation.schema,
+          document_url: flag.measurement.attestation.documentUrl,
+          evidence_sha256: flag.measurement.attestation.evidenceSha256,
+        },
+        source: {
+          id: flag.measurement.source.id,
+          url: flag.measurement.source.url,
+          source_class: flag.measurement.source.sourceClass,
+        },
+        supply_reference: {
+          snapshot_id: flag.measurement.supplyReference.snapshotId,
+          amount: flag.measurement.supplyReference.amount,
+          as_of: flag.measurement.supplyReference.asOf,
+          ledger_sequence: flag.measurement.supplyReference.ledgerSequence,
+          ledger_closed_at: flag.measurement.supplyReference.ledgerClosedAt,
+          status: flag.measurement.supplyReference.status,
+          confidence: flag.measurement.supplyReference.confidence,
+          methodology_version: flag.measurement.supplyReference.methodologyVersion,
+        },
+        confidence: {
+          score: flag.measurement.confidence.score,
+          formula_version: flag.measurement.confidence.formulaVersion,
+          components: flag.measurement.confidence.components,
+          caps_applied: flag.measurement.confidence.capsApplied,
+        },
+      },
+      response: flag.response ? {
+        body: flag.response.body,
+        version: flag.response.version,
+        submitted_at: flag.response.submittedAt,
+        reviewed_at: flag.response.reviewedAt,
+        evidence: flag.response.evidence.map((item) => item.kind === 'link'
+          ? { id: item.id, kind: 'link', url: item.url }
+          : { id: item.id, kind: 'upload', content_type: item.contentType, byte_size: item.byteSize, sha256: item.sha256 }),
+      } : null,
+      disputes: flag.disputes.map((item) => ({
+        id: item.id,
+        body: item.body,
+        status: item.status,
+        submitted_at: item.submittedAt,
+        resolved_at: item.resolvedAt,
+        evidence: item.evidence.map((evidence) => evidence.kind === 'link'
+          ? { id: evidence.id, kind: 'link', url: evidence.url }
+          : { id: evidence.id, kind: 'upload', content_type: evidence.contentType, byte_size: evidence.byteSize, sha256: evidence.sha256 }),
+      })),
+      corrections: flag.corrections.map((item) => ({
+        id: item.id,
+        target_event_id: item.targetEventId,
+        type: item.type,
+        reason: item.reason,
+        corrected_deviation_band: typeof item.replacement?.correctedDeviationBand === 'string'
+          ? item.replacement.correctedDeviationBand
+          : null,
+        occurred_at: item.occurredAt,
+      })),
+    })),
+    page: { next_cursor: model.nextCursor },
+    as_of: model.asOf,
+    request_id: requestId,
+    api_version: 'v1',
+  })
+}
 
 function serializeMetricValue(value: MetricValue): z.infer<typeof apiMetricValueSchema> {
   switch (value.kind) {
