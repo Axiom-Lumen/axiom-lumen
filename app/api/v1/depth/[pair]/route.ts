@@ -2,7 +2,8 @@ import { depthReconciliationMethodologyConfig } from '../../../../../config/meth
 import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import { apiReconciliationSnapshotSchema, parseTradingPairId, serializePublicReconciliationSnapshot, type ApiReconciliationSnapshot } from '../../../../../lib/contracts'
 import { loadLatestDepthReadModel } from '../../../../../lib/db/depth-read-model'
-import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
+import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, linkApiResponseToProducerCycle, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
+import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 interface Context { params: Promise<{ pair: string }> }
@@ -33,11 +34,11 @@ export async function GET(request: Request, context: Context) {
       const readModel = await loadLatestDepthReadModel(pair, now)
       if (!readModel) return apiErrorResponse({ request, status: 404, code: 'depth_snapshot_not_found', message: 'No finalized depth snapshot is available', requestId: resolved.requestId, asOf: now })
       const response = serializePublicReconciliationSnapshot(readModel.snapshot, resolved.requestId)
-      if (readModel.stale) return apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' })
+      if (readModel.stale) return linkApiResponseToProducerCycle(apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' }), readModel.snapshot.cycleId)
       const status = response.status === 'unavailable' ? 503 : 200
-      return apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
+      return linkApiResponseToProducerCycle(apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 }), readModel.snapshot.cycleId)
     } catch (error) {
-      console.error('Unable to load depth read model', { name: error instanceof Error ? error.name : 'Error' })
+      structuredLog('error', 'depth_read_failed', { request_id: resolved.requestId, ...errorTelemetry(error) })
       return apiErrorResponse({ request, status: 503, code: 'depth_read_unavailable', message: 'The depth read model is temporarily unavailable', requestId: resolved.requestId, asOf: now })
     }
   })

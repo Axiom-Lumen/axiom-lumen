@@ -59,6 +59,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
@@ -68,6 +71,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -116,6 +122,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -147,6 +156,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -198,6 +210,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -241,6 +256,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -295,6 +313,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -303,6 +324,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -332,6 +356,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -391,6 +418,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
@@ -400,6 +430,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -448,6 +481,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -479,6 +515,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -533,6 +572,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -576,6 +618,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -630,6 +675,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -638,6 +686,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -667,6 +718,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -726,6 +780,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
@@ -735,6 +792,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -783,6 +843,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -814,6 +877,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -868,6 +934,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -911,6 +980,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -965,6 +1037,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -973,6 +1048,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1002,6 +1080,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1061,6 +1142,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
@@ -1070,6 +1154,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1118,6 +1205,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1149,6 +1239,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1203,6 +1296,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1246,6 +1342,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1300,6 +1399,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -1308,6 +1410,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1337,6 +1442,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1403,6 +1511,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
@@ -1412,6 +1523,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1457,6 +1571,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1488,6 +1605,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1545,6 +1665,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1589,6 +1712,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1632,6 +1758,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -1640,6 +1769,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1669,6 +1801,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1726,6 +1861,9 @@
             "$ref": "#/components/parameters/RequestId"
           },
           {
+            "$ref": "#/components/parameters/Traceparent"
+          },
+          {
             "$ref": "#/components/parameters/LastEventId"
           }
         ],
@@ -1735,6 +1873,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1772,6 +1913,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1826,6 +1970,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1870,6 +2017,9 @@
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
               },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
@@ -1913,6 +2063,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
           }
         ],
         "responses": {
@@ -1921,6 +2074,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -1950,6 +2106,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "Traceparent": {
+                "$ref": "#/components/headers/Traceparent"
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
@@ -4365,6 +4524,9 @@
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
           },
+          "Traceparent": {
+            "$ref": "#/components/headers/Traceparent"
+          },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
           },
@@ -4397,6 +4559,9 @@
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
           },
+          "Traceparent": {
+            "$ref": "#/components/headers/Traceparent"
+          },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
           },
@@ -4428,6 +4593,9 @@
         "headers": {
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
+          },
+          "Traceparent": {
+            "$ref": "#/components/headers/Traceparent"
           },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
@@ -4539,6 +4707,16 @@
           "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
         }
       },
+      "Traceparent": {
+        "name": "Traceparent",
+        "in": "header",
+        "required": false,
+        "description": "Optional W3C trace context; valid trace IDs are continued with a new server span",
+        "schema": {
+          "type": "string",
+          "pattern": "^00-[0-9a-fA-F]{32}-[0-9a-fA-F]{16}-[0-9a-fA-F]{2}$"
+        }
+      },
       "IfNoneMatch": {
         "name": "If-None-Match",
         "in": "header",
@@ -4563,6 +4741,13 @@
         "description": "Request correlation identifier",
         "schema": {
           "type": "string"
+        }
+      },
+      "Traceparent": {
+        "description": "W3C trace context for the server span",
+        "schema": {
+          "type": "string",
+          "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-01$"
         }
       },
       "CacheControl": {

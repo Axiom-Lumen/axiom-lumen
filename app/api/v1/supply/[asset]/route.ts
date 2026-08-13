@@ -14,8 +14,10 @@ import {
   apiOptionsResponse,
   rejectUnexpectedQueryParameters,
   resolveApiRequestId,
+  linkApiResponseToProducerCycle,
   withPublicApiAccess,
 } from '../../../../../lib/http/api'
+import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 
@@ -118,11 +120,11 @@ export async function GET(request: Request, context: SupplyRouteContext) {
         return apiErrorResponse({ request, status: 404, code: 'supply_snapshot_not_found', message: 'No finalized supply snapshot is available', requestId, asOf: now })
       }
       const response = serializePublicReconciliationSnapshot(readModel.snapshot, requestId)
-      if (readModel.stale) return apiJsonResponse(request, staleResponse(response, requestId, now), { status: 503, requestId, cache: 'no-store' })
+      if (readModel.stale) return linkApiResponseToProducerCycle(apiJsonResponse(request, staleResponse(response, requestId, now), { status: 503, requestId, cache: 'no-store' }), readModel.snapshot.cycleId)
       const status = response.status === 'unavailable' ? 503 : 200
-      return apiJsonResponse(request, response, { status, requestId, cache: status === 200 ? supplyCachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
+      return linkApiResponseToProducerCycle(apiJsonResponse(request, response, { status, requestId, cache: status === 200 ? supplyCachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 }), readModel.snapshot.cycleId)
     } catch (error) {
-      console.error('Unable to load the supply read model', { name: error instanceof Error ? error.name : 'Error' })
+      structuredLog('error', 'supply_read_failed', { request_id: requestId, ...errorTelemetry(error) })
       return apiErrorResponse({ request, status: 503, code: 'supply_read_unavailable', message: 'The supply read model is temporarily unavailable', requestId, asOf: now })
     }
   })

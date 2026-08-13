@@ -255,6 +255,7 @@ function componentSchema(schema: Parameters<typeof zodToJsonSchema>[0], name: st
 
 const responseHeaders = {
   'X-Request-ID': { $ref: '#/components/headers/XRequestId' },
+  Traceparent: { $ref: '#/components/headers/Traceparent' },
   'Cache-Control': { $ref: '#/components/headers/CacheControl' },
   'Access-Control-Allow-Origin': { $ref: '#/components/headers/CorsOrigin' },
   'Access-Control-Expose-Headers': { $ref: '#/components/headers/CorsExposeHeaders' },
@@ -300,7 +301,7 @@ function publicOptionsOperation(operationId: string) {
   return {
     operationId,
     summary: 'Inspect public read-only CORS policy',
-    parameters: [{ $ref: '#/components/parameters/RequestId' }],
+    parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }],
     responses: {
       204: { description: 'CORS preflight accepted', headers: optionsHeaders },
       400: {
@@ -337,7 +338,7 @@ export function createOpenApiDocument() {
           security: [{ ApiKeyAuth: [] }],
           tags: ['Ledger'],
           summary: 'Get the latest finalized Public Network ledger snapshot',
-          parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
             ...accessErrorResponses,
             200: {
@@ -398,6 +399,7 @@ export function createOpenApiDocument() {
           parameters: [
             { $ref: '#/components/parameters/Asset' },
             { $ref: '#/components/parameters/RequestId' },
+            { $ref: '#/components/parameters/Traceparent' },
             { $ref: '#/components/parameters/IfNoneMatch' },
           ],
           responses: {
@@ -456,7 +458,7 @@ export function createOpenApiDocument() {
         get: {
           operationId: 'getDepth', tags: ['Depth'], summary: 'Get the latest finalized Public Network SDEX depth snapshot',
           security: [{ ApiKeyAuth: [] }],
-          parameters: [{ $ref: '#/components/parameters/Pair' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          parameters: [{ $ref: '#/components/parameters/Pair' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
             ...accessErrorResponses,
             200: { description: 'Current verified or degraded depth snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/DepthVerified' }, degraded: { $ref: '#/components/examples/DepthDegraded' } } } } },
@@ -472,7 +474,7 @@ export function createOpenApiDocument() {
         get: {
           operationId: 'getTrustlines', tags: ['Trustlines'], summary: 'Get finalized Public Network trustline authorization-state counts',
           security: [{ ApiKeyAuth: [] }],
-          parameters: [{ $ref: '#/components/parameters/Asset' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          parameters: [{ $ref: '#/components/parameters/Asset' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
             ...accessErrorResponses,
             200: { description: 'Current verified or degraded trustline-state snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/TrustlineVerified' }, degraded: { $ref: '#/components/examples/TrustlineDegraded' } } } } },
@@ -489,7 +491,7 @@ export function createOpenApiDocument() {
           operationId: 'getAnchorReserves', tags: ['Anchors'], summary: 'Get reviewed public reserve disclosures for a verified anchor',
           security: [{ ApiKeyAuth: [] }],
           description: 'Returns only publication-approved named-party flags and public corrections. An empty disclosures array does not reveal whether internal cases exist.',
-          parameters: [{ $ref: '#/components/parameters/Anchor' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
+          parameters: [{ $ref: '#/components/parameters/Anchor' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
             ...accessErrorResponses,
             200: { description: 'Public disclosures, possibly empty', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/AnchorReservesResponse' }, examples: { reviewedComparison: { $ref: '#/components/examples/AnchorReserves' } } } } },
@@ -508,7 +510,7 @@ export function createOpenApiDocument() {
           tags: ['Events'],
           summary: 'Stream completed public snapshot events',
           description: 'Opens a server-sent event stream. Reconnect with the last received event ID to replay without silent gaps. Anchor reserve comparison snapshots are excluded because they require separate publication-state filtering.',
-          parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/LastEventId' }],
+          parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/Traceparent' }, { $ref: '#/components/parameters/LastEventId' }],
           responses: {
             ...accessErrorResponses,
             200: {
@@ -612,6 +614,13 @@ export function createOpenApiDocument() {
           description: 'Optional caller correlation identifier; generated when absent',
           schema: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._:-]*$' },
         },
+        Traceparent: {
+          name: 'Traceparent',
+          in: 'header',
+          required: false,
+          description: 'Optional W3C trace context; valid trace IDs are continued with a new server span',
+          schema: { type: 'string', pattern: '^00-[0-9a-fA-F]{32}-[0-9a-fA-F]{16}-[0-9a-fA-F]{2}$' },
+        },
         IfNoneMatch: {
           name: 'If-None-Match',
           in: 'header',
@@ -628,6 +637,7 @@ export function createOpenApiDocument() {
       },
       headers: {
         XRequestId: { description: 'Request correlation identifier', schema: { type: 'string' } },
+        Traceparent: { description: 'W3C trace context for the server span', schema: { type: 'string', pattern: '^00-[0-9a-f]{32}-[0-9a-f]{16}-01$' } },
         CacheControl: { description: 'Private snapshot caching or no-store', schema: { type: 'string' } },
         ETag: { description: 'Weak complete-representation validator', schema: { type: 'string' } },
         CorsOrigin: { description: 'Public read-only origin policy', schema: { type: 'string', enum: ['*'] } },

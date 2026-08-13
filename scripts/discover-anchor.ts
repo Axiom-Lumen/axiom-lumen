@@ -5,6 +5,7 @@ import { networks } from '../lib/db/schema'
 import { creditAssetSchema, networkIdSchema, parseAssetId } from '../lib/contracts/domain'
 import { discoverAnchor } from '../lib/stellar/anchor-discovery'
 import { parseHorizonHostList } from '../lib/stellar/horizon'
+import { errorTelemetry, structuredLog } from '../lib/observability/telemetry'
 
 function argument(name: string) {
   const index = process.argv.indexOf(`--${name}`)
@@ -45,19 +46,18 @@ async function main() {
       throw error
     }
     const persisted = await repository.persistVerifiedDiscovery({ networkId, discovery })
-    console.log(JSON.stringify({
-      event: 'anchor_discovery_complete',
-      network: networkId,
+    structuredLog('info', 'anchor_discovery_complete', {
+      network_id: networkId,
       asset: `${asset.code}:${asset.issuer}`,
-      homeDomain: discovery.homeDomain,
+      home_domain: discovery.homeDomain,
       ...persisted,
-    }))
+    })
   } finally {
     await client.pool.end()
   }
 }
 
 main().catch((error: unknown) => {
-  console.error(JSON.stringify({ event: 'anchor_discovery_failed', errorType: error instanceof Error ? error.name : 'UnknownError' }))
+  structuredLog('error', 'anchor_discovery_failed', errorTelemetry(error))
   process.exitCode = 1
 })

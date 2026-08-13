@@ -17,6 +17,10 @@ responses always emit it. The shared `401`, `403`, and `429` components describe
 quota failures.
 `OPTIONS` remains unauthenticated.
 
+Operational endpoints (`/api/health/live`, `/api/health/ready`, and `/api/metrics`) are deployment probes rather
+than versioned public data operations, so they are intentionally outside the `/api/v1` OpenAPI contract. Their
+behavior and scrape format are documented in [`operations.md`](./operations.md).
+
 ## Source and generation
 
 [`lib/openapi/document.ts`](../lib/openapi/document.ts) converts the shared Zod response schemas into OpenAPI

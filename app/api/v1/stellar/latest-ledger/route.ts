@@ -1,14 +1,16 @@
-import { loadLatestLedgerReadModel } from '../../../../../lib/db/latest-ledger-read-model'
+import { latestLedgerProducerCycle, loadLatestLedgerReadModel } from '../../../../../lib/db/latest-ledger-read-model'
 import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import {
   apiErrorResponse,
   apiJsonResponse,
+  linkApiResponseToProducerCycle,
   apiMethodNotAllowedResponse,
   apiOptionsResponse,
   rejectUnexpectedQueryParameters,
   resolveApiRequestId,
   withPublicApiAccess,
 } from '../../../../../lib/http/api'
+import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,16 +47,16 @@ export async function GET(request: Request) {
         )
       }
       const status = reconciled.status === 'unavailable' ? 503 : 200
-      return apiJsonResponse(request, reconciled, {
+      const response = apiJsonResponse(request, reconciled, {
         status,
         requestId: resolved.requestId,
         cache: status === 200 ? { maxAgeSeconds: 15, staleWhileRevalidateSeconds: 45 } : 'no-store',
         etag: status === 200,
       })
+      const producerCycle = latestLedgerProducerCycle(reconciled)
+      return producerCycle ? linkApiResponseToProducerCycle(response, producerCycle) : response
     } catch (error) {
-      console.error('Unable to load the latest-ledger read model', {
-        name: error instanceof Error ? error.name : 'Error',
-      })
+      structuredLog('error', 'latest_ledger_read_failed', { request_id: resolved.requestId, ...errorTelemetry(error) })
       return requestError(
         request,
         503,

@@ -4,7 +4,10 @@ import { latestLedgerResponseSchema, type LatestLedgerReconciliationResult } fro
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
 const readModel = vi.hoisted(() => ({ load: vi.fn() }))
-vi.mock('../../lib/db/latest-ledger-read-model', () => ({ loadLatestLedgerReadModel: readModel.load }))
+vi.mock('../../lib/db/latest-ledger-read-model', () => ({
+  loadLatestLedgerReadModel: readModel.load,
+  latestLedgerProducerCycle: () => undefined,
+}))
 vi.mock('../../lib/db/api-access-repository', () => ({ authorizePublicApiKey: vi.fn(async () => ({ status: 'allowed', grant: { principalId: 'test', planId: 'developer', limit: 60, remaining: 59, resetAt: '2026-08-10T10:01:00.000Z' } })) }))
 
 import { GET, OPTIONS, POST } from '../../app/api/v1/stellar/latest-ledger/route'
@@ -54,6 +57,7 @@ describe('GET /api/v1/stellar/latest-ledger', () => {
     expect(response.headers.get('x-request-id')).toBe('req_latest_1')
     expect(response.headers.get('cache-control')).toBe('private, max-age=15, stale-while-revalidate=45')
     expect(response.headers.get('vary')).toBe('X-Request-ID, X-Axiom-Key')
+    expect(response.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
     expect(response.headers.get('access-control-allow-origin')).toBe('*')
     expect(response.headers.get('etag')).toMatch(/^W\/"[A-Za-z0-9_-]+"$/)
     expect(fetchSpy).not.toHaveBeenCalled()
