@@ -95,3 +95,15 @@ the recorded digest and repeats the same post-rollout worker-progress and repres
 If compatibility is uncertain, disable affected feature flags and use a reviewed forward fix. Database recovery
 uses PITR or restore into a new instance as described in the [release recovery runbook](./runbooks/release-recovery.md),
 never destructive schema reversal.
+
+## Production-readiness gate
+
+REL-02 keeps public v1 unsigned until restore drills, an incident exercise, independent security and methodology
+reviews, product/legal publication approval, and named on-call/rollback owners are recorded. The executable
+record is [`production-readiness.record.json`](./releases/production-readiness.record.json). Promotion into
+isolated environments may continue; marketing and pricing must not describe general availability while that
+record is unsigned. See the [production-readiness guide](./releases/production-readiness.md) and
+[threat model](./security/threat-model.md).
+
+Release smoke also exercises `/status` and `GET /api/v1/events/snapshots` so documented public reads are not
+labeled available without a promotion check.

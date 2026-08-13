@@ -150,5 +150,47 @@ export async function runReleaseSmoke(input: ReleaseSmokeInput) {
     }
   }
 
+  const statusPage = await fetchClient(new URL('/status', input.baseUrl), {
+    headers: { 'X-Axiom-Key': input.apiKey, Accept: 'text/html' },
+    signal: AbortSignal.timeout(10_000),
+  })
+  const statusBody = await statusPage.text()
+  if (
+    statusPage.status !== 200
+    || !statusPage.headers.get('content-type')?.includes('text/html')
+    || !statusBody.includes('AL-OPS-01')
+  ) {
+    throw new Error('/status did not return the persisted operational status page')
+  }
+
+  const streamController = new AbortController()
+  const streamTimeout = setTimeout(() => streamController.abort(), 10_000)
+  try {
+    const stream = await fetchClient(new URL('/api/v1/events/snapshots', input.baseUrl), {
+      headers: { 'X-Axiom-Key': input.apiKey, Accept: 'text/event-stream' },
+      signal: streamController.signal,
+    })
+    if (stream.status !== 200 || !stream.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new Error('/api/v1/events/snapshots did not open an event stream')
+    }
+    if (!stream.body) throw new Error('/api/v1/events/snapshots returned no stream body')
+    const reader = stream.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (buffer.length < 8_192) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
+      if (buffer.includes('\n\n')) break
+    }
+    await reader.cancel().catch(() => undefined)
+    streamController.abort()
+    if (!/(?:^|\n)(?:retry:|: heartbeat|event: snapshot|id: )/m.test(buffer)) {
+      throw new Error('/api/v1/events/snapshots did not emit a contract-valid stream preface')
+    }
+  } finally {
+    clearTimeout(streamTimeout)
+  }
+
   return { status: 'passed' as const, image_digest: input.manifest.image_digest }
 }

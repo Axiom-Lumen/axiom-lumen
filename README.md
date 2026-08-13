@@ -96,6 +96,9 @@ Implemented in this repository today:
 - [ ] **WebSocket streams:** Not implemented; bidirectional behavior has not been demonstrated as necessary.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
   form or claimant API is enabled.
+- [ ] **Public v1 general availability:** Release automation exists, but the production-readiness record remains
+  unsigned. Restore drills, incident exercise, independent reviews, legal publication approval, and named
+  on-call/rollback owners are still required before public v1 may be declared.
 
 ---
 
@@ -327,6 +330,8 @@ Property, replay, load, failure-injection, security, database, and scheduled smo
 [quality strategy](./docs/quality-strategy.md).
 Immutable OCI builds, isolated environments, digest-pinned promotion, feature flags, migration jobs, and rollback
 are documented in the [release guide](./docs/releases.md).
+The unsigned production-readiness record, threat model, and SLO/ownership contracts are documented in the
+[production-readiness guide](./docs/releases/production-readiness.md).
 
 ---
 

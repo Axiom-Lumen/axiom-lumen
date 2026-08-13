@@ -25,3 +25,8 @@ raw evidence, claimant material, database URLs, or unpublished named-party cases
 Production ownership, paging destinations, database-provider commands, deployment commands, and communication
 channels are environment-specific controlled configuration. A production environment is not ready until those
 fields are populated in the private operator system and exercised in a drill.
+
+Related controls:
+
+- [Production-readiness gate](../releases/production-readiness.md)
+- [Threat model](../security/threat-model.md)

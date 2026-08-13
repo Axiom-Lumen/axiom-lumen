@@ -53,6 +53,7 @@
     "release:manifest-verify": "tsx scripts/release/verify-manifest.ts",
     "release:render-kubernetes": "tsx scripts/release/render-kubernetes.ts",
     "release:smoke": "tsx scripts/release/smoke.ts",
+    "release:readiness-verify": "tsx scripts/release/verify-readiness.ts",
     "worker:once": "tsx worker/main.ts --once",
     "worker:continuous": "tsx worker/main.ts --continuous",
     "start": "next start",
