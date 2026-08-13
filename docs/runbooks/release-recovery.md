@@ -13,3 +13,12 @@ Application rollback redeploys the last known-good immutable artifact only when 
 documented. Roll back web and worker independently if safe, disable new publication behavior first, run readiness
 and representative reads, then observe one full ingestion interval. A database rollback is always restore or
 forward-fix—not a down migration that deletes evidence.
+
+For the versioned release path, use `release-rollback.yml` with the last known-good build run ID and explicitly
+acknowledge schema compatibility. Explicitly select the metric flags that were valid for that artifact; do not
+inherit potentially changed environment defaults. The workflow pins both deployments to that manifest digest,
+forces named-party publication off, verifies the artifact's trusted build run and signed provenance, checks out its
+recorded source commit, replaces the singleton worker, and requires a newly finalized latest-ledger cycle as well
+as the reported runtime digest and successful representative reads. Do not use
+`kubectl set image` or a mutable registry tag outside the workflow because that bypasses provenance and smoke
+evidence.

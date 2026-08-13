@@ -325,6 +325,8 @@ Backup/PITR policy, restore drills, retention, credential rotation, and incident
 [operations runbooks](./docs/runbooks/README.md).
 Property, replay, load, failure-injection, security, database, and scheduled smoke coverage are documented in the
 [quality strategy](./docs/quality-strategy.md).
+Immutable OCI builds, isolated environments, digest-pinned promotion, feature flags, migration jobs, and rollback
+are documented in the [release guide](./docs/releases.md).
 
 ---
 
