@@ -6,6 +6,7 @@ import {
   apiOptionsResponse,
   rejectUnexpectedQueryParameters,
   resolveApiRequestId,
+  withPublicApiAccess,
 } from '../../../../../lib/http/api'
 
 export const dynamic = 'force-dynamic'
@@ -27,37 +28,39 @@ export const DELETE = apiMethodNotAllowedResponse
 export async function GET(request: Request) {
   const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return requestError(request, 400, resolved.code, resolved.message, resolved.requestId)
-  const queryError = rejectUnexpectedQueryParameters(request)
-  if (queryError) return requestError(request, 400, queryError.code, queryError.message, resolved.requestId)
+  return withPublicApiAccess(request, resolved.requestId, async () => {
+    const queryError = rejectUnexpectedQueryParameters(request)
+    if (queryError) return requestError(request, 400, queryError.code, queryError.message, resolved.requestId)
 
-  try {
-    const reconciled = await loadLatestLedgerReadModel()
-    if (!reconciled) {
+    try {
+      const reconciled = await loadLatestLedgerReadModel()
+      if (!reconciled) {
+        return requestError(
+          request,
+          404,
+          'latest_ledger_snapshot_not_found',
+          'No finalized latest-ledger snapshot is available',
+          resolved.requestId,
+        )
+      }
+      const status = reconciled.status === 'unavailable' ? 503 : 200
+      return apiJsonResponse(request, reconciled, {
+        status,
+        requestId: resolved.requestId,
+        cache: status === 200 ? { maxAgeSeconds: 15, staleWhileRevalidateSeconds: 45 } : 'no-store',
+        etag: status === 200,
+      })
+    } catch (error) {
+      console.error('Unable to load the latest-ledger read model', {
+        name: error instanceof Error ? error.name : 'Error',
+      })
       return requestError(
         request,
-        404,
-        'latest_ledger_snapshot_not_found',
-        'No finalized latest-ledger snapshot is available',
+        503,
+        'latest_ledger_read_unavailable',
+        'The latest-ledger read model is temporarily unavailable',
         resolved.requestId,
       )
     }
-    const status = reconciled.status === 'unavailable' ? 503 : 200
-    return apiJsonResponse(request, reconciled, {
-      status,
-      requestId: resolved.requestId,
-      cache: status === 200 ? { maxAgeSeconds: 15, staleWhileRevalidateSeconds: 45 } : 'no-store',
-      etag: status === 200,
-    })
-  } catch (error) {
-    console.error('Unable to load the latest-ledger read model', {
-      name: error instanceof Error ? error.name : 'Error',
-    })
-    return requestError(
-      request,
-      503,
-      'latest_ledger_read_unavailable',
-      'The latest-ledger read model is temporarily unavailable',
-      resolved.requestId,
-    )
-  }
+  })
 }

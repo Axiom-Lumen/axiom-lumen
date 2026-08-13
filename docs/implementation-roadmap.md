@@ -25,6 +25,8 @@ Items below are directional and are not commitments to a particular scope or rel
   material and returns empty collections without revealing internal cases.
 - Runtime-validated public API contracts, consistent HTTP behavior, OpenAPI 3.1 documentation, and contract
   parity checks.
+- Optional hosted API-key enforcement with hashed credentials, revocation/expiry, atomic per-plan fixed-window
+  quotas, and standard rate-limit response metadata.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,
   stale, unavailable, and empty states.
 - An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy

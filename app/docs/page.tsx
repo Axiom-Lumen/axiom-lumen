@@ -27,8 +27,8 @@ export default function DocsPage() {
       >
         The current API serves persisted latest-ledger, supply, classic SDEX depth, trustline-state snapshots,
         and immutable reviewed anchor reserve comparisons.
-        Authenticated hosted APIs, paid tiers, WebSocket streams, and additional metrics remain
-        planned work.
+        Hosted API-key enforcement and per-plan quotas are available; WebSocket streams and additional metrics
+        remain planned work.
       </PageHero>
 
       <DocSection num="01" label="Implemented" title="Latest ledger reconciliation." wide>
@@ -50,7 +50,7 @@ export default function DocsPage() {
               they never contribute to the reconciled value or confidence.
             </p>
             <CodePanel label="Local request">
-              <code>{'curl http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
+              <code>{'curl -H "X-Axiom-Key: $AXIOM_KEY" http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
             </CodePanel>
           </div>
           <CodePanel label="Response shape">
@@ -107,7 +107,7 @@ export default function DocsPage() {
               unavailable, and illustrative fallback states.
             </p>
             <CodePanel label="Local request">
-              <code>{'curl "http://localhost:3000/api/v1/supply/USDC:<issuer>"'}</code>
+              <code>{'curl -H "X-Axiom-Key: $AXIOM_KEY" "http://localhost:3000/api/v1/supply/USDC:<issuer>"'}</code>
             </CodePanel>
           </div>
           <ConfidenceJson />
@@ -159,8 +159,8 @@ export default function DocsPage() {
         <p className="mt-8 max-w-[620px] text-sm leading-relaxed text-muted">
           Each item retains the exact reviewed reserve and on-chain supply values, delta, evidence, and time
           boundary. The endpoint returns an empty collection for a verified anchor without publishable disclosures,
-          so it does not reveal internal case existence. API keys, rate limits, paid tiers, and SSE/WebSocket streams
-          remain planned. The broader methodology is described on the{' '}
+          so it does not reveal internal case existence. Hosted deployments can require API keys and enforce
+          per-plan quotas; paid self-service and SSE/WebSocket streams remain planned. The broader methodology is described on the{' '}
           <Link href="/methodology" className="text-gold underline-offset-4 hover:underline">
             methodology page
           </Link>

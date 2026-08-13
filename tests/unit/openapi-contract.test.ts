@@ -62,6 +62,21 @@ describe('OpenAPI 3.1 contract', () => {
     }
   })
 
+  it('requires hosted API-key security and documents quota metadata on application responses', () => {
+    const document = createOpenApiDocument()
+    for (const operation of IMPLEMENTED_PUBLIC_OPERATIONS.filter((item) => item.method === 'get')) {
+      const contract = document.paths[operation.path].get!
+      expect(contract.security).toEqual([{ ApiKeyAuth: [] }])
+      for (const status of ['200', '304', '400', '404', '503']) {
+        const response = contract.responses[status as keyof typeof contract.responses]
+        if (!response || !('headers' in response)) continue
+        expect(response.headers).toHaveProperty('X-RateLimit-Limit')
+        expect(response.headers).toHaveProperty('X-RateLimit-Remaining')
+        expect(response.headers).toHaveProperty('X-RateLimit-Reset')
+      }
+    }
+  })
+
   it('matches the committed generated artifact byte for byte', () => {
     const committed = readFileSync(resolve(process.cwd(), 'openapi/openapi.json'), 'utf8')
     expect(committed).toBe(`${JSON.stringify(createOpenApiDocument(), null, 2)}\n`)

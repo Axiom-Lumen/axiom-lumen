@@ -75,3 +75,5 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          AXIOM_API_AUTH_REQUIRED: "false"

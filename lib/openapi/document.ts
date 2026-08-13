@@ -224,7 +224,7 @@ export const OPENAPI_EXAMPLES = {
   ),
   depthReadUnavailable: errorExample('depth_read_unavailable', 'The depth read model is temporarily unavailable'),
   trustlineReadUnavailable: errorExample('trustline_read_unavailable', 'The trustline read model is temporarily unavailable'),
-  authenticationError: errorExample('authentication_required', 'A valid API credential is required'),
+  authenticationError: errorExample('authentication_required', 'A valid API key is required'),
   rateLimitError: errorExample('rate_limit_exceeded', 'The request quota has been exceeded'),
 } as const
 
@@ -245,9 +245,25 @@ const responseHeaders = {
   Vary: { $ref: '#/components/headers/Vary' },
 }
 
-const conditionalHeaders = {
+const quotaHeaders = {
+  'X-RateLimit-Limit': { $ref: '#/components/headers/XRateLimitLimit' },
+  'X-RateLimit-Remaining': { $ref: '#/components/headers/XRateLimitRemaining' },
+  'X-RateLimit-Reset': { $ref: '#/components/headers/XRateLimitReset' },
+}
+
+const authenticatedResponseHeaders = {
   ...responseHeaders,
+  ...quotaHeaders,
+}
+
+const conditionalHeaders = {
+  ...authenticatedResponseHeaders,
   ETag: { $ref: '#/components/headers/ETag' },
+}
+
+const accessErrorResponses = {
+  401: { $ref: '#/components/responses/AuthenticationError' },
+  429: { $ref: '#/components/responses/RateLimitError' },
 }
 
 const errorContent = (examples: Record<string, { $ref: string }>) => ({
@@ -300,10 +316,12 @@ export function createOpenApiDocument() {
       '/api/v1/stellar/latest-ledger': {
         get: {
           operationId: 'getLatestLedger',
+          security: [{ ApiKeyAuth: [] }],
           tags: ['Ledger'],
           summary: 'Get the latest finalized Public Network ledger snapshot',
           parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
+            ...accessErrorResponses,
             200: {
               description: 'Current verified or degraded latest-ledger snapshot',
               headers: conditionalHeaders,
@@ -320,7 +338,7 @@ export function createOpenApiDocument() {
             304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
             400: {
               description: 'Invalid request header or query parameter',
-              headers: responseHeaders,
+              headers: authenticatedResponseHeaders,
               content: errorContent({
                 invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' },
                 invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' },
@@ -328,12 +346,12 @@ export function createOpenApiDocument() {
             },
             404: {
               description: 'No finalized snapshot exists',
-              headers: responseHeaders,
+              headers: authenticatedResponseHeaders,
               content: errorContent({ missing: { $ref: '#/components/examples/LatestMissingSnapshot' } }),
             },
             503: {
-              description: 'Persisted metric state or read storage is unavailable',
-              headers: responseHeaders,
+              description: 'Persisted metric state, read storage, or API access storage is unavailable',
+              headers: authenticatedResponseHeaders,
               content: {
                 'application/json': {
                   schema: {
@@ -356,6 +374,7 @@ export function createOpenApiDocument() {
       '/api/v1/supply/{asset}': {
         get: {
           operationId: 'getSupply',
+          security: [{ ApiKeyAuth: [] }],
           tags: ['Supply'],
           summary: 'Get the latest finalized Public Network supply snapshot',
           parameters: [
@@ -364,6 +383,7 @@ export function createOpenApiDocument() {
             { $ref: '#/components/parameters/IfNoneMatch' },
           ],
           responses: {
+            ...accessErrorResponses,
             200: {
               description: 'Current verified or degraded on-chain supply snapshot',
               headers: conditionalHeaders,
@@ -380,7 +400,7 @@ export function createOpenApiDocument() {
             304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
             400: {
               description: 'Invalid asset, request header, or query parameter',
-              headers: responseHeaders,
+              headers: authenticatedResponseHeaders,
               content: errorContent({
                 invalidAsset: { $ref: '#/components/examples/InvalidAsset' },
                 invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' },
@@ -389,12 +409,12 @@ export function createOpenApiDocument() {
             },
             404: {
               description: 'No finalized snapshot exists for the asset',
-              headers: responseHeaders,
+              headers: authenticatedResponseHeaders,
               content: errorContent({ missing: { $ref: '#/components/examples/SupplyMissingSnapshot' } }),
             },
             503: {
-              description: 'Persisted metric state, evidence freshness, or read storage is unavailable',
-              headers: responseHeaders,
+              description: 'Persisted metric state, evidence freshness, read storage, or API access storage is unavailable',
+              headers: authenticatedResponseHeaders,
               content: {
                 'application/json': {
                   schema: {
@@ -417,13 +437,15 @@ export function createOpenApiDocument() {
       '/api/v1/depth/{pair}': {
         get: {
           operationId: 'getDepth', tags: ['Depth'], summary: 'Get the latest finalized Public Network SDEX depth snapshot',
+          security: [{ ApiKeyAuth: [] }],
           parameters: [{ $ref: '#/components/parameters/Pair' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
+            ...accessErrorResponses,
             200: { description: 'Current verified or degraded depth snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/DepthVerified' }, degraded: { $ref: '#/components/examples/DepthDegraded' } } } } },
             304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
-            400: { description: 'Invalid pair, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidPair: { $ref: '#/components/examples/InvalidPair' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
-            404: { description: 'No finalized snapshot exists for the pair', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/DepthMissingSnapshot' } }) },
-            503: { description: 'Persisted metric state, freshness, or read storage is unavailable', headers: responseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/DepthUnavailable' }, readUnavailable: { $ref: '#/components/examples/DepthReadUnavailable' } } } } },
+            400: { description: 'Invalid pair, request header, or query parameter', headers: authenticatedResponseHeaders, content: errorContent({ invalidPair: { $ref: '#/components/examples/InvalidPair' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No finalized snapshot exists for the pair', headers: authenticatedResponseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/DepthMissingSnapshot' } }) },
+            503: { description: 'Persisted metric state, freshness, read storage, or API access storage is unavailable', headers: authenticatedResponseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/DepthUnavailable' }, readUnavailable: { $ref: '#/components/examples/DepthReadUnavailable' } } } } },
           },
         },
         options: publicOptionsOperation('depthOptions'),
@@ -431,13 +453,15 @@ export function createOpenApiDocument() {
       '/api/v1/trustlines/{asset}': {
         get: {
           operationId: 'getTrustlines', tags: ['Trustlines'], summary: 'Get finalized Public Network trustline authorization-state counts',
+          security: [{ ApiKeyAuth: [] }],
           parameters: [{ $ref: '#/components/parameters/Asset' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
+            ...accessErrorResponses,
             200: { description: 'Current verified or degraded trustline-state snapshot', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/ReconciliationSnapshot' }, examples: { verified: { $ref: '#/components/examples/TrustlineVerified' }, degraded: { $ref: '#/components/examples/TrustlineDegraded' } } } } },
             304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
-            400: { description: 'Invalid asset, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidAsset: { $ref: '#/components/examples/InvalidAsset' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
-            404: { description: 'No finalized snapshot exists for the asset', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/TrustlineMissingSnapshot' } }) },
-            503: { description: 'Persisted metric state, freshness, or read storage is unavailable', headers: responseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/TrustlineUnavailable' }, readUnavailable: { $ref: '#/components/examples/TrustlineReadUnavailable' } } } } },
+            400: { description: 'Invalid asset, request header, or query parameter', headers: authenticatedResponseHeaders, content: errorContent({ invalidAsset: { $ref: '#/components/examples/InvalidAsset' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No finalized snapshot exists for the asset', headers: authenticatedResponseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/TrustlineMissingSnapshot' } }) },
+            503: { description: 'Persisted metric state, freshness, read storage, or API access storage is unavailable', headers: authenticatedResponseHeaders, content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/ReconciliationSnapshot' }, { $ref: '#/components/schemas/ApiErrorResponse' }] }, examples: { unavailable: { $ref: '#/components/examples/TrustlineUnavailable' }, readUnavailable: { $ref: '#/components/examples/TrustlineReadUnavailable' } } } } },
           },
         },
         options: publicOptionsOperation('trustlineOptions'),
@@ -445,14 +469,16 @@ export function createOpenApiDocument() {
       '/api/v1/anchors/{anchor}/reserves': {
         get: {
           operationId: 'getAnchorReserves', tags: ['Anchors'], summary: 'Get reviewed public reserve disclosures for a verified anchor',
+          security: [{ ApiKeyAuth: [] }],
           description: 'Returns only publication-approved named-party flags and public corrections. An empty disclosures array does not reveal whether internal cases exist.',
           parameters: [{ $ref: '#/components/parameters/Anchor' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IfNoneMatch' }],
           responses: {
+            ...accessErrorResponses,
             200: { description: 'Public disclosures, possibly empty', headers: conditionalHeaders, content: { 'application/json': { schema: { $ref: '#/components/schemas/AnchorReservesResponse' }, examples: { reviewedComparison: { $ref: '#/components/examples/AnchorReserves' } } } } },
             304: { description: 'The representation matches If-None-Match', headers: conditionalHeaders },
-            400: { description: 'Invalid anchor, pagination, request header, or query parameter', headers: responseHeaders, content: errorContent({ invalidAnchor: { $ref: '#/components/examples/InvalidAnchor' }, invalidPagination: { $ref: '#/components/examples/InvalidPagination' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
-            404: { description: 'No verified anchor exists for the identifier', headers: responseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/AnchorMissing' } }) },
-            503: { description: 'The persisted public read model is unavailable', headers: responseHeaders, content: errorContent({ readUnavailable: { $ref: '#/components/examples/AnchorReadUnavailable' } }) },
+            400: { description: 'Invalid anchor, pagination, request header, or query parameter', headers: authenticatedResponseHeaders, content: errorContent({ invalidAnchor: { $ref: '#/components/examples/InvalidAnchor' }, invalidPagination: { $ref: '#/components/examples/InvalidPagination' }, invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' }, invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' } }) },
+            404: { description: 'No verified anchor exists for the identifier', headers: authenticatedResponseHeaders, content: errorContent({ missing: { $ref: '#/components/examples/AnchorMissing' } }) },
+            503: { description: 'The persisted public read model or API access storage is unavailable', headers: authenticatedResponseHeaders, content: errorContent({ readUnavailable: { $ref: '#/components/examples/AnchorReadUnavailable' } }) },
           },
         },
         options: publicOptionsOperation('anchorReservesOptions'),
@@ -467,15 +493,18 @@ export function createOpenApiDocument() {
       },
       responses: {
         AuthenticationError: {
-          description: 'Reserved authentication failure response for future authenticated operations',
+          description: 'API key is missing, malformed, expired, revoked, or inactive when authentication is required',
           headers: responseHeaders,
           content: errorContent({ authentication: { $ref: '#/components/examples/AuthenticationError' } }),
         },
         RateLimitError: {
-          description: 'Reserved quota-exceeded response for future rate-limited operations',
+          description: 'The authenticated principal exhausted its plan quota for the current fixed window',
           headers: {
             ...responseHeaders,
             'Retry-After': { $ref: '#/components/headers/RetryAfter' },
+            'X-RateLimit-Limit': { $ref: '#/components/headers/XRateLimitLimit' },
+            'X-RateLimit-Remaining': { $ref: '#/components/headers/XRateLimitRemaining' },
+            'X-RateLimit-Reset': { $ref: '#/components/headers/XRateLimitReset' },
           },
           content: errorContent({ rateLimit: { $ref: '#/components/examples/RateLimitError' } }),
         },
@@ -532,8 +561,11 @@ export function createOpenApiDocument() {
         CorsAllowHeaders: { description: 'Headers accepted by CORS requests', schema: { type: 'string' } },
         CorsAllowMethods: { description: 'Methods accepted by CORS requests', schema: { type: 'string', enum: ['GET, OPTIONS'] } },
         CorsMaxAge: { description: 'Preflight cache lifetime in seconds', schema: { type: 'string', enum: ['86400'] } },
-        Vary: { description: 'Cache representation varies by request identifier', schema: { type: 'string', enum: ['X-Request-ID'] } },
-        RetryAfter: { description: 'Seconds until a quota-limited request may be retried', schema: { type: 'integer', minimum: 0 } },
+        Vary: { description: 'Cache representation varies by request identifier and API credential', schema: { type: 'string', enum: ['X-Request-ID, X-Axiom-Key'] } },
+        RetryAfter: { description: 'Seconds until a quota-limited request may be retried', schema: { type: 'string', pattern: '^\\d+$' } },
+        XRateLimitLimit: { description: 'Maximum requests in the current plan window', schema: { type: 'string', pattern: '^[1-9]\\d*$' } },
+        XRateLimitRemaining: { description: 'Requests remaining after this request', schema: { type: 'string', pattern: '^\\d+$' } },
+        XRateLimitReset: { description: 'UTC Unix timestamp when the fixed window resets', schema: { type: 'string', pattern: '^\\d+$' } },
       },
       examples: {
         LatestVerified: { summary: 'Verified latest ledger', value: OPENAPI_EXAMPLES.latestVerified },
@@ -566,12 +598,20 @@ export function createOpenApiDocument() {
         TrustlineReadUnavailable: { summary: 'Trustline read storage unavailable', value: OPENAPI_EXAMPLES.trustlineReadUnavailable },
         AnchorReadUnavailable: { summary: 'Anchor reserve read storage unavailable', value: errorExample('anchor_reserves_read_unavailable', 'The anchor reserve read model is temporarily unavailable') },
         AuthenticationError: {
-          summary: 'Reserved example for future authenticated operations; no production path currently references it',
+          summary: 'Authentication is required but the supplied API key is not usable',
           value: OPENAPI_EXAMPLES.authenticationError,
         },
         RateLimitError: {
-          summary: 'Reserved example for future quota enforcement; no production path currently references it',
+          summary: 'The current API-key plan window is exhausted',
           value: OPENAPI_EXAMPLES.rateLimitError,
+        },
+      },
+      securitySchemes: {
+        ApiKeyAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Axiom-Key',
+          description: 'Required by the hosted API contract. Plaintext keys are shown only when issued.',
         },
       },
     },

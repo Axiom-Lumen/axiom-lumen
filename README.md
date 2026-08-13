@@ -30,7 +30,7 @@ Implemented in this repository today:
    confidence, status classification, and discrepancy reporting.
 3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
 
-Planned but not implemented yet: authenticated public API keys, rate limits, and SSE/WebSocket streams.
+Planned but not implemented yet: SSE/WebSocket streams.
 
 ---
 
@@ -86,7 +86,8 @@ Planned but not implemented yet: authenticated public API keys, rate limits, and
 
 - [x] **Public anchor reserve disclosures:** `GET /api/v1/anchors/{anchor}/reserves` serves only reviewed,
   publication-approved flags and public corrections. Empty collections do not reveal internal cases.
-- [ ] **Authentication and rate limits:** Planned; no API key issuance or enforcement yet.
+- [x] **Authentication and rate limits:** Hosted deployments can require opaque `X-Axiom-Key` credentials,
+  enforce atomic per-plan fixed-window quotas, revoke or expire keys, and return standard quota headers.
 - [ ] **SSE/WebSocket streams:** Planned; not implemented.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
   form or claimant API is enabled.
@@ -226,12 +227,19 @@ corrections and retractions cannot disappear with a later verification-state cha
 `/api/v1` is the canonical public prefix. All five implemented routes accept `GET` and `OPTIONS`, echo or generate
 `X-Request-ID`, expose public read-only CORS, reject undeclared query parameters, and return a shared error
 envelope for invalid requests, unsupported methods, missing snapshots, and read-store failures. Current `200`
-snapshots use private, request-ID-varying caches and complete-representation weak ETags; errors and unavailable
+snapshots use private caches varying by request ID and API key, with complete-representation weak ETags; errors and unavailable
 responses use `Cache-Control: no-store`. Matching `If-None-Match` requests return `304`.
 
 Current-metric routes cap caching at their remaining evidence lifetime. Supply uses at most 15 seconds plus 45
 seconds of stale-while-revalidate, depth uses 5 plus 15 seconds, and trustline state uses 60 plus 300 seconds.
 Historical anchor disclosures use stable persisted event timestamps and a 15 plus 45 second cache policy.
+
+Hosted deployments enable API-key enforcement with `AXIOM_API_AUTH_REQUIRED=true`. Requests then send
+`X-Axiom-Key`; missing or unusable credentials return `401`, exhausted plan windows return `429`, and successful
+authenticated responses report `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Local
+development remains anonymous by default; production requires an explicit authentication policy. Key
+provisioning, site-key behavior, and bounded quota retention are documented in
+[`docs/api-access.md`](./docs/api-access.md).
 
 Shared cursor pagination defaults to 25 and is capped at 100. Anchor disclosures are paginated; the current
 snapshot routes are singular resources and reject pagination parameters. Deprecation headers are emitted only when a route
@@ -293,6 +301,7 @@ Worker source setup, one-shot/continuous execution, configuration, and lease rec
 
 The internal claimant and correction operator flow is documented in
 [docs/anchor-claim-workflow.md](./docs/anchor-claim-workflow.md).
+Hosted API credential provisioning is documented in [docs/api-access.md](./docs/api-access.md).
 
 ---
 

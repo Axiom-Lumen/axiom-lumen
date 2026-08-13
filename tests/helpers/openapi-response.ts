@@ -25,6 +25,7 @@ interface DereferencedDocument {
 }
 
 const validator = new Ajv2020({ allErrors: true, strict: false, validateFormats: false })
+const conditionallyPresentHeaders = new Set(['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'])
 let documentPromise: Promise<DereferencedDocument> | undefined
 
 function dereferencedDocument() {
@@ -56,6 +57,7 @@ export async function expectOpenApiResponse(
 
   for (const [headerName, headerContract] of Object.entries(responseContract.headers ?? {})) {
     const value = response.headers.get(headerName)
+    if (value === null && conditionallyPresentHeaders.has(headerName.toLowerCase())) continue
     expect(value, `${response.status} ${method.toUpperCase()} ${path} omitted ${headerName}`).not.toBeNull()
     if (value === null) continue
 

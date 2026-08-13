@@ -13,6 +13,7 @@ import {
   apiOptionsResponse,
   rejectUnexpectedQueryParameters,
   resolveApiRequestId,
+  withPublicApiAccess,
 } from '../../../../../lib/http/api'
 
 export const dynamic = 'force-dynamic'
@@ -88,65 +89,40 @@ export async function GET(request: Request, context: SupplyRouteContext) {
     })
   }
   const requestId = resolved.requestId
-  const queryError = rejectUnexpectedQueryParameters(request)
-  if (queryError) {
-    return apiErrorResponse({ request, status: 400, ...queryError, requestId, asOf: now })
-  }
-  const { asset: rawAsset } = await context.params
-  let asset
-  try {
-    const parsed = parseAssetId(rawAsset)
-    if (parsed.kind !== 'credit') throw new Error('native XLM is not supported by supply v0.1')
-    asset = parsed
-  } catch {
-    return apiErrorResponse({
-      request,
-      status: 400,
-      code: 'invalid_asset',
-      message: 'Asset must be a canonical CODE:ISSUER credit-asset identifier',
-      requestId,
-      asOf: now,
-    })
-  }
-
-  try {
-    const readModel = await loadLatestSupplyReadModel(asset, now)
-    if (!readModel) {
+  return withPublicApiAccess(request, requestId, async () => {
+    const queryError = rejectUnexpectedQueryParameters(request)
+    if (queryError) {
+      return apiErrorResponse({ request, status: 400, ...queryError, requestId, asOf: now })
+    }
+    const { asset: rawAsset } = await context.params
+    let asset
+    try {
+      const parsed = parseAssetId(rawAsset)
+      if (parsed.kind !== 'credit') throw new Error('native XLM is not supported by supply v0.1')
+      asset = parsed
+    } catch {
       return apiErrorResponse({
         request,
-        status: 404,
-        code: 'supply_snapshot_not_found',
-        message: 'No finalized supply snapshot is available',
+        status: 400,
+        code: 'invalid_asset',
+        message: 'Asset must be a canonical CODE:ISSUER credit-asset identifier',
         requestId,
         asOf: now,
       })
     }
-    const response = serializePublicReconciliationSnapshot(readModel.snapshot, requestId)
-    if (readModel.stale) {
-      return apiJsonResponse(request, staleResponse(response, requestId, now), {
-        status: 503,
-        requestId,
-        cache: 'no-store',
-      })
+
+    try {
+      const readModel = await loadLatestSupplyReadModel(asset, now)
+      if (!readModel) {
+        return apiErrorResponse({ request, status: 404, code: 'supply_snapshot_not_found', message: 'No finalized supply snapshot is available', requestId, asOf: now })
+      }
+      const response = serializePublicReconciliationSnapshot(readModel.snapshot, requestId)
+      if (readModel.stale) return apiJsonResponse(request, staleResponse(response, requestId, now), { status: 503, requestId, cache: 'no-store' })
+      const status = response.status === 'unavailable' ? 503 : 200
+      return apiJsonResponse(request, response, { status, requestId, cache: status === 200 ? supplyCachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
+    } catch (error) {
+      console.error('Unable to load the supply read model', { name: error instanceof Error ? error.name : 'Error' })
+      return apiErrorResponse({ request, status: 503, code: 'supply_read_unavailable', message: 'The supply read model is temporarily unavailable', requestId, asOf: now })
     }
-    const status = response.status === 'unavailable' ? 503 : 200
-    return apiJsonResponse(request, response, {
-      status,
-      requestId,
-      cache: status === 200 ? supplyCachePolicy(readModel.freshForSeconds) : 'no-store',
-      etag: status === 200,
-    })
-  } catch (error) {
-    console.error('Unable to load the supply read model', {
-      name: error instanceof Error ? error.name : 'Error',
-    })
-    return apiErrorResponse({
-      request,
-      status: 503,
-      code: 'supply_read_unavailable',
-      message: 'The supply read model is temporarily unavailable',
-      requestId,
-      asOf: now,
-    })
-  }
+  })
 }

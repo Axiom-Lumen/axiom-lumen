@@ -14,6 +14,11 @@ from that finalized snapshot, its immutable contribution readings, and approved 
 - `DATABASE_POOL_MAX`: maximum connections in one application process; defaults to `5`.
 - `DATABASE_IDLE_TIMEOUT_MS`: idle connection timeout; defaults to `30000`.
 - `DATABASE_CONNECTION_TIMEOUT_MS`: connection acquisition timeout; defaults to `5000`.
+- `AXIOM_API_AUTH_REQUIRED`: when `true`, public v1 GET requests require a database-backed API key and consume
+  the principal plan's atomic fixed-window quota; defaults to `false` only outside production, where it must be
+  explicit.
+- `API_QUOTA_RETENTION_HOURS`: completed quota-window retention used by `npm run api:quota-prune`; defaults to
+  `168` hours.
 
 Never commit real URLs or log them. Aggregate pool capacity across all process instances must remain below the
 database provider's connection limit.

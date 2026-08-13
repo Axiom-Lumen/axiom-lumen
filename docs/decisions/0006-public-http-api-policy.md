@@ -22,14 +22,22 @@ All implemented v1 snapshot routes:
 - use `200` for current verified/degraded snapshots, `304` for a matching validator, `400` for invalid input,
   `404` for a valid resource with no finalized snapshot, `405` for unsupported methods, and `503` for persisted
   or read-time unavailability;
-- use private response caching, `Vary: X-Request-ID`, and a weak representation `ETag` only for `200` snapshots;
+- use private response caching, `Vary: X-Request-ID, X-Axiom-Key`, and a weak representation `ETag` only for
+  `200` snapshots;
   all errors and unavailable responses use `Cache-Control: no-store`;
 - expose public read-only CORS (`Access-Control-Allow-Origin: *`) and a bounded 24-hour preflight cache;
 - never expose exception messages, connection strings, credentials, or stack traces.
 
+The hosted contract requires `X-Axiom-Key` with `AXIOM_API_AUTH_REQUIRED=true`; local development remains
+anonymous by default, while production requires an explicit true/false choice and fails closed if it is absent.
+Required authentication consumes one atomic PostgreSQL fixed-window quota unit before
+route validation/read work. Unusable credentials share one `401`, exhausted windows return `429` with
+`Retry-After`, and CORS preflight is unauthenticated.
+
 ETags cover the complete representation, including supply's `request_id`, so a validator can return `304` only
 when the caller reuses the same correlation ID. Weak comparison accepts either weak or strong syntax for the same
-opaque tag. Private caches vary on `X-Request-ID`, preventing a caller-supplied ID from crossing request contexts.
+opaque tag. Private caches vary on `X-Request-ID, X-Axiom-Key`, preventing caller correlation or credential
+contexts from crossing cache entries.
 
 The default private snapshot cache permits 15 seconds of freshness and 45 seconds of stale-while-revalidate.
 Supply further caps the combined cache lifetime at the evidence's exact remaining time before its hard 120-second

@@ -106,4 +106,9 @@ describe('homepage reconciliation strip', () => {
     expect(markup).toContain('aria-atomic="true"')
     expect(markup).toContain('class="sr-only"')
   })
+
+  it('omits browser refresh controls when hosted authentication is required', () => {
+    const markup = renderToStaticMarkup(<ReconciliationStripView initialState={availableState('verified')} endpoint="/api/v1/supply/example" refreshEnabled={false} />)
+    expect(markup).not.toContain('Refresh now')
+  })
 })

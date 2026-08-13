@@ -41,6 +41,11 @@
     "/api/v1/stellar/latest-ledger": {
       "get": {
         "operationId": "getLatestLedger",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "tags": [
           "Ledger"
         ],
@@ -71,6 +76,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
@@ -110,6 +124,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -132,6 +155,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -150,6 +182,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
           "404": {
             "description": "No finalized snapshot exists",
             "headers": {
@@ -167,6 +202,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -182,8 +226,11 @@
               }
             }
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "503": {
-            "description": "Persisted metric state or read storage is unavailable",
+            "description": "Persisted metric state, read storage, or API access storage is unavailable",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -199,6 +246,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -311,6 +367,11 @@
     "/api/v1/supply/{asset}": {
       "get": {
         "operationId": "getSupply",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "tags": [
           "Supply"
         ],
@@ -344,6 +405,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
@@ -383,6 +453,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -405,6 +484,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -426,6 +514,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
           "404": {
             "description": "No finalized snapshot exists for the asset",
             "headers": {
@@ -443,6 +534,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -458,8 +558,11 @@
               }
             }
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "503": {
-            "description": "Persisted metric state, evidence freshness, or read storage is unavailable",
+            "description": "Persisted metric state, evidence freshness, read storage, or API access storage is unavailable",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -475,6 +578,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -591,6 +703,11 @@
           "Depth"
         ],
         "summary": "Get the latest finalized Public Network SDEX depth snapshot",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/Pair"
@@ -620,6 +737,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
@@ -659,6 +785,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -681,6 +816,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -702,6 +846,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
           "404": {
             "description": "No finalized snapshot exists for the pair",
             "headers": {
@@ -719,6 +866,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -734,8 +890,11 @@
               }
             }
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "503": {
-            "description": "Persisted metric state, freshness, or read storage is unavailable",
+            "description": "Persisted metric state, freshness, read storage, or API access storage is unavailable",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -751,6 +910,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -867,6 +1035,11 @@
           "Trustlines"
         ],
         "summary": "Get finalized Public Network trustline authorization-state counts",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/Asset"
@@ -896,6 +1069,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
@@ -935,6 +1117,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -957,6 +1148,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -978,6 +1178,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
           "404": {
             "description": "No finalized snapshot exists for the asset",
             "headers": {
@@ -995,6 +1198,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -1010,8 +1222,11 @@
               }
             }
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "503": {
-            "description": "Persisted metric state, freshness, or read storage is unavailable",
+            "description": "Persisted metric state, freshness, read storage, or API access storage is unavailable",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -1027,6 +1242,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -1143,6 +1367,11 @@
           "Anchors"
         ],
         "summary": "Get reviewed public reserve disclosures for a verified anchor",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
         "description": "Returns only publication-approved named-party flags and public corrections. An empty disclosures array does not reveal whether internal cases exist.",
         "parameters": [
           {
@@ -1180,6 +1409,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -1215,6 +1453,15 @@
               "Vary": {
                 "$ref": "#/components/headers/Vary"
               },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              },
               "ETag": {
                 "$ref": "#/components/headers/ETag"
               }
@@ -1237,6 +1484,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -1261,6 +1517,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationError"
+          },
           "404": {
             "description": "No verified anchor exists for the identifier",
             "headers": {
@@ -1278,6 +1537,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -1293,8 +1561,11 @@
               }
             }
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "503": {
-            "description": "The persisted public read model is unavailable",
+            "description": "The persisted public read model or API access storage is unavailable",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -1310,6 +1581,15 @@
               },
               "Vary": {
                 "$ref": "#/components/headers/Vary"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
               }
             },
             "content": {
@@ -3664,7 +3944,7 @@
     },
     "responses": {
       "AuthenticationError": {
-        "description": "Reserved authentication failure response for future authenticated operations",
+        "description": "API key is missing, malformed, expired, revoked, or inactive when authentication is required",
         "headers": {
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
@@ -3696,7 +3976,7 @@
         }
       },
       "RateLimitError": {
-        "description": "Reserved quota-exceeded response for future rate-limited operations",
+        "description": "The authenticated principal exhausted its plan quota for the current fixed window",
         "headers": {
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
@@ -3715,6 +3995,15 @@
           },
           "Retry-After": {
             "$ref": "#/components/headers/RetryAfter"
+          },
+          "X-RateLimit-Limit": {
+            "$ref": "#/components/headers/XRateLimitLimit"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/XRateLimitRemaining"
+          },
+          "X-RateLimit-Reset": {
+            "$ref": "#/components/headers/XRateLimitReset"
           }
         },
         "content": {
@@ -3870,19 +4159,40 @@
         }
       },
       "Vary": {
-        "description": "Cache representation varies by request identifier",
+        "description": "Cache representation varies by request identifier and API credential",
         "schema": {
           "type": "string",
           "enum": [
-            "X-Request-ID"
+            "X-Request-ID, X-Axiom-Key"
           ]
         }
       },
       "RetryAfter": {
         "description": "Seconds until a quota-limited request may be retried",
         "schema": {
-          "type": "integer",
-          "minimum": 0
+          "type": "string",
+          "pattern": "^\\d+$"
+        }
+      },
+      "XRateLimitLimit": {
+        "description": "Maximum requests in the current plan window",
+        "schema": {
+          "type": "string",
+          "pattern": "^[1-9]\\d*$"
+        }
+      },
+      "XRateLimitRemaining": {
+        "description": "Requests remaining after this request",
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d+$"
+        }
+      },
+      "XRateLimitReset": {
+        "description": "UTC Unix timestamp when the fixed window resets",
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d+$"
         }
       }
     },
@@ -4695,11 +5005,11 @@
         }
       },
       "AuthenticationError": {
-        "summary": "Reserved example for future authenticated operations; no production path currently references it",
+        "summary": "Authentication is required but the supplied API key is not usable",
         "value": {
           "error": {
             "code": "authentication_required",
-            "message": "A valid API credential is required"
+            "message": "A valid API key is required"
           },
           "request_id": "example_request",
           "as_of": "2026-08-10T12:00:00.000Z",
@@ -4707,7 +5017,7 @@
         }
       },
       "RateLimitError": {
-        "summary": "Reserved example for future quota enforcement; no production path currently references it",
+        "summary": "The current API-key plan window is exhausted",
         "value": {
           "error": {
             "code": "rate_limit_exceeded",
@@ -4717,6 +5027,14 @@
           "as_of": "2026-08-10T12:00:00.000Z",
           "api_version": "v1"
         }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Axiom-Key",
+        "description": "Required by the hosted API contract. Plaintext keys are shown only when issued."
       }
     }
   }

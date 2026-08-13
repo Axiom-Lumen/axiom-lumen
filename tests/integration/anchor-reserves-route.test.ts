@@ -4,6 +4,8 @@ import { InvalidAnchorReserveCursorError } from '../../lib/db/anchor-public-read
 import { parseStellarAmount } from '../../lib/stellar/amount'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
+vi.mock('../../lib/db/api-access-repository', () => ({ authorizePublicApiKey: vi.fn(async () => ({ status: 'allowed', grant: { principalId: 'test', planId: 'developer', limit: 60, remaining: 59, resetAt: '2026-08-10T10:01:00.000Z' } })) }))
+
 const readModel = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('../../lib/db/anchor-public-read-model', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/db/anchor-public-read-model')>()),
