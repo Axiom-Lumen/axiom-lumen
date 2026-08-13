@@ -100,3 +100,7 @@ cycle cannot overwrite newer circuit state.
 Audit events and referenced evidence have indefinite retention by default. Any future retention policy must be a
 reviewed forward migration that preserves evidence referenced by unresolved discrepancies; ordinary application
 credentials have no deletion path.
+
+Backup schedules, PITR requirements, isolated restore verification, and retention classes are defined in the
+[data-protection runbook](./runbooks/data-protection.md). Incident and service-specific recovery procedures are
+indexed by the [operations runbook](./runbooks/README.md).

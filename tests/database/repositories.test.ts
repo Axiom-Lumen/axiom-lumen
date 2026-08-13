@@ -924,22 +924,25 @@ describeWithDatabase('transactional persistence repositories', () => {
         },
       })
       expect(await cases.claimDueNotifications({ workerId: 'notice-worker-4', now: '2026-08-10T10:06:00.000Z', leaseDurationMs: 30_000, limit: 10 })).toEqual([])
+      await pool.query(`INSERT INTO api_plans (id, name, requests_per_window, window_seconds) VALUES ('review-plan', 'Review', 1, 60)`)
+      await pool.query(`INSERT INTO api_principals (id, plan_id, display_name) VALUES ('reviewer-1', 'review-plan', 'Reviewer')`)
+      await pool.query(`INSERT INTO api_scopes (id, description) VALUES ('anchor:review', 'Review anchor cases')`)
+      await pool.query(`INSERT INTO api_principal_scopes (principal_id, scope_id) VALUES ('reviewer-1', 'anchor:review')`)
+      await expect(cases.requeueFailedNotification({ notificationId: 'notification-terminal', administratorPrincipalId: 'missing', reason: 'Transport repaired', requeuedAt: '2026-08-10T10:06:00.000Z' })).rejects.toThrow(/anchor:review/)
+      expect(await cases.requeueFailedNotification({ notificationId: 'notification-terminal', administratorPrincipalId: 'reviewer-1', reason: 'Transport repaired and verified', requeuedAt: '2026-08-10T10:06:00.000Z' })).toMatchObject({ notificationId: 'notification-terminal' })
+      expect((await cases.claimDueNotifications({ workerId: 'notice-worker-4', now: '2026-08-10T10:06:00.000Z', leaseDurationMs: 30_000, limit: 10 })).map((claim) => claim.id)).toEqual(['notification-terminal'])
       const queue = await cases.listReviewQueue()
       expect(queue).toHaveLength(1)
       expect(queue[0]).toMatchObject({ caseId: opened.caseId, publicationState: 'pending_reply' })
       const review = await cases.getReviewEvidence(opened.caseId)
       expect(review).toMatchObject({
         discrepancy: { methodologyVersion: 'method-v1' },
-        caseHistory: [{ eventType: 'opened' }, { eventType: 'notice_failed' }, { eventType: 'notice_delivered' }, { eventType: 'notice_failed' }],
+        caseHistory: [{ eventType: 'opened' }, { eventType: 'notice_failed' }, { eventType: 'notice_delivered' }, { eventType: 'notice_failed' }, { eventType: 'notice_requeued' }],
       })
       expect(review?.evidence[0]).toMatchObject({ rawPayload: { Authorization: '[REDACTED]' } })
 
       expect(await cases.expireDueReplyWindows({ now: '2026-08-13T10:03:01.000Z' })).toEqual([opened.caseId])
       expect((await pool.query(`SELECT status FROM anchor_cases WHERE id = $1`, [opened.caseId])).rows[0]?.status).toBe('under_review')
-      await pool.query(`INSERT INTO api_plans (id, name, requests_per_window, window_seconds) VALUES ('review-plan', 'Review', 1, 60)`)
-      await pool.query(`INSERT INTO api_principals (id, plan_id, display_name) VALUES ('reviewer-1', 'review-plan', 'Reviewer')`)
-      await pool.query(`INSERT INTO api_scopes (id, description) VALUES ('anchor:review', 'Review anchor cases')`)
-      await pool.query(`INSERT INTO api_principal_scopes (principal_id, scope_id) VALUES ('reviewer-1', 'anchor:review')`)
       await expect(cases.reviewCase({
         caseId: opened.caseId,
         reviewerPrincipalId: 'reviewer-1',

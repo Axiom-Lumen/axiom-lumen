@@ -91,6 +91,8 @@ Implemented in this repository today:
   authorization, heartbeats, bounded `Last-Event-ID` replay, recurring quota checks, and slow-consumer handling.
 - [x] **Telemetry and status:** Structured trace-correlated API/worker logs, persisted health aggregation,
   liveness/readiness probes, Prometheus metrics, alert thresholds, and a public `/status` page are implemented.
+- [x] **Data protection and recovery:** Encrypted, authenticated PostgreSQL backups, isolated restore drills,
+  retention rules, and incident/recovery runbooks are implemented.
 - [ ] **WebSocket streams:** Not implemented; bidirectional behavior has not been demonstrated as necessary.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
   form or claimant API is enabled.
@@ -317,6 +319,8 @@ Authorized snapshot streaming, replay/resume behavior, and client guidance are d
 [docs/snapshot-events.md](./docs/snapshot-events.md).
 Operational probes, metrics, thresholds, structured-log redaction, and status behavior are documented in
 [docs/operations.md](./docs/operations.md).
+Backup/PITR policy, restore drills, retention, credential rotation, and incident recovery are indexed in the
+[operations runbooks](./docs/runbooks/README.md).
 
 ---
 
