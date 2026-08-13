@@ -12,6 +12,7 @@ import {
   withPublicApiAccess,
 } from '../../../../../../lib/http/api'
 import { errorTelemetry, structuredLog } from '../../../../../../lib/observability/telemetry'
+import { featureDisabledResponse, metricFeatureEnabled } from '../../../../../../lib/http/feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export async function GET(request: Request, context: AnchorReserveRouteContext) 
     return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
   }
   const requestId = resolved.requestId
+  if (!metricFeatureEnabled('anchorReserves')) return featureDisabledResponse(request, requestId, now)
   return withPublicApiAccess(request, requestId, PUBLIC_API_ACCESS_POLICIES.anchorReserves, async () => {
     let pagination
     try {

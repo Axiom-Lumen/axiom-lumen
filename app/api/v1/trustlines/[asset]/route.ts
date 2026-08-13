@@ -4,6 +4,7 @@ import { apiReconciliationSnapshotSchema, parseAssetId, serializePublicReconcili
 import { loadLatestTrustlineReadModel } from '../../../../../lib/db/trustline-read-model'
 import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, linkApiResponseToProducerCycle, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
 import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
+import { featureDisabledResponse, metricFeatureEnabled } from '../../../../../lib/http/feature-flags'
 
 export const dynamic = 'force-dynamic'
 interface Context { params: Promise<{ asset: string }> }
@@ -18,6 +19,7 @@ function cachePolicy(freshForSeconds: number) { const budget = Math.max(0, Math.
 export async function GET(request: Request, context: Context) {
   const now = new Date(); const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
+  if (!metricFeatureEnabled('trustlines')) return featureDisabledResponse(request, resolved.requestId, now)
   return withPublicApiAccess(request, resolved.requestId, PUBLIC_API_ACCESS_POLICIES.trustlines, async () => {
     const queryError = rejectUnexpectedQueryParameters(request); if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId: resolved.requestId, asOf: now })
     let asset

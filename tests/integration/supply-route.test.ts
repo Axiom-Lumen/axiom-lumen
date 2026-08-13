@@ -13,6 +13,7 @@ const readModel = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('../../lib/db/supply-read-model', () => ({ loadLatestSupplyReadModel: readModel.load }))
 
 import { GET, OPTIONS, POST } from '../../app/api/v1/supply/[asset]/route'
+import { createSupplyGetHandler } from '../../lib/http/supply-route'
 
 const ISSUER = `G${'A'.repeat(55)}`
 const ASSET = `USDC:${ISSUER}`
@@ -81,6 +82,17 @@ describe('GET /api/v1/supply/{asset}', () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     readModel.load.mockReset()
+  })
+
+  it('fails closed before reads when supply is disabled for the environment', async () => {
+    const disabled = createSupplyGetHandler({ featureEnabled: () => false, loadReadModel: readModel.load })
+    const response = await disabled(
+      new Request(`https://axiom.example/api/v1/supply/${ASSET}`, { headers: { 'X-Request-ID': 'req_disabled' } }),
+      { params: Promise.resolve({ asset: ASSET }) },
+    )
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: { code: 'feature_not_available' } })
+    expect(readModel.load).not.toHaveBeenCalled()
   })
 
   it('serves a verified finalized snapshot without synchronous upstream fan-out', async () => {

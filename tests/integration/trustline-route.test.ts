@@ -10,7 +10,14 @@ const ISSUER = `G${'A'.repeat(55)}`; const ASSET = `USDC:${ISSUER}`; const NOW =
 function snapshot(): TrustlineReadModel['snapshot'] { return reconciliationSnapshotSchema.parse({ snapshotId: 'snapshot_trustlines', cycleId: 'cycle_trustlines', metric: 'trustline_count', subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } }, status: 'degraded', value: { kind: 'trustline_state', total: '825', states: { authorized: '700', authorized_to_maintain_liabilities: '100', unauthorized: '25' }, ledgerSequence: 500, ledgerClosedAt: NOW }, confidence: { score: 0.6, formulaVersion: 'trustline-state-confidence-v0.1', components: { agreement: 1, freshness: 1, availability: 1, spread: 1 }, capsApplied: ['single_source'] }, sourcesConfigured: 1, sourcesResponded: 1, sourcesUsable: 1, sourcesAgreeing: 1, sourcesExcluded: 0, contributions: [], discrepancies: [], sourceErrors: [], asOf: NOW, methodologyVersion: 'trustline-state-v0.1' }) }
 function request(asset = ASSET, query = '') { return GET(new Request(`https://axiom.example/api/v1/trustlines/${asset}${query}`, { headers: { 'X-Request-ID': 'req_trustlines' } }), { params: Promise.resolve({ asset }) }) }
 describe('GET /api/v1/trustlines/{asset}', () => {
-  afterEach(() => { readModel.load.mockReset(); vi.restoreAllMocks() })
+  afterEach(() => { readModel.load.mockReset(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
+  it('fails closed before storage reads when trustlines are disabled', async () => {
+    vi.stubEnv('AXIOM_FEATURE_TRUSTLINES_ENABLED', 'false')
+    const response = await request()
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: { code: 'feature_not_available' } })
+    expect(readModel.load).not.toHaveBeenCalled()
+  })
   it('serves finalized authorization-state counts', async () => {
     readModel.load.mockResolvedValue({ snapshot: snapshot(), stale: false, freshForSeconds: 800 })
     const response = await request(); await expectOpenApiResponse(response.clone(), '/api/v1/trustlines/{asset}', 'get'); const body = await response.json()

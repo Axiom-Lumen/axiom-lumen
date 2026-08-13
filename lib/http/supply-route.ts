@@ -16,6 +16,7 @@ import {
   resolveApiRequestId,
   withPublicApiAccess,
 } from './api'
+import { featureDisabledResponse, metricFeatureEnabled } from './feature-flags'
 
 interface SupplyRouteContext {
   params: Promise<{ asset: string }>
@@ -24,6 +25,7 @@ interface SupplyRouteContext {
 interface SupplyRouteDependencies {
   loadReadModel?: typeof loadLatestSupplyReadModel
   clock?: () => Date
+  featureEnabled?: () => boolean
 }
 
 function staleResponse(response: ApiReconciliationSnapshot, requestId: string, now: Date): ApiReconciliationSnapshot {
@@ -65,6 +67,7 @@ function supplyCachePolicy(freshForSeconds: number) {
 export function createSupplyGetHandler({
   loadReadModel = loadLatestSupplyReadModel,
   clock = () => new Date(),
+  featureEnabled = () => metricFeatureEnabled('supply'),
 }: SupplyRouteDependencies = {}) {
   return async function getSupply(request: Request, context: SupplyRouteContext) {
     const now = clock()
@@ -79,6 +82,7 @@ export function createSupplyGetHandler({
       })
     }
     const requestId = resolved.requestId
+    if (!featureEnabled()) return featureDisabledResponse(request, requestId, now)
     return withPublicApiAccess(request, requestId, PUBLIC_API_ACCESS_POLICIES.supply, async () => {
       const queryError = rejectUnexpectedQueryParameters(request)
       if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId, asOf: now })

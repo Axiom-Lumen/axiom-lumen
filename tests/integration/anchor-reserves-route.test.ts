@@ -40,7 +40,15 @@ function request(anchor = 'anchor-a', init?: RequestInit, query = '') {
 }
 
 describe('GET /api/v1/anchors/{anchor}/reserves', () => {
-  afterEach(() => { vi.restoreAllMocks(); readModel.load.mockReset() })
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); readModel.load.mockReset() })
+
+  it('fails closed before storage reads when anchor reserves are disabled', async () => {
+    vi.stubEnv('AXIOM_FEATURE_ANCHOR_RESERVES_ENABLED', 'false')
+    const response = await request('anchor-a', { headers: { 'X-Request-ID': 'anchor_disabled' } })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: { code: 'feature_not_available' } })
+    expect(readModel.load).not.toHaveBeenCalled()
+  })
 
   it('serves only the publication-gated public read model', async () => {
     readModel.load.mockResolvedValue(model)

@@ -1,0 +1,140 @@
+name: Build release artifact
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: axiom
+          POSTGRES_PASSWORD: axiom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiom -d postgres"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Run complete release gate
+        run: npm run ci
+        env:
+          DATABASE_TEST_ADMIN_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
+          DATABASE_RESTORE_TOOLS_REQUIRED: "true"
+          AXIOM_API_AUTH_REQUIRED: "false"
+      - run: npm run security:dependencies
+
+  build:
+    name: Build and attest immutable image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: axiom
+          POSTGRES_PASSWORD: axiom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiom -d postgres"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+      image: ${{ steps.image.outputs.image }}
+      repository: ${{ steps.image.outputs.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Normalize registry repository
+        id: registry
+        run: echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Build and push once
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.registry.outputs.repository }}:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Record digest-pinned image
+        id: image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REPOSITORY: ${{ steps.registry.outputs.repository }}
+        run: |
+          image="${REPOSITORY}@${DIGEST}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "repository=${REPOSITORY}" >> "$GITHUB_OUTPUT"
+      - name: Exercise exact image runtime roles
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.image }}
+          RELEASE_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RELEASE_COMMIT_SHA: ${{ github.sha }}
+          DATABASE_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
+          DATABASE_MIGRATION_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
+          RELEASE_BACKUP_DIRECTORY: ${{ runner.temp }}/release-image-backups
+        run: bash deploy/verify-release-image.sh
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.registry.outputs.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - name: Create immutable release manifest
+        run: npm run release:manifest-create -- --output release-manifest.json
+        env:
+          RELEASE_COMMIT_SHA: ${{ github.sha }}
+          RELEASE_IMAGE: ${{ steps.image.outputs.image }}
+          RELEASE_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 90

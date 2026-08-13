@@ -1,4 +1,5 @@
 import { resolveTraceContext, structuredLog } from '../../../../lib/observability/telemetry'
+import { parseReleaseFeatureFlags, parseReleaseMetadata } from '../../../../lib/release/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,12 @@ function response(request: Request, status: number, body: unknown) {
 }
 
 export function GET(request: Request) {
-  return response(request, 200, { status: 'alive', checked_at: new Date().toISOString() })
+  return response(request, 200, {
+    status: 'alive',
+    checked_at: new Date().toISOString(),
+    release: parseReleaseMetadata(),
+    features: parseReleaseFeatureFlags(),
+  })
 }
 
 export function OPTIONS() {

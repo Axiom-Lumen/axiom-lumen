@@ -26,7 +26,14 @@ function snapshot(): DepthReadModel['snapshot'] {
 function request(pair = PAIR) { return GET(new Request(`https://axiom.example/api/v1/depth/${pair}`, { headers: { 'X-Request-ID': 'req_depth' } }), { params: Promise.resolve({ pair }) }) }
 
 describe('GET /api/v1/depth/{pair}', () => {
-  afterEach(() => { readModel.load.mockReset(); vi.restoreAllMocks() })
+  afterEach(() => { readModel.load.mockReset(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
+  it('fails closed before storage reads when depth is disabled', async () => {
+    vi.stubEnv('AXIOM_FEATURE_DEPTH_ENABLED', 'false')
+    const response = await request()
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: { code: 'feature_not_available' } })
+    expect(readModel.load).not.toHaveBeenCalled()
+  })
   it('serves a finalized coherent book without upstream fan-out', async () => {
     readModel.load.mockResolvedValue({ snapshot: snapshot(), stale: false, freshForSeconds: 15 })
     const response = await request(); await expectOpenApiResponse(response.clone(), '/api/v1/depth/{pair}', 'get'); const body = await response.json()

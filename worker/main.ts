@@ -15,6 +15,7 @@ import { createAnchorReserveJobHandler } from '../lib/worker/anchor-reserve-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
 import { runAnchorWorkflowContinuously, runAnchorWorkflowOnce } from '../lib/worker/anchor-case-workflow'
 import { errorTelemetry, structuredLog } from '../lib/observability/telemetry'
+import { parseReleaseFeatureFlags, parseReleaseMetadata } from '../lib/release/config'
 
 function executionMode(arguments_: readonly string[]) {
   const once = arguments_.includes('--once')
@@ -25,6 +26,8 @@ function executionMode(arguments_: readonly string[]) {
 
 async function main() {
   const mode = executionMode(process.argv.slice(2))
+  const features = parseReleaseFeatureFlags()
+  const release = parseReleaseMetadata()
   const options = parseWorkerConfig()
   const anchorWorkflowConfig = parseAnchorWorkflowConfig()
   const contactSecretKeyring = process.env.ANCHOR_CONTACT_SECRET_KEYS || process.env.ANCHOR_CONTACT_ACTIVE_KEY_ID
@@ -45,10 +48,10 @@ async function main() {
       schedulerRepository,
       persistenceRepositories,
       methodologyVersion: LATEST_LEDGER_METHODOLOGY_VERSION,
-      supplyMethodologyVersion: SUPPLY_METHODOLOGY_VERSION,
-      depthMethodologyVersion: DEPTH_RECONCILIATION_METHODOLOGY_VERSION,
-      trustlineMethodologyVersion: TRUSTLINE_METHODOLOGY_VERSION,
-      anchorReserveMethodologyVersion: ANCHOR_RESERVE_METHODOLOGY_VERSION,
+      supplyMethodologyVersion: features.supply ? SUPPLY_METHODOLOGY_VERSION : undefined,
+      depthMethodologyVersion: features.depth ? DEPTH_RECONCILIATION_METHODOLOGY_VERSION : undefined,
+      trustlineMethodologyVersion: features.trustlines ? TRUSTLINE_METHODOLOGY_VERSION : undefined,
+      anchorReserveMethodologyVersion: features.anchorReserves ? ANCHOR_RESERVE_METHODOLOGY_VERSION : undefined,
       handlers: {
         latest_ledger: createLatestLedgerJobHandler(persistenceRepositories, () => new Date(), {
           endpointPolicy: {
@@ -97,7 +100,7 @@ async function main() {
       const anchorWorkflow = await runAnchorWorkflowOnce({ repository: anchorCaseRepository, keyring: contactSecretKeyring }, anchorWorkflowConfig, options.workerId, controller.signal)
       structuredLog('info', 'worker_poll_complete', { worker_id: options.workerId, ...summary, anchor_workflow: anchorWorkflow })
     } else {
-      structuredLog('info', 'worker_started', { worker_id: options.workerId })
+      structuredLog('info', 'worker_started', { worker_id: options.workerId, release, features })
       await Promise.all([
         runSchedulerContinuously(dependencies, options, controller.signal),
         ...(anchorWorkflowConfig.enabled
