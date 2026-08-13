@@ -236,7 +236,9 @@ Historical anchor disclosures use stable persisted event timestamps and a 15 plu
 
 Hosted deployments enable API-key enforcement with `AXIOM_API_AUTH_REQUIRED=true`. Requests then send
 `X-Axiom-Key`; missing or unusable credentials return `401`, exhausted plan windows return `429`, and successful
-authenticated responses report `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Local
+authenticated responses report `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Principal
+scopes and optional plan/route policies enforce route access; sustained and burst quotas are shared atomically
+across replicas. Local
 development remains anonymous by default; production requires an explicit authentication policy. Key
 provisioning, site-key behavior, and bounded quota retention are documented in
 [`docs/api-access.md`](./docs/api-access.md).

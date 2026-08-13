@@ -14,8 +14,10 @@ misspelled fields cannot silently enter reconciliation.
 When `AXIOM_API_AUTH_REQUIRED=true`, every public v1 GET requires an opaque `X-Axiom-Key`. The server looks up
 only the non-secret key prefix, verifies the complete SHA-256 digest with a timing-safe comparison, rejects
 revoked/expired keys and inactive principals or plans through one generic `401`, and atomically consumes the
-principal plan's fixed-window quota. Quota exhaustion returns `429` before route work. Local development is
-anonymous by default; `OPTIONS` never requires a key or consumes quota.
+principal's sustained and burst fixed-window quotas for the stable route ID. Missing route scope or a disabled
+plan/route policy returns `403`; quota exhaustion returns `429` before route work. Local development is anonymous
+by default; `OPTIONS` never requires a key or consumes quota. Creation, rotation, and revocation append immutable
+audit events without storing plaintext secrets.
 
 ## Domain conventions
 

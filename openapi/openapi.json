@@ -185,6 +185,9 @@
           "401": {
             "$ref": "#/components/responses/AuthenticationError"
           },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
           "404": {
             "description": "No finalized snapshot exists",
             "headers": {
@@ -516,6 +519,9 @@
           },
           "401": {
             "$ref": "#/components/responses/AuthenticationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
           },
           "404": {
             "description": "No finalized snapshot exists for the asset",
@@ -849,6 +855,9 @@
           "401": {
             "$ref": "#/components/responses/AuthenticationError"
           },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
           "404": {
             "description": "No finalized snapshot exists for the pair",
             "headers": {
@@ -1180,6 +1189,9 @@
           },
           "401": {
             "$ref": "#/components/responses/AuthenticationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
           },
           "404": {
             "description": "No finalized snapshot exists for the asset",
@@ -1519,6 +1531,9 @@
           },
           "401": {
             "$ref": "#/components/responses/AuthenticationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
           },
           "404": {
             "description": "No verified anchor exists for the identifier",
@@ -3975,8 +3990,40 @@
           }
         }
       },
+      "AuthorizationError": {
+        "description": "The authenticated principal does not hold the scope required by this route, or the route is disabled for its plan",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          },
+          "Access-Control-Allow-Origin": {
+            "$ref": "#/components/headers/CorsOrigin"
+          },
+          "Access-Control-Expose-Headers": {
+            "$ref": "#/components/headers/CorsExposeHeaders"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/Vary"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "authorization": {
+                "$ref": "#/components/examples/AuthorizationError"
+              }
+            }
+          }
+        }
+      },
       "RateLimitError": {
-        "description": "The authenticated principal exhausted its plan quota for the current fixed window",
+        "description": "The authenticated principal exhausted its sustained or burst quota for the current route window",
         "headers": {
           "X-Request-ID": {
             "$ref": "#/components/headers/XRequestId"
@@ -5010,6 +5057,18 @@
           "error": {
             "code": "authentication_required",
             "message": "A valid API key is required"
+          },
+          "request_id": "example_request",
+          "as_of": "2026-08-10T12:00:00.000Z",
+          "api_version": "v1"
+        }
+      },
+      "AuthorizationError": {
+        "summary": "The API key lacks the scope required by the route",
+        "value": {
+          "error": {
+            "code": "insufficient_scope",
+            "message": "The API key is not authorized for this route"
           },
           "request_id": "example_request",
           "as_of": "2026-08-10T12:00:00.000Z",

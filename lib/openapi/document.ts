@@ -225,6 +225,7 @@ export const OPENAPI_EXAMPLES = {
   depthReadUnavailable: errorExample('depth_read_unavailable', 'The depth read model is temporarily unavailable'),
   trustlineReadUnavailable: errorExample('trustline_read_unavailable', 'The trustline read model is temporarily unavailable'),
   authenticationError: errorExample('authentication_required', 'A valid API key is required'),
+  insufficientScope: errorExample('insufficient_scope', 'The API key is not authorized for this route'),
   rateLimitError: errorExample('rate_limit_exceeded', 'The request quota has been exceeded'),
 } as const
 
@@ -263,6 +264,7 @@ const conditionalHeaders = {
 
 const accessErrorResponses = {
   401: { $ref: '#/components/responses/AuthenticationError' },
+  403: { $ref: '#/components/responses/AuthorizationError' },
   429: { $ref: '#/components/responses/RateLimitError' },
 }
 
@@ -497,8 +499,13 @@ export function createOpenApiDocument() {
           headers: responseHeaders,
           content: errorContent({ authentication: { $ref: '#/components/examples/AuthenticationError' } }),
         },
+        AuthorizationError: {
+          description: 'The authenticated principal does not hold the scope required by this route, or the route is disabled for its plan',
+          headers: responseHeaders,
+          content: errorContent({ authorization: { $ref: '#/components/examples/AuthorizationError' } }),
+        },
         RateLimitError: {
-          description: 'The authenticated principal exhausted its plan quota for the current fixed window',
+          description: 'The authenticated principal exhausted its sustained or burst quota for the current route window',
           headers: {
             ...responseHeaders,
             'Retry-After': { $ref: '#/components/headers/RetryAfter' },
@@ -600,6 +607,10 @@ export function createOpenApiDocument() {
         AuthenticationError: {
           summary: 'Authentication is required but the supplied API key is not usable',
           value: OPENAPI_EXAMPLES.authenticationError,
+        },
+        AuthorizationError: {
+          summary: 'The API key lacks the scope required by the route',
+          value: OPENAPI_EXAMPLES.insufficientScope,
         },
         RateLimitError: {
           summary: 'The current API-key plan window is exhausted',

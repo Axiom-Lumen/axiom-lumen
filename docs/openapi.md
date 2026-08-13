@@ -12,7 +12,8 @@ implemented public operations:
 Every GET operation documents required `X-Axiom-Key` authentication for the hosted contract. Local development's
 explicit anonymous mode is a deployment convenience, not a weaker hosted contract. Normal application responses
 document conditionally present quota metadata because anonymous local responses omit it; authenticated hosted
-responses always emit it. The shared `401` and `429` components describe authentication and quota failures.
+responses always emit it. The shared `401`, `403`, and `429` components describe authentication, scope, and
+quota failures.
 `OPTIONS` remains unauthenticated.
 
 ## Source and generation

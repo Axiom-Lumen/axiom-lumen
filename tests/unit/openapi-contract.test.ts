@@ -47,6 +47,7 @@ describe('OpenAPI 3.1 contract', () => {
       OPENAPI_EXAMPLES.depthReadUnavailable,
       OPENAPI_EXAMPLES.trustlineReadUnavailable,
       OPENAPI_EXAMPLES.authenticationError,
+      OPENAPI_EXAMPLES.insufficientScope,
       OPENAPI_EXAMPLES.rateLimitError,
     ]
     for (const example of errorExamples) {

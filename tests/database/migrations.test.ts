@@ -84,7 +84,9 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
         'anchor_reviews',
         'anchor_verification_events',
         'anchors',
+        'api_key_events',
         'api_keys',
+        'api_plan_route_limits',
         'api_plans',
         'api_principal_scopes',
         'api_principals',
@@ -110,7 +112,7 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ])
 
       const migrationRows = await pool.query('SELECT count(*)::int AS count FROM drizzle.__axiom_lumen_migrations')
-      expect(migrationRows.rows[0]?.count).toBe(14)
+      expect(migrationRows.rows[0]?.count).toBe(15)
 
       const leaseSnapshotColumns = await pool.query<{ column_name: string; data_type: string }>(
         `SELECT column_name, data_type
@@ -170,6 +172,9 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
           'anchor_verification_events_domain_occurred_idx',
           'anchor_domains_anchor_domain_uidx',
           'anchors_network_name_idx',
+          'api_key_events_key_occurred_idx',
+          'api_plan_route_limits_route_idx',
+          'api_quota_usage_route_window_idx',
         ]),
       )
 
@@ -295,6 +300,49 @@ describeWithDatabase('PostgreSQL forward migrations', () => {
       ).rejects.toMatchObject({ code: '55000' })
       const snapshotTable = await pool.query("SELECT to_regclass('public.reconciliation_snapshots') AS table_name")
       expect(snapshotTable.rows[0]?.table_name).toBe('reconciliation_snapshots')
+    } finally {
+      await pool.end()
+    }
+  })
+
+  it('backfills existing quota rows when adding route and burst dimensions', async () => {
+    const { pool } = await createDatabase('api_access_prior')
+    try {
+      await pool.query(`CREATE TABLE api_plans (id text PRIMARY KEY)`)
+      await pool.query(`CREATE TABLE api_principals (id text PRIMARY KEY)`)
+      await pool.query(`CREATE TABLE api_keys (id text PRIMARY KEY)`)
+      await pool.query(`
+        CREATE TABLE api_quota_usage (
+          principal_id text NOT NULL,
+          window_started_at timestamp with time zone NOT NULL,
+          request_count bigint NOT NULL DEFAULT 0,
+          updated_at timestamp with time zone NOT NULL DEFAULT now(),
+          CONSTRAINT api_quota_usage_pk PRIMARY KEY (principal_id, window_started_at)
+        )
+      `)
+      await pool.query(`INSERT INTO api_plans (id) VALUES ('developer')`)
+      await pool.query(`INSERT INTO api_principals (id) VALUES ('client-a')`)
+      await pool.query(`INSERT INTO api_keys (id) VALUES ('key-a')`)
+      await pool.query(`INSERT INTO api_quota_usage (principal_id, window_started_at, request_count) VALUES ('client-a', '2026-08-01T00:00:00Z', 7)`)
+      await pool.query(`
+        CREATE FUNCTION public.reject_append_only_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION '% is append-only', TG_TABLE_NAME USING ERRCODE = '55000'; END;
+        $$
+      `)
+
+      await applySqlMigration(pool, '0014_real_hawkeye.sql')
+
+      const usage = await pool.query(`SELECT route_id, quota_kind, request_count::int AS request_count FROM api_quota_usage`)
+      expect(usage.rows).toEqual([{ route_id: 'legacy', quota_kind: 'sustained', request_count: 7 }])
+      const defaults = await pool.query(`
+        SELECT column_name, column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'api_quota_usage' AND column_name IN ('route_id', 'quota_kind')
+        ORDER BY column_name
+      `)
+      expect(defaults.rows).toEqual([
+        { column_name: 'quota_kind', column_default: null },
+        { column_name: 'route_id', column_default: null },
+      ])
     } finally {
       await pool.end()
     }

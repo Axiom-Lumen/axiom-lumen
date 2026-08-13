@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiErrorResponseSchema } from '../../lib/contracts'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../lib/api-access/policy'
 import { expectOpenApiResponse } from '../helpers/openapi-response'
 
 const access = vi.hoisted(() => ({ authorize: vi.fn() }))
@@ -46,7 +47,26 @@ describe('public API access boundary', () => {
       expect(response.status).toBe(401)
       expect(apiErrorResponseSchema.parse(await response.json()).error).toEqual({ code: 'authentication_required', message: 'A valid API key is required' })
     }
+    expect(access.authorize.mock.calls.slice(0, 5).map((call) => call[1])).toEqual([
+      PUBLIC_API_ACCESS_POLICIES.latestLedger,
+      PUBLIC_API_ACCESS_POLICIES.supply,
+      PUBLIC_API_ACCESS_POLICIES.depth,
+      PUBLIC_API_ACCESS_POLICIES.trustlines,
+      PUBLIC_API_ACCESS_POLICIES.anchorReserves,
+    ])
     expect((await request('malformed')).status).toBe(401)
+    expect(readModel.load).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 before route work when an authenticated principal lacks the route scope', async () => {
+    vi.stubEnv('AXIOM_API_AUTH_REQUIRED', 'true')
+    access.authorize.mockResolvedValue({ status: 'forbidden' })
+    for (const route of protectedRoutes) {
+      const response = await route.call({ 'X-Axiom-Key': 'opaque-key' })
+      await expectOpenApiResponse(response.clone(), route.path, 'get')
+      expect(response.status).toBe(403)
+      expect((await response.json()).error.code).toBe('insufficient_scope')
+    }
     expect(readModel.load).not.toHaveBeenCalled()
   })
 

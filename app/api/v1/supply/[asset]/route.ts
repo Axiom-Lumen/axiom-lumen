@@ -1,4 +1,5 @@
 import { supplyMethodologyConfig } from '../../../../../config/methodology'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import {
   apiReconciliationSnapshotSchema,
   parseAssetId,
@@ -89,7 +90,7 @@ export async function GET(request: Request, context: SupplyRouteContext) {
     })
   }
   const requestId = resolved.requestId
-  return withPublicApiAccess(request, requestId, async () => {
+  return withPublicApiAccess(request, requestId, PUBLIC_API_ACCESS_POLICIES.supply, async () => {
     const queryError = rejectUnexpectedQueryParameters(request)
     if (queryError) {
       return apiErrorResponse({ request, status: 400, ...queryError, requestId, asOf: now })

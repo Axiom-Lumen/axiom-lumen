@@ -1,4 +1,5 @@
 import { depthReconciliationMethodologyConfig } from '../../../../../config/methodology'
+import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import { apiReconciliationSnapshotSchema, parseTradingPairId, serializePublicReconciliationSnapshot, type ApiReconciliationSnapshot } from '../../../../../lib/contracts'
 import { loadLatestDepthReadModel } from '../../../../../lib/db/depth-read-model'
 import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
@@ -23,7 +24,7 @@ function cachePolicy(freshForSeconds: number) { const budget = Math.max(0, Math.
 export async function GET(request: Request, context: Context) {
   const now = new Date(); const resolved = resolveApiRequestId(request)
   if (!resolved.ok) return apiErrorResponse({ request, status: 400, code: resolved.code, message: resolved.message, requestId: resolved.requestId, asOf: now })
-  return withPublicApiAccess(request, resolved.requestId, async () => {
+  return withPublicApiAccess(request, resolved.requestId, PUBLIC_API_ACCESS_POLICIES.depth, async () => {
     const queryError = rejectUnexpectedQueryParameters(request)
     if (queryError) return apiErrorResponse({ request, status: 400, ...queryError, requestId: resolved.requestId, asOf: now })
     let pair
