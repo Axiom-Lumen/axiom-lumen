@@ -2,7 +2,8 @@ import { trustlineMethodologyConfig } from '../../../../../config/methodology'
 import { PUBLIC_API_ACCESS_POLICIES } from '../../../../../lib/api-access/policy'
 import { apiReconciliationSnapshotSchema, parseAssetId, serializePublicReconciliationSnapshot, type ApiReconciliationSnapshot } from '../../../../../lib/contracts'
 import { loadLatestTrustlineReadModel } from '../../../../../lib/db/trustline-read-model'
-import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
+import { apiErrorResponse, apiJsonResponse, apiMethodNotAllowedResponse, apiOptionsResponse, linkApiResponseToProducerCycle, rejectUnexpectedQueryParameters, resolveApiRequestId, withPublicApiAccess } from '../../../../../lib/http/api'
+import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 interface Context { params: Promise<{ asset: string }> }
@@ -25,11 +26,11 @@ export async function GET(request: Request, context: Context) {
       const readModel = await loadLatestTrustlineReadModel(asset, now)
       if (!readModel) return apiErrorResponse({ request, status: 404, code: 'trustline_snapshot_not_found', message: 'No finalized trustline snapshot is available', requestId: resolved.requestId, asOf: now })
       const response = serializePublicReconciliationSnapshot(readModel.snapshot, resolved.requestId)
-      if (readModel.stale) return apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' })
+      if (readModel.stale) return linkApiResponseToProducerCycle(apiJsonResponse(request, staleResponse(response, resolved.requestId, now), { status: 503, requestId: resolved.requestId, cache: 'no-store' }), readModel.snapshot.cycleId)
       const status = response.status === 'unavailable' ? 503 : 200
-      return apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 })
+      return linkApiResponseToProducerCycle(apiJsonResponse(request, response, { status, requestId: resolved.requestId, cache: status === 200 ? cachePolicy(readModel.freshForSeconds) : 'no-store', etag: status === 200 }), readModel.snapshot.cycleId)
     } catch (error) {
-      console.error('Unable to load trustline read model', { name: error instanceof Error ? error.name : 'Error' })
+      structuredLog('error', 'trustline_read_failed', { request_id: resolved.requestId, ...errorTelemetry(error) })
       return apiErrorResponse({ request, status: 503, code: 'trustline_read_unavailable', message: 'The trustline read model is temporarily unavailable', requestId: resolved.requestId, asOf: now })
     }
   })

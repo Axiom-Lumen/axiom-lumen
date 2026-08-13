@@ -11,6 +11,7 @@ import {
   resolveApiRequestId,
   withPublicApiAccess,
 } from '../../../../../../lib/http/api'
+import { errorTelemetry, structuredLog } from '../../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,7 +62,7 @@ export async function GET(request: Request, context: AnchorReserveRouteContext) 
       if (error instanceof InvalidAnchorReserveCursorError) {
         return apiErrorResponse({ request, status: 400, code: 'invalid_pagination', message: error.message, requestId, asOf: now })
       }
-      console.error('Unable to load the public anchor reserve read model', { name: error instanceof Error ? error.name : 'Error' })
+      structuredLog('error', 'anchor_reserves_read_failed', { request_id: requestId, ...errorTelemetry(error) })
       return apiErrorResponse({ request, status: 503, code: 'anchor_reserves_read_unavailable', message: 'The anchor reserve read model is temporarily unavailable', requestId, asOf: now })
     }
   })

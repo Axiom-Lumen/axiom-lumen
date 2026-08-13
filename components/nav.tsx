@@ -10,6 +10,7 @@ const links = [
   { href: '/methodology', label: 'Methodology' },
   { href: '/docs', label: 'Docs' },
   { href: '/anchors', label: 'Anchors' },
+  { href: '/status', label: 'Status' },
   // { href: '/pricing', label: 'Pricing' },
   { href: '/about', label: 'About' },
 ]

@@ -17,6 +17,7 @@ import {
   withPublicApiAccess,
 } from '../../../../../lib/http/api'
 import { createSnapshotEventStream } from '../../../../../lib/http/sse'
+import { errorTelemetry, structuredLog } from '../../../../../lib/observability/telemetry'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
         details: error.details,
       })
     }
-    console.error('Unable to configure snapshot event stream', { name: error instanceof Error ? error.name : 'Error' })
+    structuredLog('error', 'snapshot_stream_configuration_failed', { request_id: resolved.requestId, ...errorTelemetry(error) })
     return apiErrorResponse({ request, status: 503, code: 'stream_unavailable', message: 'The snapshot event stream is temporarily unavailable', requestId: resolved.requestId })
   }
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
           ? () => authorizePublicApiKey(rawKey, PUBLIC_API_ACCESS_POLICIES.snapshotEvents)
           : undefined,
         onError(error) {
-          console.error('Snapshot event stream stopped', { name: error instanceof Error ? error.name : 'Error' })
+          structuredLog('error', 'snapshot_stream_stopped', { request_id: resolved.requestId, ...errorTelemetry(error) })
         },
       })
       return apiEventStreamResponse(stream, resolved.requestId)
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
           details: error.details,
         })
       }
-      console.error('Unable to open snapshot event stream', { name: error instanceof Error ? error.name : 'Error' })
+      structuredLog('error', 'snapshot_stream_open_failed', { request_id: resolved.requestId, ...errorTelemetry(error) })
       return apiErrorResponse({ request, status: 503, code: 'stream_unavailable', message: 'The snapshot event stream is temporarily unavailable', requestId: resolved.requestId })
     }
   })

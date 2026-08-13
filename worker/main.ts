@@ -7,7 +7,6 @@ import { ANCHOR_RESERVE_METHODOLOGY_VERSION, DEPTH_RECONCILIATION_METHODOLOGY_VE
 import { parseHorizonHostList } from '../lib/stellar/horizon'
 import { parseAnchorWorkflowConfig, parseSourceResilienceConfig, parseWorkerConfig } from '../lib/worker/config'
 import { parseContactSecretKeyring } from '../lib/anchor/contact-secret'
-import { serializeWorkerError } from '../lib/worker/errors'
 import { createLatestLedgerJobHandler } from '../lib/worker/latest-ledger-job'
 import { createSupplyJobHandler } from '../lib/worker/supply-job'
 import { createDepthJobHandler } from '../lib/worker/depth-job'
@@ -15,6 +14,7 @@ import { createTrustlineJobHandler } from '../lib/worker/trustline-job'
 import { createAnchorReserveJobHandler } from '../lib/worker/anchor-reserve-job'
 import { runSchedulerContinuously, runSchedulerOnce } from '../lib/worker/scheduler'
 import { runAnchorWorkflowContinuously, runAnchorWorkflowOnce } from '../lib/worker/anchor-case-workflow'
+import { errorTelemetry, structuredLog } from '../lib/observability/telemetry'
 
 function executionMode(arguments_: readonly string[]) {
   const once = arguments_.includes('--once')
@@ -90,13 +90,14 @@ async function main() {
           resiliencePolicy,
         }),
       },
+      telemetry: structuredLog,
     }
     if (mode === 'once') {
       const summary = await runSchedulerOnce(dependencies, options, controller.signal)
       const anchorWorkflow = await runAnchorWorkflowOnce({ repository: anchorCaseRepository, keyring: contactSecretKeyring }, anchorWorkflowConfig, options.workerId, controller.signal)
-      console.log(JSON.stringify({ event: 'worker_cycle_complete', workerId: options.workerId, ...summary, anchorWorkflow }))
+      structuredLog('info', 'worker_poll_complete', { worker_id: options.workerId, ...summary, anchor_workflow: anchorWorkflow })
     } else {
-      console.log(JSON.stringify({ event: 'worker_started', workerId: options.workerId }))
+      structuredLog('info', 'worker_started', { worker_id: options.workerId })
       await Promise.all([
         runSchedulerContinuously(dependencies, options, controller.signal),
         ...(anchorWorkflowConfig.enabled
@@ -112,9 +113,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(JSON.stringify({
-    event: 'worker_failed',
-    ...serializeWorkerError(error),
-  }))
+  structuredLog('error', 'worker_failed', errorTelemetry(error))
   process.exitCode = 1
 })

@@ -29,6 +29,8 @@ Items below are directional and are not commitments to a particular scope or rel
   quotas, and standard rate-limit response metadata.
 - Authorized server-sent snapshot events with durable IDs, bounded replay/resume, heartbeats, and slow-consumer
   protection.
+- Persisted operational health aggregation, structured trace-correlated logs, liveness/readiness probes,
+  Prometheus metrics, configured alert thresholds, and a public status page.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,
   stale, unavailable, and empty states.
 - An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy
@@ -42,7 +44,7 @@ Future work may broaden the product in these areas:
 - Additional reconciliation views where the public contract exposes sufficient evidence.
 - Additional Stellar network metrics where semantics and independent evidence can be defined precisely.
 - Carefully governed issuer and anchor comparison workflows.
-- Production-grade access, event delivery, observability, and reliability capabilities.
+- Additional production reliability and release capabilities.
 - Expanded replay, load, failure, and end-to-end verification.
 
 New public capabilities will be documented only after their contracts, methodology, failure behavior, and

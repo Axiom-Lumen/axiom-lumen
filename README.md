@@ -89,6 +89,8 @@ Implemented in this repository today:
   enforce atomic per-plan/per-route sustained and burst quotas, rotate/revoke/expire keys, and return standard quota headers.
 - [x] **Snapshot SSE:** `GET /api/v1/events/snapshots` streams durable Public Network snapshot events with
   authorization, heartbeats, bounded `Last-Event-ID` replay, recurring quota checks, and slow-consumer handling.
+- [x] **Telemetry and status:** Structured trace-correlated API/worker logs, persisted health aggregation,
+  liveness/readiness probes, Prometheus metrics, alert thresholds, and a public `/status` page are implemented.
 - [ ] **WebSocket streams:** Not implemented; bidirectional behavior has not been demonstrated as necessary.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
   form or claimant API is enabled.
@@ -313,6 +315,8 @@ The internal claimant and correction operator flow is documented in
 Hosted API credential provisioning is documented in [docs/api-access.md](./docs/api-access.md).
 Authorized snapshot streaming, replay/resume behavior, and client guidance are documented in
 [docs/snapshot-events.md](./docs/snapshot-events.md).
+Operational probes, metrics, thresholds, structured-log redaction, and status behavior are documented in
+[docs/operations.md](./docs/operations.md).
 
 ---
 

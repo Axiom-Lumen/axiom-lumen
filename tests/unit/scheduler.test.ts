@@ -99,6 +99,23 @@ describe('worker scheduler', () => {
     expect(fixture.persistenceRepositories.persistCompletedCycle).toHaveBeenCalledTimes(3)
   })
 
+  it('emits cycle and source correlation fields through the injected structured telemetry sink', async () => {
+    const discovered = job('public')
+    const lease = leaseFor(discovered)
+    const handler = vi.fn(async () => ({ readings: [{ sourceId: 'source-public' }] } as never))
+    const fixture = dependencies([discovered], [lease], handler)
+    const telemetry = vi.fn()
+
+    await runSchedulerOnce({ ...fixture.value, telemetry }, options)
+
+    expect(telemetry).toHaveBeenCalledWith('info', 'worker_cycle_started', expect.objectContaining({
+      trace_id: expect.stringMatching(/^[0-9a-f]{32}$/), cycle_id: lease.id, worker_id: 'worker-a',
+    }))
+    expect(telemetry).toHaveBeenCalledWith('info', 'worker_cycle_completed', expect.objectContaining({
+      cycle_id: lease.id, source_ids: ['source-public'], persistence_status: 'inserted',
+    }))
+  })
+
   it('acknowledges a durable winner when an overlapping retry resolves as a duplicate', async () => {
     const discovered = job('public')
     const handler = vi.fn(async () => ({ cycle: { id: 'winner' } } as never))

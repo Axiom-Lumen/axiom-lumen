@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createApiErrorResponse, identifierSchema } from '../contracts'
 import { apiAuthenticationRequired } from '../api-access/key'
 import type { PublicApiAccessPolicy } from '../api-access/policy'
+import { errorTelemetry, resolveTraceContext, structuredLog, traceIdForCycle, type TraceContext } from '../observability/telemetry'
 
 export const PUBLIC_API_PREFIX = '/api/v1' as const
 export const DEFAULT_PAGE_SIZE = 25
@@ -12,8 +13,23 @@ export const MAXIMUM_PAGE_SIZE = 100
 const REQUEST_ID_HEADER = 'x-request-id'
 const ALLOWED_METHODS = 'GET, OPTIONS'
 const API_KEY_HEADER = 'x-axiom-key'
-const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, Last-Event-ID, X-Axiom-Key, X-Request-ID'
-const EXPOSED_HEADERS = 'Deprecation, ETag, Link, Retry-After, Sunset, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID'
+const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, Last-Event-ID, Traceparent, X-Axiom-Key, X-Request-ID'
+const EXPOSED_HEADERS = 'Deprecation, ETag, Link, Retry-After, Sunset, Traceparent, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID'
+const requestTraces = new WeakMap<Request, TraceContext>()
+const producerTraces = new WeakMap<Response, string>()
+
+function traceForRequest(request: Request) {
+  const existing = requestTraces.get(request)
+  if (existing) return existing
+  const trace = resolveTraceContext(request.headers.get('traceparent'))
+  requestTraces.set(request, trace)
+  return trace
+}
+
+export function linkApiResponseToProducerCycle(response: Response, cycleId: string) {
+  producerTraces.set(response, traceIdForCycle(cycleId))
+  return response
+}
 
 export interface ApiDeprecationPolicy {
   deprecatedAt: string
@@ -167,6 +183,7 @@ export function parseApiPagination(searchParams: URLSearchParams): ApiPagination
 
 export function apiJsonResponse(request: Request, body: unknown, options: ApiResponseOptions) {
   const headers = baseHeaders(options.requestId, options.cache ?? 'no-store', options.deprecation)
+  headers.set('Traceparent', traceForRequest(request).traceparent)
   if (options.etag && options.status === 200) {
     const etag = weakEtag(options.etagValue ?? body)
     headers.set('ETag', etag)
@@ -210,6 +227,7 @@ export function apiErrorResponse({
 export function apiOptionsResponse(request: Request) {
   const resolved = resolveApiRequestId(request)
   const headers = baseHeaders(resolved.requestId, 'no-store')
+  headers.set('Traceparent', traceForRequest(request).traceparent)
   headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS)
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS)
   headers.set('Access-Control-Max-Age', '86400')
@@ -247,8 +265,7 @@ function applyRateLimitHeaders(response: Response, limit: number, remaining: num
   return response
 }
 
-/** Authenticates and atomically consumes one plan quota unit before public route work begins. */
-export async function withPublicApiAccess(
+async function authorizePublicApiAccess(
   request: Request,
   requestId: string,
   policy: PublicApiAccessPolicy,
@@ -257,7 +274,7 @@ export async function withPublicApiAccess(
   try {
     if (!apiAuthenticationRequired()) return handler()
   } catch (error) {
-    console.error('Unable to read public API access policy', { name: error instanceof Error ? error.name : 'Error' })
+    structuredLog('error', 'api_access_policy_failed', { request_id: requestId, route_id: policy.routeId, ...errorTelemetry(error) })
     return apiErrorResponse({ request, status: 503, code: 'api_access_unavailable', message: 'API access verification is temporarily unavailable', requestId })
   }
   let decision
@@ -265,7 +282,7 @@ export async function withPublicApiAccess(
     const { authorizePublicApiKey } = await import('../db/api-access-repository')
     decision = await authorizePublicApiKey(request.headers.get(API_KEY_HEADER), policy)
   } catch (error) {
-    console.error('Unable to authorize public API access', { name: error instanceof Error ? error.name : 'Error' })
+    structuredLog('error', 'api_access_authorization_failed', { request_id: requestId, route_id: policy.routeId, ...errorTelemetry(error) })
     return apiErrorResponse({
       request,
       status: 503,
@@ -310,4 +327,44 @@ export async function withPublicApiAccess(
     decision.grant.remaining,
     decision.grant.resetAt,
   )
+}
+
+/** Authenticates, consumes quota, and emits one trace-correlated completion log for a public API request. */
+export async function withPublicApiAccess(
+  request: Request,
+  requestId: string,
+  policy: PublicApiAccessPolicy,
+  handler: () => Promise<Response>,
+) {
+  const startedAt = Date.now()
+  const trace = traceForRequest(request)
+  let response: Response
+  try {
+    response = await authorizePublicApiAccess(request, requestId, policy, handler)
+  } catch (error) {
+    structuredLog('error', 'api_request_failed', {
+      request_id: requestId,
+      trace_id: trace.traceId,
+      span_id: trace.spanId,
+      route_id: policy.routeId,
+      method: request.method,
+      path: new URL(request.url).pathname,
+      duration_ms: Date.now() - startedAt,
+      ...errorTelemetry(error),
+    })
+    throw error
+  }
+  response.headers.set('Traceparent', trace.traceparent)
+  structuredLog(response.status >= 500 ? 'error' : response.status >= 400 ? 'warn' : 'info', 'api_request_completed', {
+    request_id: requestId,
+    trace_id: trace.traceId,
+    span_id: trace.spanId,
+    route_id: policy.routeId,
+    method: request.method,
+    path: new URL(request.url).pathname,
+    status_code: response.status,
+    duration_ms: Date.now() - startedAt,
+    ...(producerTraces.get(response) ? { producer_trace_id: producerTraces.get(response) } : {}),
+  })
+  return response
 }
