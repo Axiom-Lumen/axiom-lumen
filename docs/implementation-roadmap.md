@@ -31,6 +31,8 @@ Items below are directional and are not commitments to a particular scope or rel
   protection.
 - Persisted operational health aggregation, structured trace-correlated logs, liveness/readiness probes,
   Prometheus metrics, configured alert thresholds, and a public status page.
+- Encrypted, authenticated PostgreSQL backups, isolated restore-drill automation, explicit retention policy, and
+  versioned operational recovery runbooks.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,
   stale, unavailable, and empty states.
 - An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy

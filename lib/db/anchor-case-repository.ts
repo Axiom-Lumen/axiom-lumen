@@ -373,6 +373,39 @@ export function createAnchorCaseRepository(client: DatabaseClient) {
       })
     },
 
+    async requeueFailedNotification(input: { notificationId: string; administratorPrincipalId: string; reason: string; requeuedAt: string }) {
+      const requeuedAt = utcTimestampSchema.parse(input.requeuedAt)
+      const reason = input.reason.trim()
+      if (!reason || reason.length > 4_000) throw new Error('notification requeue reason must contain 1 to 4000 characters')
+      return db.transaction(async (tx) => {
+        const administrator = (await tx.select({ id: apiPrincipals.id }).from(apiPrincipals)
+          .innerJoin(apiPrincipalScopes, eq(apiPrincipalScopes.principalId, apiPrincipals.id))
+          .where(and(
+            eq(apiPrincipals.id, input.administratorPrincipalId),
+            eq(apiPrincipals.status, 'active'),
+            eq(apiPrincipalScopes.scopeId, 'anchor:review'),
+          )).limit(1))[0]
+        if (!administrator) throw new Error('administrator principal is not active or lacks anchor:review scope')
+        const row = (await tx.select({ notification: notifications, anchorCase: anchorCases }).from(notifications)
+          .innerJoin(anchorCases, eq(anchorCases.id, notifications.caseId))
+          .where(eq(notifications.id, input.notificationId)).for('update').limit(1))[0]
+        if (!row || row.notification.status !== 'failed' || row.notification.nextAttemptAt !== null || row.notification.leaseOwner !== null) {
+          throw new Error('notification is not a terminal unleased failure')
+        }
+        await tx.update(notifications).set({ nextAttemptAt: requeuedAt, failure: null }).where(eq(notifications.id, row.notification.id))
+        await tx.insert(anchorCaseEvents).values({
+          id: durableId('anchor_case_event', row.anchorCase.id, 'notice_requeued', row.notification.id, requeuedAt),
+          caseId: row.anchorCase.id,
+          eventType: 'notice_requeued',
+          actorType: 'administrator',
+          actorId: administrator.id,
+          payload: { notificationId: row.notification.id, priorAttemptCount: row.notification.attemptCount, reason },
+          occurredAt: requeuedAt,
+        })
+        return { notificationId: row.notification.id, caseId: row.anchorCase.id, nextAttemptAt: requeuedAt }
+      })
+    },
+
     async expireDueReplyWindows(input: { now: string; limit?: number }) {
       const now = utcTimestampSchema.parse(input.now)
       const limit = input.limit ?? 25

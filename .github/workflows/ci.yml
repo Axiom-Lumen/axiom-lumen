@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
       - name: Run lint
         run: npm run lint
 
@@ -72,6 +75,7 @@ jobs:
         run: npm run test:database
         env:
           DATABASE_TEST_ADMIN_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
+          DATABASE_RESTORE_TOOLS_REQUIRED: "true"
 
       - name: Build
         run: npm run build
