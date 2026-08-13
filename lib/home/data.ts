@@ -28,7 +28,7 @@ export const pipeline = [
   {
     tag: 'SERVE',
     term: 'Actionable output',
-    def: 'Verified data via REST, WebSocket streams, and a dashboard — with a confidence score attached to every value.',
+    def: 'Verified data via REST, resumable snapshot events, and a dashboard — with a confidence score attached to every value.',
   },
 ]
 

@@ -3,6 +3,7 @@ import {
   apiAnchorReservesResponseSchema,
   apiErrorResponseSchema,
   apiReconciliationSnapshotSchema,
+  apiSnapshotEventSchema,
   type ApiErrorResponse,
   type ApiReconciliationSnapshot,
 } from '../contracts'
@@ -45,6 +46,8 @@ export const IMPLEMENTED_PUBLIC_OPERATIONS = [
   { operationId: 'trustlineOptions', method: 'options', path: '/api/v1/trustlines/{asset}' },
   { operationId: 'getAnchorReserves', method: 'get', path: '/api/v1/anchors/{anchor}/reserves' },
   { operationId: 'anchorReservesOptions', method: 'options', path: '/api/v1/anchors/{anchor}/reserves' },
+  { operationId: 'streamSnapshotEvents', method: 'get', path: '/api/v1/events/snapshots' },
+  { operationId: 'snapshotEventsOptions', method: 'options', path: '/api/v1/events/snapshots' },
 ] as const
 
 function latestExample(status: 'verified' | 'degraded' | 'unavailable'): LatestLedgerReconciliationResult {
@@ -199,6 +202,15 @@ export const OPENAPI_EXAMPLES = {
   trustlineDegraded: trustlineExample('degraded'),
   trustlineUnavailable: trustlineExample('unavailable'),
   anchorReserves: anchorReservesExample(),
+  snapshotEvent: apiSnapshotEventSchema.parse({
+    snapshot_id: 'snapshot_example',
+    metric: 'onchain_asset_supply',
+    subject: { kind: 'asset', asset: ASSET },
+    status: 'verified',
+    as_of: AS_OF,
+    methodology_version: 'onchain-asset-supply-v0.1',
+    resource: `/api/v1/supply/${ASSET}`,
+  }),
   invalidRequestId: errorExample(
     'invalid_request_id',
     'X-Request-ID must be a valid identifier of at most 128 characters',
@@ -227,6 +239,9 @@ export const OPENAPI_EXAMPLES = {
   authenticationError: errorExample('authentication_required', 'A valid API key is required'),
   insufficientScope: errorExample('insufficient_scope', 'The API key is not authorized for this route'),
   rateLimitError: errorExample('rate_limit_exceeded', 'The request quota has been exceeded'),
+  invalidLastEventId: errorExample('invalid_last_event_id', 'Last-Event-ID must be a non-negative decimal event ID'),
+  replayWindowExceeded: errorExample('replay_window_exceeded', 'More events are pending than the bounded replay window permits'),
+  streamUnavailable: errorExample('stream_unavailable', 'The snapshot event stream is temporarily unavailable'),
 } as const
 
 function componentSchema(schema: Parameters<typeof zodToJsonSchema>[0], name: string) {
@@ -313,6 +328,7 @@ export function createOpenApiDocument() {
       { name: 'Depth', description: 'Classic SDEX cumulative order-book depth reconciliation' },
       { name: 'Trustlines', description: 'Classic credit-asset trustline authorization-state reconciliation' },
       { name: 'Anchors', description: 'Reviewed, publication-approved anchor reserve disclosures' },
+      { name: 'Events', description: 'Authorized live and replayed public snapshot notifications' },
     ],
     paths: {
       '/api/v1/stellar/latest-ledger': {
@@ -485,12 +501,56 @@ export function createOpenApiDocument() {
         },
         options: publicOptionsOperation('anchorReservesOptions'),
       },
+      '/api/v1/events/snapshots': {
+        get: {
+          operationId: 'streamSnapshotEvents',
+          security: [{ ApiKeyAuth: [] }],
+          tags: ['Events'],
+          summary: 'Stream completed public snapshot events',
+          description: 'Opens a server-sent event stream. Reconnect with the last received event ID to replay without silent gaps. Anchor reserve comparison snapshots are excluded because they require separate publication-state filtering.',
+          parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/LastEventId' }],
+          responses: {
+            ...accessErrorResponses,
+            200: {
+              description: 'SSE stream containing snapshot events, heartbeat comments, and terminal error events',
+              headers: authenticatedResponseHeaders,
+              content: {
+                'text/event-stream': {
+                  schema: { type: 'string' },
+                  example: `id: 42\nevent: snapshot\ndata: ${JSON.stringify(OPENAPI_EXAMPLES.snapshotEvent)}\n\n`,
+                },
+              },
+            },
+            400: {
+              description: 'Invalid request identifier, Last-Event-ID, or query parameter',
+              headers: authenticatedResponseHeaders,
+              content: errorContent({
+                invalidRequestId: { $ref: '#/components/examples/InvalidRequestId' },
+                invalidLastEventId: { $ref: '#/components/examples/InvalidLastEventId' },
+                invalidQueryParameter: { $ref: '#/components/examples/InvalidQueryParameter' },
+              }),
+            },
+            409: {
+              description: 'The requested cursor cannot be resumed within the bounded replay window',
+              headers: authenticatedResponseHeaders,
+              content: errorContent({ replayWindow: { $ref: '#/components/examples/ReplayWindowExceeded' } }),
+            },
+            503: {
+              description: 'Event storage, stream configuration, or API access verification is unavailable',
+              headers: authenticatedResponseHeaders,
+              content: errorContent({ unavailable: { $ref: '#/components/examples/StreamUnavailable' } }),
+            },
+          },
+        },
+        options: publicOptionsOperation('snapshotEventsOptions'),
+      },
     },
     components: {
       schemas: {
         LatestLedgerResponse: componentSchema(latestLedgerResponseSchema, 'LatestLedgerResponse'),
         ReconciliationSnapshot: componentSchema(apiReconciliationSnapshotSchema, 'ReconciliationSnapshot'),
         AnchorReservesResponse: componentSchema(apiAnchorReservesResponseSchema, 'AnchorReservesResponse'),
+        SnapshotEvent: componentSchema(apiSnapshotEventSchema, 'SnapshotEvent'),
         ApiErrorResponse: componentSchema(apiErrorResponseSchema, 'ApiErrorResponse'),
       },
       responses: {
@@ -558,6 +618,13 @@ export function createOpenApiDocument() {
           required: false,
           schema: { type: 'string' },
         },
+        LastEventId: {
+          name: 'Last-Event-ID',
+          in: 'header',
+          required: false,
+          description: 'Decimal ID of the last fully processed snapshot event; omitted connections begin live at the current tail',
+          schema: { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,18})$' },
+        },
       },
       headers: {
         XRequestId: { description: 'Request correlation identifier', schema: { type: 'string' } },
@@ -616,6 +683,9 @@ export function createOpenApiDocument() {
           summary: 'The current API-key plan window is exhausted',
           value: OPENAPI_EXAMPLES.rateLimitError,
         },
+        InvalidLastEventId: { summary: 'Malformed or future resume cursor', value: OPENAPI_EXAMPLES.invalidLastEventId },
+        ReplayWindowExceeded: { summary: 'Resume cursor is outside the bounded replay window', value: OPENAPI_EXAMPLES.replayWindowExceeded },
+        StreamUnavailable: { summary: 'Durable event stream storage is unavailable', value: OPENAPI_EXAMPLES.streamUnavailable },
       },
       securitySchemes: {
         ApiKeyAuth: {

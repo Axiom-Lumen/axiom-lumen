@@ -5,7 +5,7 @@ import { PageHero, DocSection, CodePanel, ConfidenceJson, K, S } from '@/compone
 export const metadata: Metadata = {
   title: 'API documentation',
   description:
-    'Implemented API surfaces for persisted ledger, supply, depth, trustline, and reviewed anchor reserve disclosures.',
+    'Implemented API surfaces for persisted metrics, reviewed anchor reserve disclosures, and live snapshot events.',
 }
 
 const anchorEndpoints = [
@@ -23,12 +23,12 @@ export default function DocsPage() {
       <PageHero
         docCode="AL-API-03 · API STATUS"
         kicker="Developer documentation"
-        title="Five implemented endpoints. One machine-readable contract."
+        title="Six implemented endpoints. One machine-readable contract."
       >
         The current API serves persisted latest-ledger, supply, classic SDEX depth, trustline-state snapshots,
         and immutable reviewed anchor reserve comparisons.
-        Hosted API-key enforcement and per-plan quotas are available; WebSocket streams and additional metrics
-        remain planned work.
+        Hosted API-key enforcement, per-plan quotas, and resumable server-sent snapshot events are available;
+        bidirectional WebSocket behavior and additional metrics remain planned work.
       </PageHero>
 
       <DocSection num="01" label="Implemented" title="Latest ledger reconciliation." wide>
@@ -160,12 +160,25 @@ export default function DocsPage() {
           Each item retains the exact reviewed reserve and on-chain supply values, delta, evidence, and time
           boundary. The endpoint returns an empty collection for a verified anchor without publishable disclosures,
           so it does not reveal internal case existence. Hosted deployments can require API keys and enforce
-          per-plan quotas; paid self-service and SSE/WebSocket streams remain planned. The broader methodology is described on the{' '}
+          per-plan quotas; paid self-service remains planned. The broader methodology is described on the{' '}
           <Link href="/methodology" className="text-gold underline-offset-4 hover:underline">
             methodology page
           </Link>
           .
         </p>
+      </DocSection>
+
+      <DocSection num="05" label="Events" title="Resumable snapshot updates.">
+        <div className="flex max-w-[680px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
+          <p>
+            <K>GET /api/v1/events/snapshots</K> streams completed public-metric snapshot pointers as server-sent
+            events. Persist the decimal event ID and reconnect with <K>Last-Event-ID</K> to replay without a
+            silent gap. Connections without a cursor begin at the current live tail.
+          </p>
+          <CodePanel label="Streaming request">
+            <code>{'curl -N -H "X-Axiom-Key: $AXIOM_KEY" -H "Last-Event-ID: 42" http://localhost:3000/api/v1/events/snapshots'}</code>
+          </CodePanel>
+        </div>
       </DocSection>
     </main>
   )

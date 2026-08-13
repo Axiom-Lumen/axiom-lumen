@@ -28,9 +28,8 @@ Implemented in this repository today:
    retries transient failures, and persists source health and circuit state.
 2. **Reconcile:** Metric-specific weighted reconciliation with freshness, availability, source-diversity,
    confidence, status classification, and discrepancy reporting.
-3. **Serve:** A local Next.js API route reads the latest finalized PostgreSQL snapshot without live upstream work.
-
-Planned but not implemented yet: SSE/WebSocket streams.
+3. **Serve:** Next.js REST routes read finalized PostgreSQL snapshots without live upstream work, and an
+   authorized server-sent event route publishes durable snapshot pointers with bounded replay.
 
 ---
 
@@ -87,8 +86,10 @@ Planned but not implemented yet: SSE/WebSocket streams.
 - [x] **Public anchor reserve disclosures:** `GET /api/v1/anchors/{anchor}/reserves` serves only reviewed,
   publication-approved flags and public corrections. Empty collections do not reveal internal cases.
 - [x] **Authentication and rate limits:** Hosted deployments can require opaque `X-Axiom-Key` credentials,
-  enforce atomic per-plan fixed-window quotas, revoke or expire keys, and return standard quota headers.
-- [ ] **SSE/WebSocket streams:** Planned; not implemented.
+  enforce atomic per-plan/per-route sustained and burst quotas, rotate/revoke/expire keys, and return standard quota headers.
+- [x] **Snapshot SSE:** `GET /api/v1/events/snapshots` streams durable Public Network snapshot events with
+  authorization, heartbeats, bounded `Last-Event-ID` replay, recurring quota checks, and slow-consumer handling.
+- [ ] **WebSocket streams:** Not implemented; bidirectional behavior has not been demonstrated as necessary.
 - [ ] **Self-service claimant surface:** The authenticated operator workflow is implemented, but no public web
   form or claimant API is enabled.
 
@@ -222,9 +223,15 @@ revealing internal cases. Suspended anchors remain readable only when they have 
 corrections and retractions cannot disappear with a later verification-state change. Unknown anchors return
 `404`. Results use opaque cursor pagination with a default of 25 and maximum of 100.
 
+### `GET /api/v1/events/snapshots`
+
+Streams durable completed Public Network metric notifications as server-sent events. Each event carries a
+monotonic database ID and a canonical REST resource pointer. Reconnect with `Last-Event-ID` for bounded replay;
+connections without a cursor start at the live tail. See [the snapshot event guide](./docs/snapshot-events.md).
+
 ### Shared HTTP behavior
 
-`/api/v1` is the canonical public prefix. All five implemented routes accept `GET` and `OPTIONS`, echo or generate
+`/api/v1` is the canonical public prefix. All six implemented routes accept `GET` and `OPTIONS`, echo or generate
 `X-Request-ID`, expose public read-only CORS, reject undeclared query parameters, and return a shared error
 envelope for invalid requests, unsupported methods, missing snapshots, and read-store failures. Current `200`
 snapshots use private caches varying by request ID and API key, with complete-representation weak ETags; errors and unavailable
@@ -304,6 +311,8 @@ Worker source setup, one-shot/continuous execution, configuration, and lease rec
 The internal claimant and correction operator flow is documented in
 [docs/anchor-claim-workflow.md](./docs/anchor-claim-workflow.md).
 Hosted API credential provisioning is documented in [docs/api-access.md](./docs/api-access.md).
+Authorized snapshot streaming, replay/resume behavior, and client guidance are documented in
+[docs/snapshot-events.md](./docs/snapshot-events.md).
 
 ---
 

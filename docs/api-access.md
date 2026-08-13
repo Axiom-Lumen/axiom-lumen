@@ -1,6 +1,6 @@
 # API-key access and quotas
 
-The public v1 routes support database-backed API-key authentication and atomic per-plan fixed-window quotas.
+The public v1 routes support database-backed API-key authentication and atomic per-plan, per-route fixed-window quotas.
 Local development remains anonymous unless `AXIOM_API_AUTH_REQUIRED=true` is set. Production refuses to start
 API or first-party data work unless that variable is explicitly `true` or `false`; hosted API deployments set it
 to `true` after provisioning a plan, principal, and key. An invalid/missing production setting or unavailable
@@ -16,13 +16,14 @@ disabled in required-auth mode.
 
 Plans define a positive `requests_per_window` and `window_seconds`. Principals belong to one enabled plan and
 must be granted the scopes used by their routes: `metrics:read` for ledger, supply, depth, and trustline reads;
-`anchors:read` for public anchor reserve disclosures. Create those operator-controlled records through the
+`anchors:read` for public anchor reserve disclosures; and `events:read` for snapshot SSE. Create those operator-controlled records through the
 deployment's database administration workflow, then issue a key:
 
 ```sql
 INSERT INTO api_scopes (id, description) VALUES
   ('metrics:read', 'Read public reconciliation metrics'),
-  ('anchors:read', 'Read public anchor reserve disclosures')
+  ('anchors:read', 'Read public anchor reserve disclosures'),
+  ('events:read', 'Stream public snapshot events')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO api_principal_scopes (principal_id, scope_id)
@@ -75,7 +76,7 @@ VALUES
 ```
 
 Stable route IDs are `stellar.latest-ledger`, `stellar.supply`, `stellar.depth`, `stellar.trustlines`, and
-`anchors.reserves`. Setting an override's `enabled` field to `false` denies that plan access to the route.
+`anchors.reserves`; snapshot SSE uses `events.snapshots`. Setting an override's `enabled` field to `false` denies that plan access to the route.
 Scope or route-policy denials return `403` without consuming quota. Authentication, scope, plan, and quota-store
 failures are fail-closed when hosted authentication is enabled; explicitly anonymous local mode does not access
 or mutate quota state.

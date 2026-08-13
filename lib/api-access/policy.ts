@@ -8,6 +8,7 @@ export const PUBLIC_API_ACCESS_POLICIES = {
   depth: { routeId: 'stellar.depth', requiredScope: 'metrics:read' },
   trustlines: { routeId: 'stellar.trustlines', requiredScope: 'metrics:read' },
   anchorReserves: { routeId: 'anchors.reserves', requiredScope: 'anchors:read' },
+  snapshotEvents: { routeId: 'events.snapshots', requiredScope: 'events:read' },
 } as const
 
 export interface PublicApiAccessPolicy {

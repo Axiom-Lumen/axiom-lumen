@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  bigserial,
   boolean,
   check,
   foreignKey,
@@ -456,6 +457,23 @@ export const reconciliationSnapshots = pgTable(
           ${table.sourcesAgreeing} BETWEEN 0 AND ${table.sourcesUsable} AND
           ${table.sourcesExcluded} BETWEEN 0 AND ${table.sourcesConfigured}`,
     ),
+  ],
+)
+
+export const snapshotEvents = pgTable(
+  'snapshot_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    snapshotId: text('snapshot_id')
+      .notNull()
+      .references(() => reconciliationSnapshots.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('snapshot_events_snapshot_uidx').on(table.snapshotId),
+    index('snapshot_events_occurred_idx').on(table.occurredAt, table.id),
   ],
 )
 

@@ -12,7 +12,7 @@ export const MAXIMUM_PAGE_SIZE = 100
 const REQUEST_ID_HEADER = 'x-request-id'
 const ALLOWED_METHODS = 'GET, OPTIONS'
 const API_KEY_HEADER = 'x-axiom-key'
-const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, X-Axiom-Key, X-Request-ID'
+const ALLOWED_HEADERS = 'Accept, Content-Type, If-None-Match, Last-Event-ID, X-Axiom-Key, X-Request-ID'
 const EXPOSED_HEADERS = 'Deprecation, ETag, Link, Retry-After, Sunset, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID'
 
 export interface ApiDeprecationPolicy {
@@ -173,6 +173,14 @@ export function apiJsonResponse(request: Request, body: unknown, options: ApiRes
     if (etagMatches(request, etag)) return new NextResponse(null, { status: 304, headers })
   }
   return NextResponse.json(body, { status: options.status, headers })
+}
+
+export function apiEventStreamResponse(stream: ReadableStream<Uint8Array>, requestId: string) {
+  const headers = baseHeaders(requestId, 'no-store')
+  headers.set('Content-Type', 'text/event-stream; charset=utf-8')
+  headers.set('Connection', 'keep-alive')
+  headers.set('X-Accel-Buffering', 'no')
+  return new Response(stream, { status: 200, headers })
 }
 
 export function apiErrorResponse({

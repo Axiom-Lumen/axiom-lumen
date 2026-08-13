@@ -27,6 +27,8 @@ Items below are directional and are not commitments to a particular scope or rel
   parity checks.
 - Optional hosted API-key enforcement with hashed credentials, revocation/expiry, atomic per-plan fixed-window
   quotas, and standard rate-limit response metadata.
+- Authorized server-sent snapshot events with durable IDs, bounded replay/resume, heartbeats, and slow-consumer
+  protection.
 - Server-rendered supply confidence artifacts and a live homepage reconciliation strip with explicit degraded,
   stale, unavailable, and empty states.
 - An API-derived reconciliation dashboard with confidence, source-health, and publication-approved discrepancy
