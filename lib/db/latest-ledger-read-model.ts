@@ -15,6 +15,11 @@ import {
 } from './schema'
 
 const ledgerValueSchema = z.object({ kind: z.literal('ledger'), value: z.number().int().safe().positive() }).strict()
+const producerCycles = new WeakMap<LatestLedgerReconciliationResult, string>()
+
+export function latestLedgerProducerCycle(result: LatestLedgerReconciliationResult) {
+  return producerCycles.get(result)
+}
 
 export async function queryLatestLedgerReadModel(
   client: DatabaseClient,
@@ -72,7 +77,7 @@ export async function queryLatestLedgerReadModel(
     }
   })
 
-  return latestLedgerResponseSchema.parse({
+  const response = latestLedgerResponseSchema.parse({
     metric: 'latest_ledger',
     value: reference,
     status: snapshot.status,
@@ -111,6 +116,8 @@ export async function queryLatestLedgerReadModel(
     as_of: new Date(snapshot.asOf).toISOString(),
     methodology_version: snapshot.methodologyVersion,
   })
+  producerCycles.set(response, snapshot.cycleId)
+  return response
 }
 
 let webProcessClient: DatabaseClient | undefined

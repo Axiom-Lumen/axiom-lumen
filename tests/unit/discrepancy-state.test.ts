@@ -32,6 +32,13 @@ function advance(
   })
 }
 
+function pendingReplyAfterNotification(state: PersistedDiscrepancyState, second = 2): PersistedDiscrepancyState {
+  return transitionDiscrepancyPublication({
+    state,
+    action: { type: 'begin_reply', eventId: `notice-event-${second}`, notificationId: `notice-${second}`, occurredAt: timestamp(second) },
+  }).state
+}
+
 describe('measurement severity', () => {
   it('uses inclusive lower-severity boundaries', () => {
     expect(classifySafeIntegerDeviationBand({ absoluteDeviation: 1, tolerance: 1 })).toBe('within_tolerance')
@@ -178,14 +185,43 @@ describe('publication safeguards', () => {
     ).toThrow(/must remain internal/)
   })
 
-  it('places a named-party Warning into pending reply automatically', () => {
+  it('keeps a named-party Warning internal until notification is recorded', () => {
     const result = advance(null, 1, 3, { namedParty: true })
 
     expect(result.state).toMatchObject({
       severity: 'warning',
+      publicationState: 'internal',
+      replyReviewState: 'not_required',
+    })
+  })
+
+  it('begins the reply window only after a successful notification is identified', () => {
+    const opened = advance(null, 1, 3, { namedParty: true })
+    if (!opened.state) throw new Error('expected state')
+
+    const activated = transitionDiscrepancyPublication({
+      state: opened.state,
+      action: { type: 'begin_reply', eventId: 'pub-1', notificationId: 'notice-1', occurredAt: timestamp(2) },
+    })
+
+    expect(activated.state).toMatchObject({
       publicationState: 'pending_reply',
       replyReviewState: 'awaiting_reply',
+      publicationUpdatedAt: timestamp(2),
     })
+    expect(activated.event).toMatchObject({ action: 'begin_reply', notificationId: 'notice-1' })
+  })
+
+  it('does not start reply review for Info, non-named, or resolved discrepancies', () => {
+    const info = advance(null, 1, 2, { namedParty: true })
+    const infrastructure = advance(null, 1, 3)
+    const warning = advance(null, 1, 3, { namedParty: true })
+    const resolved = advance(warning.state, 2, 0, { namedParty: true })
+    const action = { type: 'begin_reply' as const, eventId: 'pub-1', notificationId: 'notice-1', occurredAt: timestamp(3) }
+
+    expect(() => transitionDiscrepancyPublication({ state: info.state!, action })).toThrow(/open named-party/)
+    expect(() => transitionDiscrepancyPublication({ state: infrastructure.state!, action })).toThrow(/open named-party/)
+    expect(() => transitionDiscrepancyPublication({ state: resolved.state!, action })).toThrow(/open named-party/)
   })
 
   it('cannot approve a named-party record before reply review completes', () => {
@@ -204,17 +240,18 @@ describe('publication safeguards', () => {
   it('allows human approval after a response is received and reviewed', () => {
     const opened = advance(null, 1, 3, { namedParty: true })
     if (!opened.state) throw new Error('expected state')
+    const activated = pendingReplyAfterNotification(opened.state)
     const received = transitionDiscrepancyPublication({
-      state: opened.state,
-      action: { type: 'record_response', eventId: 'pub-1', occurredAt: timestamp(2) },
+      state: activated,
+      action: { type: 'record_response', eventId: 'pub-1', occurredAt: timestamp(3) },
     })
     const reviewed = transitionDiscrepancyPublication({
       state: received.state,
-      action: { type: 'review_response', eventId: 'pub-2', occurredAt: timestamp(3), reviewerId: 'reviewer-1' },
+      action: { type: 'review_response', eventId: 'pub-2', occurredAt: timestamp(4), reviewerId: 'reviewer-1' },
     })
     const approved = transitionDiscrepancyPublication({
       state: reviewed.state,
-      action: { type: 'approve', eventId: 'pub-3', occurredAt: timestamp(4), reviewerId: 'reviewer-2' },
+      action: { type: 'approve', eventId: 'pub-3', occurredAt: timestamp(5), reviewerId: 'reviewer-2' },
     })
 
     expect(approved.state.publicationState).toBe('approved_public')
@@ -224,9 +261,10 @@ describe('publication safeguards', () => {
   it('allows human approval after an unanswered reply window expires', () => {
     const opened = advance(null, 1, 3, { namedParty: true })
     if (!opened.state) throw new Error('expected state')
+    const activated = pendingReplyAfterNotification(opened.state)
     const expired = transitionDiscrepancyPublication({
-      state: opened.state,
-      action: { type: 'expire_reply_window', eventId: 'pub-1', occurredAt: '2026-08-12T12:00:01.000Z' },
+      state: activated,
+      action: { type: 'expire_reply_window', eventId: 'pub-1', occurredAt: '2026-08-12T12:00:02.000Z' },
     })
     const approved = transitionDiscrepancyPublication({
       state: expired.state,
@@ -240,7 +278,7 @@ describe('publication safeguards', () => {
   it('cannot mark a reply window expired before the configured duration', () => {
     const opened = advance(null, 1, 3, { namedParty: true })
     if (!opened.state) throw new Error('expected state')
-    const state = opened.state
+    const state = pendingReplyAfterNotification(opened.state)
 
     expect(() =>
       transitionDiscrepancyPublication({
@@ -250,12 +288,12 @@ describe('publication safeguards', () => {
     ).toThrow(/has not expired/)
   })
 
-  it('starts reply review when a named-party Info escalates to Warning', () => {
+  it('keeps an escalated named-party Warning internal pending notification', () => {
     const info = advance(null, 1, 2, { namedParty: true })
     const warning = advance(info.state, 2, 3, { namedParty: true })
 
     expect(info.state).toMatchObject({ publicationState: 'internal', replyReviewState: 'not_required' })
-    expect(warning.state).toMatchObject({ publicationState: 'pending_reply', replyReviewState: 'awaiting_reply' })
+    expect(warning.state).toMatchObject({ publicationState: 'internal', replyReviewState: 'not_required' })
   })
 
   it('returns an approved open discrepancy to internal when its measurement drops to Info', () => {

@@ -1,0 +1,41 @@
+{
+  "schema_version": "onchain-supply-archive-replay-v1",
+  "methodology_version": "onchain-asset-supply-v0.1",
+  "network": {
+    "id": "public",
+    "passphrase": "Public Global Stellar Network ; September 2015"
+  },
+  "asset": {
+    "kind": "credit",
+    "code": "USDC",
+    "issuer": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "ledger": {
+    "sequence": 500,
+    "closed_at": "2026-08-10T11:59:55Z",
+    "hash": "f4180bce5da1a4c4a48e2f2982dcc324cd69b6ee34f7beeacacee6cf47b829eb"
+  },
+  "components": {
+    "authorized_trustlines": "700.0000000",
+    "maintain_liabilities_trustlines": "100.0000000",
+    "unauthorized_trustlines": "25.0000000",
+    "claimable_balances": "50.0000000",
+    "liquidity_pools": "75.0000000",
+    "contract_balances": "50.0000000"
+  },
+  "total": "1000.0000000",
+  "derivation": {
+    "family": "history_archive_state_replay",
+    "replay_tool": {
+      "name": "[redacted]",
+      "version": "1.0.0"
+    },
+    "stellar_core_version": "24.0.0",
+    "replay_start_ledger": 1,
+    "replay_end_ledger": 500,
+    "trusted_ledger_hash": "f4180bce5da1a4c4a48e2f2982dcc324cd69b6ee34f7beeacacee6cf47b829eb",
+    "bucket_list_hash": "0ef17e9237bc2d06f347d168991658e6262da5be627f0bd4a228ff392eb03c35",
+    "history_archive_state_sha256": "fa60e25a4b08e0b50f9d8667b8bbf23befb166ab06da4765bf8fe5266b46f8e0"
+  },
+  "generated_at": "2026-08-10T12:00:00Z"
+}

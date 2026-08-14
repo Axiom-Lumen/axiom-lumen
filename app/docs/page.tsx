@@ -1,37 +1,19 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { PageHero, DocSection, CodePanel, K, S } from '@/components/site'
+import { PageHero, DocSection, CodePanel, ConfidenceJson, K, S } from '@/components/site'
 
 export const metadata: Metadata = {
   title: 'API documentation',
   description:
-    'Implemented and planned API surfaces for Axiom Lumen, including the current latest-ledger reconciliation endpoint.',
+    'Implemented API surfaces for persisted metrics, reviewed anchor reserve disclosures, and live snapshot events.',
 }
 
-const plannedEndpoints = [
+const anchorEndpoints = [
   {
     method: 'GET',
-    path: '/api/v1/supply/{asset}',
-    name: 'On-chain asset supply',
-    desc: 'Planned: ledger-consistent credit-asset supply with explicit scope and per-source derivations.',
-  },
-  {
-    method: 'GET',
-    path: '/v1/depth/{pair}',
-    name: 'DEX order book depth',
-    desc: 'Planned: verified bid and ask depth at configurable price bands for a trading pair.',
-  },
-  {
-    method: 'GET',
-    path: '/v1/trustlines/{asset}',
-    name: 'Trustline state',
-    desc: 'Planned: trustline counts and authorization state reconciled between Horizon and archive sources.',
-  },
-  {
-    method: 'GET',
-    path: '/v1/anchors/{anchor}/reserves',
+    path: '/api/v1/anchors/{anchor}/reserves',
     name: 'Anchor reserve comparison',
-    desc: 'Planned: anchor self-reported reserves compared against on-chain supply with active discrepancies.',
+    desc: 'Reviewed public reserve disclosures; internal and pending named-party cases remain undisclosed.',
   },
 ]
 
@@ -39,23 +21,23 @@ export default function DocsPage() {
   return (
     <main>
       <PageHero
-        docCode="AL-API-02 · API STATUS"
+        docCode="AL-API-03 · API STATUS"
         kicker="Developer documentation"
-        title="One implemented endpoint. A broader API still planned."
+        title="Six implemented endpoints. One machine-readable contract."
       >
-        The current repository implements a local latest-ledger reconciliation endpoint for
-        multiple Stellar Horizon sources. Authenticated hosted APIs, paid tiers, WebSocket streams,
-        and asset-supply endpoints remain planned work.
+        The current API serves persisted latest-ledger, supply, classic SDEX depth, trustline-state snapshots,
+        and immutable reviewed anchor reserve comparisons.
+        Hosted API-key enforcement, per-plan quotas, and resumable server-sent snapshot events are available;
+        bidirectional WebSocket behavior and additional metrics remain planned work.
       </PageHero>
 
       <DocSection num="01" label="Implemented" title="Latest ledger reconciliation." wide>
         <div className="grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_460px]">
           <div className="max-w-[560px]">
             <p className="mb-4 text-[15px] leading-relaxed text-muted">
-              Configure comma-separated Horizon endpoints with{' '}
-              <code className="font-mono text-[13px] text-cyan">STELLAR_HORIZON_URLS</code>. The
-              endpoint trims, validates endpoint format, deduplicates, and caps configured sources,
-              then reports source availability separately from data discrepancies.
+              Register enabled Public Network Horizon sources in PostgreSQL, then run the ingestion
+              worker. The latest-ledger route reads a finalized snapshot and reports source
+              availability separately from data discrepancies.
             </p>
             <p className="mb-4 text-[15px] leading-relaxed text-muted">
               All configured Horizon endpoints must serve the same Stellar network. Do not reconcile
@@ -67,7 +49,7 @@ export default function DocsPage() {
               they never contribute to the reconciled value or confidence.
             </p>
             <CodePanel label="Local request">
-              <code>{'curl http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
+              <code>{'curl -H "X-Axiom-Key: $AXIOM_KEY" http://localhost:3000/api/v1/stellar/latest-ledger'}</code>
             </CodePanel>
           </div>
           <CodePanel label="Response shape">
@@ -110,11 +92,32 @@ export default function DocsPage() {
         </div>
       </DocSection>
 
-      <DocSection num="02" label="Semantics" title="Status, confidence, and source visibility.">
+      <DocSection num="02" label="Supply" title="On-chain credit-asset supply." wide>
+        <div className="grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="max-w-[560px]">
+            <p className="mb-4 text-[15px] leading-relaxed text-muted">
+              Supply reads the latest finalized reconciliation snapshot from persistence. The
+              canonical path parameter is a classic Stellar credit asset in{' '}
+              <code className="font-mono text-[13px] text-cyan">CODE:ISSUER</code> form.
+            </p>
+            <p className="mb-8 text-[15px] leading-relaxed text-muted">
+              The artifact shown here is fetched from the same endpoint and validated against the
+              shared runtime response schema. Its label distinguishes verified, degraded, stale,
+              unavailable, and illustrative fallback states.
+            </p>
+            <CodePanel label="Local request">
+              <code>{'curl -H "X-Axiom-Key: $AXIOM_KEY" "http://localhost:3000/api/v1/supply/USDC:<issuer>"'}</code>
+            </CodePanel>
+          </div>
+          <ConfidenceJson />
+        </div>
+      </DocSection>
+
+      <DocSection num="03" label="Semantics" title="Status, confidence, and source visibility.">
         <div className="flex max-w-[640px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
           <p>
-            <K>verified</K> means at least two usable Horizon sources agreed without source errors
-            and confidence stayed high. <K>degraded</K> means a value is available but source
+            <K>verified</K> means the metric&apos;s minimum independent evidence requirement was met without source
+            errors and confidence stayed high. Replicas of one derivation do not create independence. <K>degraded</K> means a value is available but source
             availability, freshness, or agreement is limited. <K>unavailable</K> means no usable
             source could produce a latest-ledger value.
           </p>
@@ -134,9 +137,9 @@ export default function DocsPage() {
         </div>
       </DocSection>
 
-      <DocSection num="03" label="Planned" title="Target v1 API surfaces." wide>
+      <DocSection num="04" label="Anchors" title="Publication-gated reserve disclosures." wide>
         <div className="border-t-2 border-line">
-          {plannedEndpoints.map((ep) => (
+          {anchorEndpoints.map((ep) => (
             <div
               key={ep.path}
               className="grid gap-x-8 gap-y-2 border-b border-linesoft py-6 md:grid-cols-[56px_360px_minmax(0,1fr)]"
@@ -153,14 +156,28 @@ export default function DocsPage() {
           ))}
         </div>
         <p className="mt-8 max-w-[620px] text-sm leading-relaxed text-muted">
-          API keys, rate limits, paid tiers, SSE/WebSocket streams, persistent audit logs, and
-          anchor right-of-reply tooling are not implemented in this repository yet. The broader
-          methodology remains described on the{' '}
+          Each item retains the exact reviewed reserve and on-chain supply values, delta, evidence, and time
+          boundary. The endpoint returns an empty collection for a verified anchor without publishable disclosures,
+          so it does not reveal internal case existence. Hosted deployments can require API keys and enforce
+          per-plan quotas; paid self-service remains planned. The broader methodology is described on the{' '}
           <Link href="/methodology" className="text-gold underline-offset-4 hover:underline">
             methodology page
           </Link>
           .
         </p>
+      </DocSection>
+
+      <DocSection num="05" label="Events" title="Resumable snapshot updates.">
+        <div className="flex max-w-[680px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
+          <p>
+            <K>GET /api/v1/events/snapshots</K> streams completed public-metric snapshot pointers as server-sent
+            events. Persist the decimal event ID and reconnect with <K>Last-Event-ID</K> to replay without a
+            silent gap. Connections without a cursor begin at the current live tail.
+          </p>
+          <CodePanel label="Streaming request">
+            <code>{'curl -N -H "X-Axiom-Key: $AXIOM_KEY" -H "Last-Event-ID: 42" http://localhost:3000/api/v1/events/snapshots'}</code>
+          </CodePanel>
+        </div>
       </DocSection>
     </main>
   )

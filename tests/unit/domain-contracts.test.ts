@@ -12,11 +12,14 @@ import {
   reconciliationSnapshotSchema,
   retrievalAttemptSchema,
   serializePublicReconciliationSnapshot,
+  serializePublicSnapshotEvent,
+  sourceErrorCodeSchema,
   tradingPairSchema,
 } from '../../lib/contracts'
 import { StellarAmount } from '../../lib/stellar/amount'
 
 const ISSUER = `G${'A'.repeat(55)}`
+const TRUSTLINE_AT = '2026-08-09T12:00:05.000Z'
 const NETWORK = {
   id: 'public' as const,
   passphrase: 'Public Global Stellar Network ; September 2015',
@@ -101,9 +104,10 @@ describe('domain contracts', () => {
     const credit = parseAssetId(`USDC:${ISSUER}`)
     expect(credit).toEqual({ kind: 'credit', code: 'USDC', issuer: ISSUER })
     expect(formatAssetId(credit)).toBe(`USDC:${ISSUER}`)
+    expect(parseAssetId(`mZAR:${ISSUER}`)).toEqual({ kind: 'credit', code: 'mZAR', issuer: ISSUER })
   })
 
-  it.each([`usdc:${ISSUER}`, 'USDC:not-an-account', 'USDC', 'USDC:issuer:extra'])('rejects invalid asset identifier %s', (asset) => {
+  it.each([`USD-:${ISSUER}`, 'USDC:not-an-account', 'USDC', 'USDC:issuer:extra'])('rejects invalid asset identifier %s', (asset) => {
     expect(() => parseAssetId(asset)).toThrow()
   })
 
@@ -143,6 +147,29 @@ describe('domain contracts', () => {
       metric: 'circulating_supply',
       asset: { kind: 'credit', code: 'USDC', issuer: ISSUER },
       amount: '48213092.4400001',
+      components: {
+        authorized_trustlines: '48213092.4400001',
+        maintain_liabilities_trustlines: '0',
+        unauthorized_trustlines: '0',
+        claimable_balances: '0',
+        liquidity_pools: '0',
+        contract_balances: '0',
+      },
+      ledgerSequence: 500,
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+      derivation: {
+        family: 'horizon_asset_aggregate',
+        connectorVersion: 'horizon-supply-v0.1',
+        evidenceSha256: 'a'.repeat(64),
+        software: { name: 'stellar-horizon', version: null },
+        checkpoint: {
+          kind: 'horizon_asset_page',
+          ledgerSequence: 500,
+          terminalCursor: 'asset-500',
+          pagesScanned: 1,
+          recordsScanned: 1,
+        },
+      },
       provenance: PROVENANCE,
     })
 
@@ -179,6 +206,14 @@ describe('domain contracts', () => {
     ).toThrow(/cannot complete before it starts/)
   })
 
+  it('represents depth connector failures in the shared source-error vocabulary', () => {
+    expect(sourceErrorCodeSchema.parse('invalid_pair')).toBe('invalid_pair')
+    expect(sourceErrorCodeSchema.parse('crossed_book')).toBe('crossed_book')
+    expect(sourceErrorCodeSchema.parse('stale_book')).toBe('stale_book')
+    expect(sourceErrorCodeSchema.parse('empty_book')).toBe('empty_book')
+    expect(sourceErrorCodeSchema.parse('one_sided_book')).toBe('one_sided_book')
+  })
+
   it('enforces snapshot availability and source-count invariants', () => {
     expect(() => reconciliationSnapshotSchema.parse({ ...snapshotInput(), status: 'unavailable' })).toThrow(
       /must have null value/,
@@ -205,6 +240,33 @@ describe('API contracts', () => {
     const snapshot = reconciliationSnapshotSchema.parse(snapshotInput())
 
     expect(serializePublicReconciliationSnapshot(snapshot, 'req_1')).toEqual(parsedFixture)
+  })
+
+  it('creates public-safe stream pointers and excludes gated anchor comparisons', () => {
+    const snapshot = reconciliationSnapshotSchema.parse(snapshotInput())
+    expect(serializePublicSnapshotEvent(snapshot, 'public')).toEqual({
+      snapshot_id: 'snapshot_1',
+      metric: 'latest_ledger',
+      subject: { kind: 'network', network: 'public' },
+      status: snapshot.status,
+      as_of: snapshot.asOf,
+      methodology_version: snapshot.methodologyVersion,
+      resource: '/api/v1/stellar/latest-ledger',
+    })
+    const anchorSnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      metric: 'anchor_reserves',
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: { kind: 'amount', value: '1000' },
+      discrepancies: [],
+      methodologyVersion: 'anchor-reserve-comparison-v0.1',
+    })
+    expect(() => serializePublicSnapshotEvent(anchorSnapshot, `public:USDC:${ISSUER}`)).toThrow(/publication-state filtering/)
+    const testnetSnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      subject: { kind: 'network', network: { id: 'testnet', passphrase: 'Test SDF Network ; September 2015' } },
+    })
+    expect(() => serializePublicSnapshotEvent(testnetSnapshot, 'testnet')).toThrow(/Public Network/)
   })
 
   it('omits discrepancies that have not been approved for publication', () => {
@@ -240,19 +302,78 @@ describe('API contracts', () => {
     expect(() => apiReconciliationSnapshotSchema.parse({ ...publicSupply, metric: 'circulating_supply' })).toThrow()
   })
 
-  it('serializes bigint counts and amounts as strings', () => {
+  it('serializes exact supply discrepancy context', () => {
+    const supplySnapshot = reconciliationSnapshotSchema.parse({
+      ...snapshotInput(),
+      metric: 'circulating_supply',
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: { kind: 'amount', value: '1000' },
+      discrepancies: [{
+        ...snapshotInput().discrepancies[0],
+        observedValue: { kind: 'amount', value: '1000' },
+        referenceValue: { kind: 'amount', value: '1000' },
+        details: {
+          kind: 'supply_comparison',
+          observedLedgerSequence: 501,
+          referenceLedgerSequence: 500,
+          observedSourceTimestamp: '2026-08-09T12:00:01Z',
+          referenceSourceTimestamp: '2026-08-09T12:00:00Z',
+          componentDifferences: [{
+            component: 'contract_balances',
+            observed: '11',
+            reference: '10',
+            absoluteDelta: '1',
+          }],
+        },
+      }],
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+    })
+
+    expect(serializePublicReconciliationSnapshot(supplySnapshot, 'req_supply_details').discrepancies[0]).toMatchObject({
+      observed_value: { kind: 'amount', value: '1000' },
+      reference_value: { kind: 'amount', value: '1000' },
+      details: {
+        kind: 'supply_comparison',
+        observed_ledger_sequence: 501,
+        reference_ledger_sequence: 500,
+        component_differences: [{
+          component: 'contract_balances',
+          observed: '11',
+          reference: '10',
+          absolute_delta: '1',
+        }],
+      },
+    })
+  })
+
+  it('serializes exact trustline-state counts as strings', () => {
     const countSnapshot = reconciliationSnapshotSchema.parse({
       ...snapshotInput(),
       metric: 'trustline_count',
-      subject: { kind: 'asset', asset: { kind: 'native' } },
-      value: { kind: 'count', value: '900719925474099312345' },
+      subject: { kind: 'asset', asset: { kind: 'credit', code: 'USDC', issuer: ISSUER } },
+      value: {
+        kind: 'trustline_state',
+        total: '900719925474099312345',
+        states: { authorized: '900719925474099312340', authorized_to_maintain_liabilities: '3', unauthorized: '2' },
+        ledgerSequence: 500,
+        ledgerClosedAt: TRUSTLINE_AT,
+      },
       discrepancies: [],
     })
 
-    expect(serializePublicReconciliationSnapshot(countSnapshot, 'req_3').value).toEqual({
-      kind: 'count',
-      value: '900719925474099312345',
+    const serialized = serializePublicReconciliationSnapshot(countSnapshot, 'req_3')
+    expect(serialized.value).toEqual({
+      kind: 'trustline_state',
+      total: '900719925474099312345',
+      states: { authorized: '900719925474099312340', authorized_to_maintain_liabilities: '3', unauthorized: '2' },
+      ledger_sequence: 500,
+      ledger_closed_at: TRUSTLINE_AT,
     })
+    expect(apiReconciliationSnapshotSchema.parse(serialized)).toEqual(serialized)
+    expect(() => apiReconciliationSnapshotSchema.parse({
+      ...serialized,
+      value: { ...serialized.value, total: '900719925474099312346' },
+    })).toThrow(/trustline total must equal/)
   })
 
   it('creates and validates a standard error response with UTC metadata', () => {

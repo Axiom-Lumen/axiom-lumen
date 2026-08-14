@@ -1,0 +1,55 @@
+{
+  "schema_version": "axiom-production-readiness-v1",
+  "public_v1_declared": false,
+  "sign_offs": {
+    "restore_drill": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Requires an isolated production-shaped restore drill recorded against the target environment."
+    },
+    "incident_exercise": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Requires a tabletop or live incident exercise with commander, timeline, and rollback rehearsal."
+    },
+    "security_review": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Threat model exists in-repo; independent review of residual risks remains required."
+    },
+    "methodology_fixture_review": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Executable fixtures are CI-gated; an independent methodology review is still required."
+    },
+    "publication_legal_review": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Named-party publication remains disabled until ADR 0001 product/legal approval is recorded."
+    },
+    "public_claims_review": {
+      "status": "accepted",
+      "reviewer": "engineering",
+      "recorded_at": "2026-08-13T22:00:00.000Z",
+      "evidence_ref": "REL-02 public-claims audit and release smoke coverage of documented GET operations",
+      "notes": "Pricing, docs, homepage, README, and OpenAPI were aligned with smoke-exercised capabilities."
+    },
+    "slo_oncall_rollback_owners": {
+      "status": "unsigned",
+      "reviewer": null,
+      "recorded_at": null,
+      "evidence_ref": null,
+      "notes": "Technical SLO contracts are documented; named on-call and rollback authority remain operator-assigned."
+    }
+  }
+}

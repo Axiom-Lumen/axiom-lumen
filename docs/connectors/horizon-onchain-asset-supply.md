@@ -1,8 +1,8 @@
 # Horizon on-chain asset-supply connector
 
 `fetchHorizonOnchainAssetSupply` implements the Horizon derivation of
-`onchain-asset-supply-v0.1` for one classic credit asset. It is a collection adapter; worker registration,
-database persistence, and reconciliation are intentionally deferred to SUP-04.
+`onchain-asset-supply-v0.1` for one classic credit asset. SUP-04 registers its shared raw-observation wrapper
+with the background worker and atomically persists its evidence with reconciliation output.
 
 ## Collection sequence
 

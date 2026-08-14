@@ -10,7 +10,6 @@ import {
   ConfidenceJson,
 } from '@/components/site'
 import { Hero } from '@/components/ui/home/hero'
-import { ReconciliationStrip } from '@/components/ui/home/reconiclation-strip'
 import { audiences, pipeline, problems } from '@/lib/home/data'
 
 
@@ -93,11 +92,11 @@ export default function HomePage() {
               <p className="max-w-[820px] text-balance font-serif text-[clamp(30px,4.2vw,52px)] font-medium leading-[1.1] tracking-[-0.015em]">
                 Stop trusting a single source blindly.{' '}
                 <span className="text-muted">
-                  Query certified Stellar metrics in minutes.
+                  Query implemented Stellar metrics with source, time, and confidence attached.
                 </span>
               </p>
               <div className="mt-10 flex flex-wrap gap-3">
-                <ButtonPrimary href="/pricing">Get API access</ButtonPrimary>
+                <ButtonPrimary href="/docs">Read the API</ButtonPrimary>
                 <ButtonSecondary href="/about">Talk to us</ButtonSecondary>
               </div>
             </div>

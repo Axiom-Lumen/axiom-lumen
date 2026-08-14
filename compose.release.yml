@@ -1,0 +1,60 @@
+name: axiom-lumen-development
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: axiom_lumen
+      POSTGRES_USER: axiom
+      POSTGRES_PASSWORD: axiom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axiom -d axiom_lumen"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - development_postgres:/var/lib/postgresql/data
+
+  migrate:
+    image: axiom-lumen:development
+    build: .
+    command: ["migrate"]
+    environment:
+      DATABASE_MIGRATION_URL: postgresql://axiom:axiom@postgres:5432/axiom_lumen
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    image: axiom-lumen:development
+    command: ["web"]
+    environment: &runtime_environment
+      DATABASE_URL: postgresql://axiom:axiom@postgres:5432/axiom_lumen
+      AXIOM_API_AUTH_REQUIRED: "false"
+      AXIOM_RELEASE_ENVIRONMENT: development
+      AXIOM_RELEASE_IMAGE_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
+      AXIOM_RELEASE_COMMIT_SHA: 0000000000000000000000000000000000000000
+      AXIOM_FEATURE_SUPPLY_ENABLED: "true"
+      AXIOM_FEATURE_DEPTH_ENABLED: "true"
+      AXIOM_FEATURE_TRUSTLINES_ENABLED: "true"
+      AXIOM_FEATURE_ANCHOR_RESERVES_ENABLED: "false"
+      ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    image: axiom-lumen:development
+    command: ["worker"]
+    environment:
+      <<: *runtime_environment
+      WORKER_ID: development-worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  development_postgres:

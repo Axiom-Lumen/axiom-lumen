@@ -1,8 +1,8 @@
 # Contributing to Axiom Lumen
 
-This repository is in an early implementation stage. It contains the Next.js web experience and one durable
-backend vertical slice: a leased worker reconciles registered Horizon sources and the local route serves its
-latest finalized PostgreSQL snapshot.
+This repository contains the Next.js web experience and durable reconciliation pipelines for latest-ledger,
+supply, classic SDEX depth, trustline state, and publication-gated anchor reserve data. Leased workers persist
+finalized PostgreSQL snapshots that public routes serve without request-time upstream fan-out.
 
 The goal of this guide is to make the contributor path clear without pretending that more backend functionality exists than is actually present.
 
@@ -14,15 +14,13 @@ The current repository supports:
 - `GET /api/v1/stellar/latest-ledger`
 - a multi-Horizon latest-ledger connector and reconciliation module
 - PostgreSQL migrations, transactional audit repositories, and an idempotent background worker
-- unit, route integration, and real PostgreSQL tests
-- CI for lint, typecheck, tests, database tests, migration validation, and production build
+- API authentication, quotas, snapshot SSE, operational status, and data-protection tooling
+- unit, property, fuzz, replay, load, failure-injection, route integration, and real PostgreSQL tests
+- CI for static analysis, contracts, security gates, tests, migration validation, and production build
 
-The following are not yet implemented in this checkout:
-
-- supply, DEX, and anchor-reserve metric workers
-- authentication, rate limiting, streams, and production deployment operations
-
-If you are working on backend pieces, treat the sections below as the target architecture and keep the implementation honest about what is currently available.
+Immutable release builds and digest-pinned promotion exist in this repository. Public v1 general availability
+remains unsigned until the production-readiness record is complete. Keep every contribution honest about the
+difference between repository capability and a declared public v1.
 
 ## 2. Target architecture
 
@@ -36,7 +34,7 @@ INGEST → RECONCILE → SERVE
 - RECONCILE: compare observations, apply methodology rules, and record discrepancies.
 - SERVE: expose verified outputs through the web experience and future API surfaces.
 
-The latest-ledger slice implements all three stages with PostgreSQL between background ingestion and serving.
+The metric pipelines implement all three stages with PostgreSQL between background ingestion and serving.
 Public requests do not perform upstream collection.
 
 ## 3. Prerequisites
@@ -111,7 +109,11 @@ Run the same aggregate check used by CI before opening a pull request:
 npm run ci
 ```
 
-The individual `lint`, `typecheck`, `test`, `test:integration`, and `build` scripts are also available. Add focused tests for new behavior rather than relying only on existing coverage.
+The individual `lint`, `typecheck`, `test`, `test:integration`, `test:quality`, `test:database`,
+`security:secrets`, and `build` scripts are also available. The complete lane ownership, determinism rules,
+scheduled Horizon smoke check, and security gates are documented in
+[docs/quality-strategy.md](docs/quality-strategy.md). Add focused tests for new behavior rather than relying only
+on existing coverage.
 
 ## 7. Methodology change policy
 
@@ -125,7 +127,7 @@ Any change to the reconciliation methodology requires a version bump. This inclu
 
 The canonical product rules document is [axiom-lumen-agent-guide.md](axiom-lumen-agent-guide.md). Any methodology change should be reflected there and in the public methodology copy.
 
-The ordered remaining work and acceptance criteria are maintained in [docs/implementation-roadmap.md](docs/implementation-roadmap.md). `docs/issue-backlog.md` is a historical pre-backend audit, not the current execution plan.
+Broad product direction is maintained in the [public roadmap](docs/implementation-roadmap.md). Detailed sequencing and internal acceptance criteria are maintained privately. `docs/issue-backlog.md` is a historical pre-backend audit, not the current execution plan.
 
 ## 8. Pull request checklist
 

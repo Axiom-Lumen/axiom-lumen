@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import {
   SUPPLY_COMPONENT_IDS,
@@ -14,6 +13,7 @@ import {
   type NetworkIdentity,
   type SourceIdentity,
 } from '../contracts/domain'
+import { computeEvidenceSha256 } from '../evidence/json'
 import { StellarAmount, parseStellarAmount } from './amount'
 import {
   DEFAULT_HORIZON_MAX_RESPONSE_BYTES,
@@ -239,26 +239,6 @@ function parsePositiveInteger(value: string | null) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('JSON payload contains a non-finite number')
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
-  if (typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalJson(nested)}`)
-      .join(',')}}`
-  }
-  throw new Error(`JSON payload contains unsupported ${typeof value} value`)
-}
-
-function payloadSha256(value: unknown) {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex')
-}
-
 function supplyError(
   source: HorizonSupplySource,
   code: HorizonSupplyErrorCode,
@@ -318,7 +298,7 @@ async function requestJson({
     let digest: string
     try {
       payload = await readBoundedHorizonJson(response, maxResponseBytes)
-      digest = payloadSha256(payload)
+      digest = computeEvidenceSha256(payload)
     } catch (error) {
       if (signal?.aborted) throw error
       const completedAt = timestamp(clock)

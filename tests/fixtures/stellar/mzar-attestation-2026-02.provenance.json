@@ -1,0 +1,7 @@
+{
+  "sourceUrl": "https://mzar.co.za/wp-content/uploads/2026/04/mZAR_Attestation_02_26.pdf",
+  "sourceSha256": "e36d96f9c3dcc065258b86a38880c5d7956463dc0a8582f4eb4928a9a35e6df6",
+  "retrievedAt": "2026-08-11T23:58:00.000Z",
+  "fixtureKind": "redacted_text_extraction",
+  "redactions": "Repeated legal and background prose was removed; all parsed identity, amount, time, unit, and accountant fields are preserved."
+}

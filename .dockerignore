@@ -1,0 +1,12 @@
+.git
+.github
+.next
+.private
+.env*
+node_modules
+npm-debug.log*
+coverage
+tests
+docs
+*.md
+!README.md

@@ -108,9 +108,8 @@ export default function AnchorsPage() {
         lede={
           <>
             Registering a verified contact endpoint is what makes the right-of-reply process work.
-            Unclaimed anchors are notified at the contact listed in their{' '}
-            <code className="font-mono text-[13px] text-cyan">stellar.toml</code>, which is slower
-            and less reliable. Claiming takes two steps:
+            Discovered <code className="font-mono text-[13px] text-cyan">stellar.toml</code> contacts
+            remain inactive until domain control is proven. Claiming takes two steps:
           </>
         }
       >
@@ -132,8 +131,8 @@ export default function AnchorsPage() {
               Register a contact endpoint
             </div>
             <p className="text-sm leading-relaxed text-muted">
-              Provide a monitored email address or webhook URL for discrepancy notifications. We
-              test it with a signed challenge before it becomes active.
+              Provide a monitored email address or challenge-capable webhook URL on the domain you
+              proved. Verified contacts expire with the domain claim and can be revoked.
             </p>
           </div>
           <CodePanel label="stellar.toml — verification entry" className="mt-8">
@@ -165,26 +164,14 @@ export default function AnchorsPage() {
       >
         <div className="flex max-w-[620px] flex-col gap-4 text-[15px] leading-relaxed text-muted">
           <p>
-            Disputes are not limited to the 72-hour reply window. If you believe a published
-            discrepancy is wrong — at any time, including after disclosure — write to{' '}
-            <a
-              href="mailto:disputes@axiomlumen.io"
-              className="font-mono text-[14px] text-gold underline-offset-4 hover:underline"
-            >
-              disputes@axiomlumen.io
-            </a>{' '}
-            with the flag identifier and your evidence.
+            Disputes are not limited to the 72-hour reply window. An authenticated claimant can
+            submit the flag identifier, an explanation, and evidence for review. The intake is
+            currently operated through internal tooling; a public self-service form or API is not enabled.
           </p>
           <p>
-            Every dispute receives a substantive response within three business days. If a
-            published flag is found to be a measurement error on our side, it is retracted with a
+            If a published flag is found to be a measurement error on our side, it is retracted with a
             correction notice in the same audit log where the flag appeared — retractions are as
-            public as the flags they correct. Institutional-tier anchors also have access to
-            dedicated dispute tooling; see{' '}
-            <Link href="/pricing" className="text-gold underline-offset-4 hover:underline">
-              the rate schedule
-            </Link>
-            .
+            public as the flags they correct.
           </p>
         </div>
       </DocSection>

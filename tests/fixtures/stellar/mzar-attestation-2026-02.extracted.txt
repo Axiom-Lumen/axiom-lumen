@@ -1,0 +1,56 @@
+Mesh Trade South Africa (Pty) Ltd
+Reg. nr. 2021/765243/07
+Examination of Management Assertions
+Reserve Account Report – Mesh Trade South Africa (Pty) Ltd
+Rand Token (ZAR)
+28 February 2026 at 5PM South African Standard Time (SAST)
+With Independent Account’s Report
+
+INDEPENDENT ACCOUNTANT’S REPORT
+Mesh Trade South Africa (Pty) Ltd
+Reg. nr. 2021/765243/07
+
+The Reserve Accounts Report refers to the total supply of Mesh Trade South Africa
+(Pty) Ltd as of 28 February 2026 at 5pm SAST. Such mZAR, which also represents
+the total circulating supply, as denoted under account
+GCBNWTCCMC32UHZ5OCC2PNMFDGXRVPA7MFFBFFTCVW77SX5PMRB7Q4BY
+at 2 decimals on 28 February 2026 at 5pm SAST is mZAR 4 249 400.26 as reported
+by Stellar Expert and maintained on the Stellar Network.
+
+The ZAR balance is at least equal to or greater than R4 251 446.27 at the Report
+Date and Time.
+
+In our opinion, management’s assertions noted above are fairly stated as of
+28 February 2026 at 5pm SAST, in all material respects.
+
+Simone Coetzee
+DIRECTOR
+Acredo Accounting (Pty) Ltd
+3/25/2026 7:43:01 AM
+
+INVESTMENT HOLDINGS REPORT
+Mesh Trade South Africa (Pty) Ltd
+Johannesburg, South Africa
+28 February 2026 at 5pm SAST
+
+mZAR tokens issued and in circulation.
+(Notes 1 and 3)
+mZAR 4 249 400.26
+
+ZAR reserved for mZAR token holders.
+(Note 2)
+R4 251 446.27
+
+The total supply of MESH South African Rand tokens (mZAR), which also represents
+the total circulating supply, as issued by account
+GCBNWTCCMC32UHZ5OCC2PNMFDGXRVPA7MFFBFFTCVW77SX5PMRB7Q4BY
+at 2 decimals at the Report Date and Time is 4 249 400.26.
+
+The ZAR balance backing mZAR is at least equal to or greater than R4 251 446.27.
+
+1 mZAR is redeemable for 1 ZAR. At all times
+
+Connie Bloem
+DIRECTOR
+Mesh Trade South Africa (Pty) Ltd
+24 March 2026

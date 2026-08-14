@@ -50,17 +50,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
       - name: Run lint
         run: npm run lint
 
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Verify generated OpenAPI contract
+        run: npm run openapi:check
+
+      - name: Verify production-readiness record
+        run: npm run release:readiness-verify
+
       - name: Run tests
         run: npm test
 
       - name: Run integration tests
         run: npm run test:integration
+
+      - name: Run deterministic quality suites
+        run: npm run test:quality
+
+      - name: Scan production sources for committed secrets
+        run: npm run security:secrets
+
+      - name: Audit production dependencies
+        run: npm run security:dependencies
 
       - name: Validate migration metadata
         run: npm run db:check
@@ -69,6 +87,9 @@ jobs:
         run: npm run test:database
         env:
           DATABASE_TEST_ADMIN_URL: postgresql://axiom:axiom@127.0.0.1:5432/postgres
+          DATABASE_RESTORE_TOOLS_REQUIRED: "true"
 
       - name: Build
         run: npm run build
+        env:
+          AXIOM_API_AUTH_REQUIRED: "false"

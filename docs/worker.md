@@ -2,8 +2,9 @@
 
 ING-01 runs collection and reconciliation outside the Next.js request lifecycle. ING-02 adds bounded per-source
 retries, circuit breaking, payload and timeout limits, and durable source-health projections. The worker discovers
-enabled Horizon sources from PostgreSQL, creates one deterministic cycle per metric, network, methodology
-version, and schedule boundary, and commits the complete evidence/snapshot batch atomically.
+enabled sources from PostgreSQL, creates one deterministic cycle per metric, subject, methodology version, and
+schedule boundary, and commits the complete evidence/snapshot batch atomically. Latest-ledger subjects are
+networks; supply subjects are explicitly registered classic credit assets keyed as `network:CODE:ISSUER`.
 
 ## Local setup
 
@@ -27,6 +28,76 @@ VALUES ('stellar-public-horizon', 'public', 'canonical_ledger', 'horizon',
         'https://horizon.stellar.org', 'stellar-public-horizon')
 ON CONFLICT (network_id, url) DO NOTHING;
 ```
+
+Supply discovery is opt-in per source and asset. Register the asset, then enable its durable asset row ID in
+each eligible Horizon/archive source's `config.supply.assetIds`. Archive sources must also carry the externally
+verified checkpoint manifest consumed by the archive adapter:
+
+```sql
+INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+VALUES ('public-usdc', 'public', 'credit', 'USDC', '<issuer>', 'USDC:<issuer>');
+
+UPDATE source_definitions
+SET config = jsonb_set(config, '{supply}',
+  '{"enabled":true,"assetIds":["public-usdc"]}'::jsonb)
+WHERE id = 'stellar-public-horizon';
+
+-- The independent verification pipeline must update the archive URL and
+-- trustedCheckpoints.public-usdc together before the scheduled cycle.
+```
+
+Absent or disabled supply configuration is ignored during discovery. An enabled but malformed supply
+configuration is retained in every otherwise eligible asset job and produces a structured configuration failure,
+so an operator-visible source error cannot disappear through routing. A configured archive source without a valid
+trusted checkpoint is likewise retained and cannot be silently treated as independent evidence.
+
+Depth discovery is opt-in for enabled `dex` / `sdex` sources. Route canonical pair IDs explicitly:
+
+```sql
+UPDATE source_definitions
+SET config = jsonb_set(config, '{depth}',
+  '{"enabled":true,"pairs":["native~USDC:G..."]}'::jsonb)
+WHERE id = 'stellar-public-sdex';
+```
+
+The worker persists empty and one-sided books as successful evidence states, but only complete two-sided books
+become reconciliation contributions.
+
+Trustline discovery is opt-in per Horizon source and registered credit asset:
+
+```sql
+UPDATE source_definitions
+SET config = jsonb_set(config, '{trustlines}',
+  '{"enabled":true,"assetIds":["public-usdc"]}'::jsonb)
+WHERE id = 'stellar-public-horizon';
+```
+
+The same-ledger asset aggregate is normalized into authorized, maintain-liabilities, and unauthorized counts.
+Horizon replicas retain one derivation identity and cannot make the result verified by themselves.
+
+Verified anchor reserve discovery is opt-in through the anchor registry. ANC-01 creates an enabled
+`anchor_self_reported` / `anchor` source only after issuer, home-domain, SEP-1 currency, and evidence URL
+verification. The worker then schedules `anchor_reserves` for its routed assets. A current persisted supply
+snapshot is required. ANC-03 provides internal notification and review controls; comparison output remains
+non-public until an eligible case completes reply/review and the separately disabled publication gate permits it.
+
+The exact verified mZAR issuer/domain/index tuple is routed instead to the isolated `mesh_mzar_pdf_v1` profile.
+That profile reads the provider's monthly PDF report under methodology v0.2 and requires a persisted supply
+snapshot at the report's historical ledger-close boundary. It never falls back to current supply. A missing
+historical checkpoint or a report older than 62 days produces an unavailable snapshot. All other anchors retain
+the generic v0.1 JSON behavior.
+
+After registering the credit asset and network, verify and register its anchor source with:
+
+```bash
+npm run anchor:discover -- \
+  --network public \
+  --asset 'USDC:G...' \
+  --horizon 'https://horizon.stellar.org'
+```
+
+Discovery fails without writing attribution if the Horizon network, issuing account, home domain, SEP-1 asset,
+DNS policy, or reserve evidence URL cannot be verified.
 
 Run exactly one scheduling/drain pass:
 
@@ -65,6 +136,20 @@ After one finalized cycle, `npm run dev` serves the latest persisted Public Netw
 - `HORIZON_TIMEOUT_MS`: timeout applied to each Horizon request; defaults to `5000`.
 - `HORIZON_MAX_RESPONSE_BYTES`: maximum decoded bytes accepted from each Horizon response; defaults to
   `1000000`.
+- `ANCHOR_WORKFLOW_ENABLED`: enables automatic eligible-case creation, notification delivery, and reply-window
+  expiry; defaults to `false`.
+- `ANCHOR_NOTIFICATION_*`: bounds notification concurrency, claims, leases, retry attempts/delays, transport
+  timeout, and response size. See `.env.example` for defaults.
+- `ANCHOR_EMAIL_RELAY_URL` / `ANCHOR_EMAIL_RELAY_TOKEN`: paired HTTPS email relay settings.
+- `ANCHOR_CONTACT_SECRET_KEYS` / `ANCHOR_CONTACT_ACTIVE_KEY_ID`: AES-256-GCM webhook-secret keyring and active
+  encryption key. Old keys must remain available until stored versions are rotated.
+- `ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED`: independent reviewer approval gate; defaults to `false` and requires
+  the ADR 0001 product/legal approval before enablement.
+
+The Horizon timeout and response-size settings apply only to Horizon/archive connectors. Anchor reserve JSON is
+bounded to 256 KB. The mZAR provider profile uses a 30-second end-to-end timeout, a 2 MB index limit, and a 5 MB
+PDF limit; these independent bounds accommodate the verified provider document without widening Horizon or
+generic anchor limits.
 
 Except for the bounded jitter ratio, every numeric setting must be a positive integer. Keep the lease duration
 comfortably above the worst-case per-source retry duration. `WORKER_CONCURRENCY` limits jobs; the independent
@@ -79,7 +164,9 @@ The mutable `source_health_states` projection persists circuit state and the nex
 worker restarts. Every finalized cycle also appends an immutable health sample. States are `healthy`,
 `unreachable`, `rejected`, `malformed`, `stale`, or `network_mismatched`. An observation older than the
 latest-ledger freshness half-life is retained as evidence with decayed reconciliation weight and recorded as
-`stale` health. An open circuit skips network retrieval until its cooldown expires; unrelated sources continue
+`stale` health. Supply evidence older than its hard 120-second maximum is also retained as a raw reading, but is
+excluded from the current snapshot; if no current evidence remains, the snapshot is `unavailable` with a null
+value. An open circuit skips network retrieval until its cooldown expires; unrelated sources continue
 and can still produce a degraded snapshot.
 
 ## Lease and shutdown behavior
@@ -88,8 +175,13 @@ Claims use PostgreSQL row locks with `SKIP LOCKED`, an owner, and a monotonicall
 heartbeat extends ownership while a handler runs. Losing the lease or receiving a shutdown signal cancels the
 connector and returns unfinished work to pending state.
 
+Each new lease stores the fully validated discovered job definition—including source endpoints, network identity,
+asset, and trusted checkpoint—plus its canonical SHA-256 digest. Claims verify that digest and execute the stored
+definition, so registry edits after scheduling cannot change a retry's inputs. Nullable fields remain only for
+leases created before this migration; those legacy leases use the current discovery result.
+
 A partial unique index permits only one pending/running cycle for a metric and subject. This keeps stateful
-discrepancy projection updates ordered for one network while still allowing unrelated subjects to run in
+discrepancy projection updates ordered for one network or asset while still allowing unrelated subjects to run in
 parallel.
 
 The finalized `ingest_cycles.idempotency_key` is the second fence. If a process crashes after committing a cycle

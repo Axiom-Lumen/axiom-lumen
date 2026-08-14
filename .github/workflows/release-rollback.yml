@@ -1,0 +1,172 @@
+name: Roll back release artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Build run ID for the last known-good artifact
+        required: true
+        type: string
+      environment:
+        required: true
+        type: choice
+        options: [preview, staging, production]
+      schema_compatible_ack:
+        description: Confirm the older artifact is compatible with the current forward-only schema
+        required: true
+        type: boolean
+        default: false
+      supply_enabled:
+        required: true
+        type: boolean
+        default: true
+      depth_enabled:
+        required: true
+        type: boolean
+        default: true
+      trustlines_enabled:
+        required: true
+        type: boolean
+        default: true
+      anchor_reserves_enabled:
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+  packages: read
+  deployments: write
+
+concurrency:
+  group: promote-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    if: inputs.schema_compatible_ack
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.AXIOM_BASE_URL }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+          path: release
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bind artifact to the trusted build run
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_RUN_ID" =~ ^[0-9]+$ ]]
+          manifest=release/release-manifest.json
+          commit=$(jq -er '.commit_sha | select(test("^[0-9a-f]{40}$"))' "$manifest")
+          digest=$(jq -er '.image_digest | select(test("^sha256:[0-9a-f]{64}$"))' "$manifest")
+          image=$(jq -er '.image | select(test("^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$"))' "$manifest")
+          source_repository=$(jq -er '.source_repository' "$manifest")
+          source_run_id=$(jq -er '.source_run_id | select(test("^[0-9]+$"))' "$manifest")
+          expected_image_repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          test "$source_repository" = "$GITHUB_REPOSITORY"
+          test "$source_run_id" = "$RELEASE_RUN_ID"
+          test "$image" = "${expected_image_repository}@${digest}"
+          run_json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RELEASE_RUN_ID}")
+          test "$(jq -r '.conclusion' <<< "$run_json")" = "success"
+          test "$(jq -r '.head_sha' <<< "$run_json")" = "$commit"
+          workflow_path=$(jq -r '.path' <<< "$run_json")
+          test "$workflow_path" = ".github/workflows/release-build.yml" || {
+            echo "artifact did not come from release-build.yml" >&2
+            exit 1
+          }
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "image_repository=${expected_image_repository}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.commit }}
+          path: source
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "source/.nvmrc"
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - run: npm ci
+        working-directory: source
+      - run: npm run release:manifest-verify -- ../release/release-manifest.json
+        working-directory: source
+        env:
+          EXPECTED_RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+          EXPECTED_RELEASE_REPOSITORY: ${{ github.repository }}
+          EXPECTED_RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          EXPECTED_RELEASE_IMAGE_REPOSITORY: ${{ steps.release.outputs.image_repository }}
+      - name: Enforce production-readiness promotion policy
+        run: npm run release:promotion-policy-verify
+        working-directory: source
+        env:
+          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
+          ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED: "false"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify signed build provenance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+        run: gh attestation verify "oci://${RELEASE_IMAGE}" --repo "$GITHUB_REPOSITORY"
+      - name: Verify attached SPDX SBOM
+        env:
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+        run: docker buildx imagetools inspect "$RELEASE_IMAGE" --format "{{ json .SBOM.SPDX }}" | jq -e '.SPDXID == "SPDXRef-DOCUMENT" and (.packages | length > 0)'
+      - name: Configure environment-scoped cluster credential
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          test -n "$KUBECONFIG_B64"
+          echo "$KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          chmod 600 "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+      - name: Redeploy last known-good web and worker digest without database rollback
+        id: rollout
+        working-directory: source
+        run: |
+          RELEASE_PHASE=runtime npm run release:render-kubernetes > "$RUNNER_TEMP/runtime.json"
+          kubectl apply -f "$RUNNER_TEMP/runtime.json"
+          kubectl rollout status --timeout=10m -n "axiom-${RELEASE_ENVIRONMENT}" deployment/axiom-web
+          kubectl rollout status --timeout=10m -n "axiom-${RELEASE_ENVIRONMENT}" deployment/axiom-worker
+          echo "worker_progress_after=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_MANIFEST_PATH: ${{ github.workspace }}/release/release-manifest.json
+          RELEASE_EXECUTION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
+          AXIOM_FEATURE_SUPPLY_ENABLED: ${{ inputs.supply_enabled }}
+          AXIOM_FEATURE_DEPTH_ENABLED: ${{ inputs.depth_enabled }}
+          AXIOM_FEATURE_TRUSTLINES_ENABLED: ${{ inputs.trustlines_enabled }}
+          AXIOM_FEATURE_ANCHOR_RESERVES_ENABLED: ${{ inputs.anchor_reserves_enabled }}
+          ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED: "false"
+      - name: Smoke rolled-back digest
+        run: npm run release:smoke
+        working-directory: source
+        env:
+          RELEASE_MANIFEST_PATH: ${{ github.workspace }}/release/release-manifest.json
+          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
+          AXIOM_FEATURE_SUPPLY_ENABLED: ${{ inputs.supply_enabled }}
+          AXIOM_FEATURE_DEPTH_ENABLED: ${{ inputs.depth_enabled }}
+          AXIOM_FEATURE_TRUSTLINES_ENABLED: ${{ inputs.trustlines_enabled }}
+          AXIOM_FEATURE_ANCHOR_RESERVES_ENABLED: ${{ inputs.anchor_reserves_enabled }}
+          ANCHOR_NAMED_PARTY_PUBLICATION_ENABLED: "false"
+          RELEASE_BASE_URL: ${{ vars.AXIOM_BASE_URL }}
+          RELEASE_WORKER_PROGRESS_AFTER: ${{ steps.rollout.outputs.worker_progress_after }}
+          AXIOM_SMOKE_ASSET: ${{ vars.AXIOM_SMOKE_ASSET }}
+          AXIOM_SMOKE_PAIR: ${{ vars.AXIOM_SMOKE_PAIR }}
+          AXIOM_SMOKE_ANCHOR: ${{ vars.AXIOM_SMOKE_ANCHOR }}
+          AXIOM_SMOKE_API_KEY: ${{ secrets.AXIOM_SMOKE_API_KEY }}

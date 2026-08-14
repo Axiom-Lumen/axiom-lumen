@@ -6,7 +6,7 @@
 // is the constants file from the previous fix; create it if you haven't yet.
 import { DOC_CODES } from "@/lib/doc-codes";
 import { ArrowLink, ButtonPrimary, Kicker, Wrap } from "../../site";
-import { ReconciliationStrip } from "./reconiclation-strip";
+import { ReconciliationStrip } from './reconciliation-strip'
 
 export function Hero() {
   return (
@@ -36,7 +36,7 @@ export function Hero() {
               conflicting ones.
             </p>
             <div className="flex shrink-0 flex-wrap md:flex-nowrap items-center gap-6">
-              <ButtonPrimary className='w-full md:w-auto text-center' href="/pricing">Get API access</ButtonPrimary>
+              <ButtonPrimary className='w-full md:w-auto text-center' href="/docs">Read the API</ButtonPrimary>
               <ArrowLink className='w-full md:w-auto justify-center text-center' href="/methodology">Methodology</ArrowLink>
             </div>
           </div>

@@ -1,5 +1,51 @@
 # Methodology changelog
 
+## anchor-reserve-comparison-v0.2 — 2026-08-11
+
+- Added the exact `mesh_mzar_pdf_v1` provider profile without changing generic v0.1 behavior.
+- Verified the real mZAR index and PDF layout, including signature values stored in AcroForm fields.
+- Required a persisted supply ledger close within five minutes of the historical report cutoff; current supply
+  cannot substitute for the retrospective reference.
+- Limited the report cutoff age to 62 days and publication delay to 35 days.
+- Allowed ZAR-to-mZAR normalization only under the document's explicit one-to-one redemption assertion.
+- Preserved original PDF bytes for evidence hashing and retained the existing internal-publication gate.
+
+## anchor-reserve-comparison-v0.1 — 2026-08-11
+
+- Added issuer → home-domain → SEP-1 currency attribution before accepting anchor evidence.
+- Added a strict JSON attestation schema in exact issued-asset units.
+- Required a current persisted supply reference and a five-minute comparison boundary.
+- Set a 10-basis-point inclusive tolerance and retained v1.5 persistence-based severity transitions.
+- Kept every named-party output non-public until reply and human-review controls are implemented.
+- Pinned public-HTTPS connections to validated DNS addresses and enforced response limits while streaming.
+- Added per-asset verification expiry, append-only verification events, atomic endpoint supersession, and
+  fail-closed suspension after failed re-verification.
+- Bound comparisons to the approved supply methodology and exact snapshot, ledger checkpoint, close time, and
+  contributing evidence identifiers.
+- Moved confidence coefficients into executable configuration and kept discrepancies internal until notification.
+
+## trustline-state-v0.1 — 2026-08-11
+
+- Defined exact authorized, maintain-liabilities, and unauthorized classic trustline counts and their total.
+- Explicitly excluded funded-holder, wallet-user, and beneficial-owner claims.
+- Added finalized reconciliation, confidence policy, freshness bounds, and the public trustline endpoint.
+
+## order-book-depth-v0.2 — 2026-08-11
+
+- Added persisted coherent-book reconciliation and `GET /api/v1/depth/{pair}`.
+- Pinned 50-basis-point bucket agreement, five/20-second freshness bounds, confidence coefficients and caps.
+- Kept Horizon replicas in one derivation family and empty/one-sided books out of usable observations.
+
+## order-book-depth-v0.1 — 2026-08-11
+
+- Defined deterministic native/credit pair canonicalization and counter-per-base rational prices.
+- Defined base-asset-equivalent cumulative bid and ask depth at 50, 100, and 500 basis points around a
+  two-sided midpoint.
+- Pinned classic SDEX offer inclusion, round-down amount conversion, same-ledger pagination, a 5-second
+  freshness half-life, and a 20-second hard age bound.
+- Excluded liquidity pools and prohibited Horizon replicas from being treated as independent corroboration.
+- This version defines ingestion only; public reconciliation and serving remain unimplemented.
+
 The public methodology is versioned independently from application releases. Changes to weights, freshness
 parameters, tolerance bands, confidence formulas, or severity thresholds require a new methodology version.
 
@@ -11,6 +57,11 @@ parameters, tolerance bands, confidence formulas, or severity thresholds require
 - Required two genuinely independent derivations for verified status; Horizon replicas improve availability but
   do not add source diversity.
 - Standardized the future public label and metric ID as “On-chain asset supply” / `onchain_asset_supply`.
+- Added the `onchain-asset-supply-confidence-v0.1` formula, a 30-second freshness half-life, and a hard
+  120-second maximum age that excludes old readings from current values without deleting their evidence.
+- Pinned all five source-class base weights inside this methodology version so later global weight changes cannot
+  alter replayed supply results.
+- Added exact component-level discrepancy context for aggregate and offsetting-component mismatches.
 
 This independently versioned metric profile does not alter the v1.5 latest-ledger weights, confidence formula,
 or discrepancy policy. Decision record: [`0005-onchain-asset-supply-semantics.md`](../decisions/0005-onchain-asset-supply-semantics.md)

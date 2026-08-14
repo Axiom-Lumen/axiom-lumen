@@ -61,3 +61,52 @@ export function parseSourceResilienceConfig(
   assertSourceResiliencePolicy(policy)
   return config
 }
+
+export interface AnchorWorkflowConfig {
+  enabled: boolean
+  concurrency: number
+  claimLimit: number
+  leaseDurationMs: number
+  pollIntervalMs: number
+  maximumAttempts: number
+  retryBaseDelayMs: number
+  retryMaximumDelayMs: number
+  transportTimeoutMs: number
+  maximumResponseBytes: number
+  emailRelayUrl?: string
+  emailRelayToken?: string
+}
+
+export function parseAnchorWorkflowConfig(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): AnchorWorkflowConfig {
+  const enabled = environment.ANCHOR_WORKFLOW_ENABLED === 'true'
+  if (environment.ANCHOR_WORKFLOW_ENABLED !== undefined && !['true', 'false'].includes(environment.ANCHOR_WORKFLOW_ENABLED)) {
+    throw new Error('ANCHOR_WORKFLOW_ENABLED must be true or false')
+  }
+  const emailRelayUrl = environment.ANCHOR_EMAIL_RELAY_URL?.trim()
+  const emailRelayToken = environment.ANCHOR_EMAIL_RELAY_TOKEN
+  if ((emailRelayUrl && !emailRelayToken) || (!emailRelayUrl && emailRelayToken)) {
+    throw new Error('ANCHOR_EMAIL_RELAY_URL and ANCHOR_EMAIL_RELAY_TOKEN must be configured together')
+  }
+  if (emailRelayUrl) {
+    const url = new URL(emailRelayUrl)
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('ANCHOR_EMAIL_RELAY_URL must be credential-free HTTPS')
+  }
+  const config: AnchorWorkflowConfig = {
+    enabled,
+    concurrency: positiveInteger('ANCHOR_NOTIFICATION_CONCURRENCY', environment.ANCHOR_NOTIFICATION_CONCURRENCY, 2),
+    claimLimit: positiveInteger('ANCHOR_NOTIFICATION_CLAIM_LIMIT', environment.ANCHOR_NOTIFICATION_CLAIM_LIMIT, 10),
+    leaseDurationMs: positiveInteger('ANCHOR_NOTIFICATION_LEASE_DURATION_MS', environment.ANCHOR_NOTIFICATION_LEASE_DURATION_MS, 30_000),
+    pollIntervalMs: positiveInteger('ANCHOR_WORKFLOW_POLL_INTERVAL_MS', environment.ANCHOR_WORKFLOW_POLL_INTERVAL_MS, 5_000),
+    maximumAttempts: positiveInteger('ANCHOR_NOTIFICATION_MAX_ATTEMPTS', environment.ANCHOR_NOTIFICATION_MAX_ATTEMPTS, 5),
+    retryBaseDelayMs: positiveInteger('ANCHOR_NOTIFICATION_RETRY_BASE_DELAY_MS', environment.ANCHOR_NOTIFICATION_RETRY_BASE_DELAY_MS, 1_000),
+    retryMaximumDelayMs: positiveInteger('ANCHOR_NOTIFICATION_RETRY_MAX_DELAY_MS', environment.ANCHOR_NOTIFICATION_RETRY_MAX_DELAY_MS, 300_000),
+    transportTimeoutMs: positiveInteger('ANCHOR_NOTIFICATION_TIMEOUT_MS', environment.ANCHOR_NOTIFICATION_TIMEOUT_MS, 10_000),
+    maximumResponseBytes: positiveInteger('ANCHOR_NOTIFICATION_MAX_RESPONSE_BYTES', environment.ANCHOR_NOTIFICATION_MAX_RESPONSE_BYTES, 64_000),
+    ...(emailRelayUrl && emailRelayToken ? { emailRelayUrl, emailRelayToken } : {}),
+  }
+  if (config.claimLimit > 100) throw new Error('ANCHOR_NOTIFICATION_CLAIM_LIMIT must not exceed 100')
+  if (config.retryMaximumDelayMs < config.retryBaseDelayMs) throw new Error('anchor notification retry maximum must not be below its base')
+  return config
+}

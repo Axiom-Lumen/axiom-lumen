@@ -164,6 +164,32 @@ describeWithDatabase('scheduler leases', () => {
     }
   })
 
+  it('routes the exact mZAR binding to retrospective v0.2 without changing generic v0.1 routes', async () => {
+    const { pool, repository } = await database()
+    try {
+      const issuer = 'GCBNWTCCMC32UHZ5OCC2PNMFDGXRVPA7MFFBFFTCVW77SX5PMRB7Q4BY'
+      await pool.query(`INSERT INTO networks (id, passphrase, display_name) VALUES ('public', 'Public Global Stellar Network ; September 2015', 'Public')`)
+      await pool.query(`INSERT INTO assets (id, network_id, type, code, issuer, canonical_id) VALUES ('asset-mzar', 'public', 'credit', 'mZAR', $1, $2)`, [issuer, `mZAR:${issuer}`])
+      await pool.query(`INSERT INTO anchors (id, network_id, name, stellar_account, status) VALUES ('anchor-mzar', 'public', 'Mesh Trade South Africa (Pty) Ltd', $1, 'verified')`, [issuer])
+      await pool.query(`
+        INSERT INTO anchor_domains (id, anchor_id, domain, verified_at, verification_expires_at)
+        VALUES ('domain-mzar', 'anchor-mzar', 'mzar.co.za', '2026-04-01T00:00:00Z', '2026-04-02T00:00:00Z')
+      `)
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, anchor_id, source_class, adapter, url, upstream_id, config)
+        VALUES ('source-mzar', 'public', 'anchor-mzar', 'anchor_self_reported', 'anchor', 'https://mzar.co.za/', 'anchor-mzar',
+          '{"anchorReserves":{"enabled":true,"assetIds":["asset-mzar"],"verifications":{"asset-mzar":{"domainId":"domain-mzar","verifiedAt":"2026-04-01T00:00:00.000Z","verificationExpiresAt":"2026-04-02T00:00:00.000Z"}},"profiles":{"asset-mzar":"mesh_mzar_pdf_v1"}}}')
+      `)
+      expect(await repository.discoverAnchorReserveJobs('anchor-reserve-comparison-v0.1', new Date('2026-04-01T12:00:00.000Z'))).toEqual([{
+        metric: 'anchor_reserves', subjectKey: `public:mZAR:${issuer}`, methodologyVersion: 'anchor-reserve-comparison-v0.2',
+        anchorId: 'anchor-mzar', connectorProfile: 'mesh_mzar_pdf_v1', asset: { kind: 'credit', code: 'mZAR', issuer },
+        sources: [expect.objectContaining({ id: 'source-mzar', url: 'https://mzar.co.za/' })],
+      }])
+    } finally {
+      await pool.end()
+    }
+  })
+
   it('reconstructs the compatibility response from finalized evidence only', async () => {
     const { pool, client, repository } = await database()
     try {
@@ -188,6 +214,115 @@ describeWithDatabase('scheduler leases', () => {
           networkId: 'public',
           networkPassphrase: 'Public Global Stellar Network ; September 2015',
         }],
+      }])
+      const canonicalAsset = `USDC:G${'A'.repeat(55)}`
+      await pool.query(`
+        INSERT INTO assets (id, network_id, type, code, issuer, canonical_id)
+        VALUES ('asset-usdc', 'public', 'credit', 'USDC', $1, $2)
+      `, [`G${'A'.repeat(55)}`, canonicalAsset])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = '{"supply":{"enabled":true,"assetIds":["asset-usdc"]}}'
+        WHERE id = 'source-a'
+      `)
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, source_class, adapter, url, config)
+        VALUES (
+          'archive-a', 'public', 'archive', 'archive', 'https://archive.example/usdc.json',
+          '{"supply":{"enabled":true,"assetIds":["asset-usdc"],"trustedCheckpoints":{"asset-usdc":{"ledgerSequence":500}}}}'
+        )
+      `)
+      expect(await repository.discoverSupplyJobs('onchain-asset-supply-v0.1')).toEqual([{
+        metric: 'circulating_supply',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'onchain-asset-supply-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [
+          expect.objectContaining({ id: 'archive-a', adapter: 'archive', trustedCheckpoint: { ledgerSequence: 500 } }),
+          expect.objectContaining({ id: 'source-a', adapter: 'horizon' }),
+        ],
+      }])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = jsonb_set(config, '{trustlines}', '{"enabled":true,"assetIds":["asset-usdc"]}'::jsonb)
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverTrustlineJobs('trustline-state-v0.1')).toEqual([{
+        metric: 'trustline_count',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'trustline-state-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [expect.objectContaining({ id: 'source-a', adapter: 'horizon', sourceClass: 'canonical_ledger' })],
+      }])
+      await pool.query(`
+        INSERT INTO anchors (id, network_id, name, stellar_account, status)
+        VALUES ('anchor-usdc', 'public', 'Example Anchor', $1, 'verified')
+      `, [`G${'A'.repeat(55)}`])
+      await pool.query(`
+        INSERT INTO anchor_domains (id, anchor_id, domain, verified_at, verification_expires_at)
+        VALUES (
+          'anchor-domain-usdc', 'anchor-usdc', 'anchor.example',
+          '2026-08-11T12:00:00.000Z', '2026-08-12T12:00:00.000Z'
+        )
+      `)
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, anchor_id, source_class, adapter, url, upstream_id, config)
+        VALUES (
+          'anchor-reserve-a', 'public', 'anchor-usdc', 'anchor_self_reported', 'anchor',
+          'https://anchor.example/reserve.json', 'anchor-usdc',
+          '{"anchorReserves":{"enabled":true,"assetIds":["asset-usdc"],"verifications":{"asset-usdc":{"domainId":"anchor-domain-usdc","verifiedAt":"2026-08-11T12:00:00.000Z","verificationExpiresAt":"2026-08-12T12:00:00.000Z"}}}}'
+        )
+      `)
+      expect(await repository.discoverAnchorReserveJobs('anchor-reserve-comparison-v0.1', new Date('2026-08-11T12:30:00.000Z'))).toEqual([{
+        metric: 'anchor_reserves',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'anchor-reserve-comparison-v0.1',
+        anchorId: 'anchor-usdc',
+        connectorProfile: 'axiom_json_v1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [expect.objectContaining({ id: 'anchor-reserve-a', adapter: 'anchor', sourceClass: 'anchor_self_reported' })],
+      }])
+      await pool.query(`
+        INSERT INTO source_definitions (id, network_id, anchor_id, source_class, adapter, url, upstream_id, config)
+        VALUES (
+          'anchor-reserve-duplicate', 'public', 'anchor-usdc', 'anchor_self_reported', 'anchor',
+          'https://anchor.example/reserve-duplicate.json', 'anchor-usdc',
+          '{"anchorReserves":{"enabled":true,"assetIds":["asset-usdc"],"verifications":{"asset-usdc":{"domainId":"anchor-domain-usdc","verifiedAt":"2026-08-11T12:00:00.000Z","verificationExpiresAt":"2026-08-12T12:00:00.000Z"}}}}'
+        )
+      `)
+      await expect(repository.discoverAnchorReserveJobs('anchor-reserve-comparison-v0.1', new Date('2026-08-11T12:30:00.000Z'))).rejects.toThrow('multiple active verified')
+      await pool.query(`UPDATE source_definitions SET enabled = false WHERE id = 'anchor-reserve-duplicate'`)
+      await pool.query(`UPDATE anchor_domains SET verification_expires_at = '2026-08-11T13:00:00.000Z' WHERE id = 'anchor-domain-usdc'`)
+      expect(await repository.discoverAnchorReserveJobs('anchor-reserve-comparison-v0.1', new Date('2026-08-11T13:00:00.000Z'))).toEqual([])
+      expect(await repository.discoverAnchorReserveJobs('anchor-reserve-comparison-v0.1', new Date('2026-08-12T12:00:00.000Z'))).toEqual([])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = jsonb_set(config, '{trustlines}', '{"enabled":true,"assetIds":"asset-usdc"}'::jsonb)
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverTrustlineJobs('trustline-state-v0.1')).toEqual([
+        expect.objectContaining({
+          sources: [expect.objectContaining({ id: 'source-a', configurationError: 'Trustline source configuration is malformed' })],
+        }),
+      ])
+      await pool.query(`
+        UPDATE source_definitions
+        SET config = '{"supply":{"enabled":true,"assetIds":"asset-usdc"}}'
+        WHERE id = 'source-a'
+      `)
+      expect(await repository.discoverSupplyJobs('onchain-asset-supply-v0.1')).toEqual([{
+        metric: 'circulating_supply',
+        subjectKey: `public:${canonicalAsset}`,
+        methodologyVersion: 'onchain-asset-supply-v0.1',
+        asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+        sources: [
+          expect.objectContaining({ id: 'archive-a', adapter: 'archive' }),
+          expect.objectContaining({
+            id: 'source-a',
+            adapter: 'horizon',
+            configurationError: 'Supply source configuration is malformed',
+          }),
+        ],
       }])
       await pool.query(`
         INSERT INTO ingest_cycles

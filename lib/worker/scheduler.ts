@@ -6,6 +6,9 @@ import type {
   SchedulerRepository,
   ScheduledCycleInput,
 } from '../db/scheduler-repository'
+import { parseDiscoveredIngestJob } from '../db/scheduler-repository'
+import { computeEvidenceSha256 } from '../evidence/json'
+import { errorTelemetry, traceIdForCycle, type TelemetryContext, type TelemetryLevel } from '../observability/telemetry'
 
 export interface SchedulerOptions {
   workerId: string
@@ -30,7 +33,12 @@ export interface SchedulerDependencies {
   persistenceRepositories: PersistenceRepositories
   handlers: WorkerJobHandlers
   methodologyVersion: string
+  supplyMethodologyVersion?: string
+  depthMethodologyVersion?: string
+  trustlineMethodologyVersion?: string
+  anchorReserveMethodologyVersion?: string
   clock?: () => Date
+  telemetry?: (level: TelemetryLevel, event: string, context: TelemetryContext) => void
 }
 
 function assertOptions(options: SchedulerOptions) {
@@ -52,6 +60,7 @@ function scheduledTime(now: Date, intervalSeconds: number) {
 }
 
 export function scheduledCycle(job: DiscoveredIngestJob, at: string): ScheduledCycleInput {
+  const jobDefinition = parseDiscoveredIngestJob(job)
   const idempotencyKey = `${job.metric}:${job.subjectKey}:${job.methodologyVersion}:${at}`
   const digest = createHash('sha256').update(idempotencyKey).digest('hex')
   return {
@@ -61,6 +70,8 @@ export function scheduledCycle(job: DiscoveredIngestJob, at: string): ScheduledC
     methodologyVersion: job.methodologyVersion,
     idempotencyKey,
     scheduledAt: at,
+    jobDefinition,
+    jobDefinitionSha256: computeEvidenceSha256(jobDefinition),
   }
 }
 
@@ -98,7 +109,21 @@ export async function runSchedulerOnce(
   if (!Number.isFinite(now.getTime())) throw new Error('clock must return a valid Date')
   const nowIso = now.toISOString()
   const reaped = await dependencies.schedulerRepository.reapExpiredLeases(nowIso, options.maxAttempts)
-  const jobs = await dependencies.schedulerRepository.discoverLatestLedgerJobs(dependencies.methodologyVersion)
+  const jobs = [
+    ...await dependencies.schedulerRepository.discoverLatestLedgerJobs(dependencies.methodologyVersion),
+    ...(dependencies.supplyMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverSupplyJobs(dependencies.supplyMethodologyVersion)
+      : []),
+    ...(dependencies.depthMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverDepthJobs(dependencies.depthMethodologyVersion)
+      : []),
+    ...(dependencies.trustlineMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverTrustlineJobs(dependencies.trustlineMethodologyVersion)
+      : []),
+    ...(dependencies.anchorReserveMethodologyVersion
+      ? await dependencies.schedulerRepository.discoverAnchorReserveJobs(dependencies.anchorReserveMethodologyVersion)
+      : []),
+  ]
   const jobsByKey = new Map(jobs.map((job) => [`${job.metric}:${job.subjectKey}`, job]))
   const at = scheduledTime(now, options.intervalSeconds)
   let scheduled = 0
@@ -117,11 +142,46 @@ export async function runSchedulerOnce(
       })
       if (!lease) return
       summary.claimed += 1
-      const job = jobsByKey.get(`${lease.metric}:${lease.subjectKey}`)
+      const traceId = traceIdForCycle(lease.id)
+      const cycleStartedAt = clock().getTime()
+      dependencies.telemetry?.('info', 'worker_cycle_started', {
+        trace_id: traceId,
+        cycle_id: lease.id,
+        worker_id: options.workerId,
+        metric: lease.metric,
+      })
+      let job: DiscoveredIngestJob | undefined
+      try {
+        if (lease.jobDefinition !== undefined) {
+          if (!lease.jobDefinitionSha256 || computeEvidenceSha256(lease.jobDefinition) !== lease.jobDefinitionSha256) {
+            throw new Error('Scheduled job definition failed its integrity check')
+          }
+          job = parseDiscoveredIngestJob(lease.jobDefinition)
+          if (
+            job.metric !== lease.metric ||
+            job.subjectKey !== lease.subjectKey ||
+            job.methodologyVersion !== lease.methodologyVersion
+          ) throw new Error('Scheduled job definition does not match its lease identity')
+        } else {
+          job = jobsByKey.get(`${lease.metric}:${lease.subjectKey}`)
+        }
+      } catch (error) {
+        await dependencies.schedulerRepository.failLease(lease, clock().toISOString(), error)
+        summary.failed += 1
+        dependencies.telemetry?.('error', 'worker_cycle_failed', {
+          trace_id: traceId, cycle_id: lease.id, worker_id: options.workerId, metric: lease.metric,
+          duration_ms: Math.max(0, clock().getTime() - cycleStartedAt), ...errorTelemetry(error),
+        })
+        continue
+      }
       const handler = dependencies.handlers[lease.metric]
       if (!job || !handler) {
         await dependencies.schedulerRepository.failLease(lease, clock().toISOString(), new Error('No registered job handler'))
         summary.failed += 1
+        dependencies.telemetry?.('error', 'worker_cycle_failed', {
+          trace_id: traceId, cycle_id: lease.id, worker_id: options.workerId, metric: lease.metric,
+          duration_ms: Math.max(0, clock().getTime() - cycleStartedAt), error_type: 'MissingJobHandler',
+        })
         continue
       }
 
@@ -153,13 +213,30 @@ export async function runSchedulerOnce(
         if (!acknowledged) throw new Error(`worker lost lease ${lease.id} before acknowledgement`)
         if (persisted.status === 'duplicate') summary.duplicates += 1
         else summary.completed += 1
+        dependencies.telemetry?.('info', 'worker_cycle_completed', {
+          trace_id: traceId,
+          cycle_id: lease.id,
+          worker_id: options.workerId,
+          metric: lease.metric,
+          source_ids: [...new Set(batch.readings.map((reading) => reading.sourceId))].sort(),
+          duration_ms: Math.max(0, clock().getTime() - cycleStartedAt),
+          persistence_status: persisted.status,
+        })
       } catch (error) {
         if (isAbort(error, jobSignal)) {
           await dependencies.schedulerRepository.releaseLease(lease, clock().toISOString())
           summary.cancelled += 1
+          dependencies.telemetry?.('warn', 'worker_cycle_cancelled', {
+            trace_id: traceId, cycle_id: lease.id, worker_id: options.workerId, metric: lease.metric,
+            duration_ms: Math.max(0, clock().getTime() - cycleStartedAt),
+          })
         } else {
           await dependencies.schedulerRepository.failLease(lease, clock().toISOString(), error)
           summary.failed += 1
+          dependencies.telemetry?.('error', 'worker_cycle_failed', {
+            trace_id: traceId, cycle_id: lease.id, worker_id: options.workerId, metric: lease.metric,
+            duration_ms: Math.max(0, clock().getTime() - cycleStartedAt), ...errorTelemetry(error),
+          })
         }
       } finally {
         clearInterval(heartbeat)

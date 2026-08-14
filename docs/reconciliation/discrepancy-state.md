@@ -34,7 +34,8 @@ replay. They never edit or delete the original event in place.
 
 ## Publication
 
-Info records remain internal. A named-party Warning or Critical record enters `pending_reply` with an
+Info records remain internal. A named-party Warning or Critical record remains internal until successful
+notification is durably recorded, then enters `pending_reply` with an
 `awaiting_reply` review state. Publication requires a non-empty human reviewer ID and either:
 
 - a received response that a reviewer has marked reviewed; or

@@ -2,7 +2,10 @@
 
 DAT-01 introduces PostgreSQL schema and migration tooling. DAT-02 adds the transactional repository boundary and
 database-enforced immutable audit records. ING-01 adds durable scheduler leases, worker writes, and a persisted
-latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections.
+latest-ledger read path. ING-02 adds durable source-health and circuit-breaker projections. SUP-04 reuses the
+same atomic boundary for supply evidence, reconciliation snapshots, and discrepancy events, and pins each newly
+scheduled lease to a digested job-definition snapshot. API-01 reconstructs the public supply response exclusively
+from that finalized snapshot, its immutable contribution readings, and approved discrepancy state.
 
 ## Configuration
 
@@ -11,6 +14,19 @@ latest-ledger read path. ING-02 adds durable source-health and circuit-breaker p
 - `DATABASE_POOL_MAX`: maximum connections in one application process; defaults to `5`.
 - `DATABASE_IDLE_TIMEOUT_MS`: idle connection timeout; defaults to `30000`.
 - `DATABASE_CONNECTION_TIMEOUT_MS`: connection acquisition timeout; defaults to `5000`.
+- `AXIOM_API_AUTH_REQUIRED`: when `true`, public v1 GET requests require a database-backed API key and consume
+  the principal plan's atomic fixed-window quota; defaults to `false` only outside production, where it must be
+  explicit.
+- `API_QUOTA_RETENTION_HOURS`: completed quota-window retention used by `npm run api:quota-prune`; defaults to
+  `168` hours.
+
+API access uses immutable `api_key_events`, principal scope grants, optional `api_plan_route_limits`, and
+`api_quota_usage` buckets partitioned by principal, route, sustained/burst kind, and fixed-window start. Key
+rotation replaces and revokes credentials transactionally; audit rows reject update, delete, and truncate.
+
+Completed public-metric cycles append `snapshot_events` in the same transaction as their immutable snapshot.
+The monotonic event ID is the cross-instance SSE cursor; payloads are validated public pointers rather than raw
+evidence. The table is append-only, and gated anchor comparison snapshots are deliberately excluded.
 
 Never commit real URLs or log them. Aggregate pool capacity across all process instances must remain below the
 database provider's connection limit.
@@ -67,10 +83,11 @@ headers, cookies, API keys, tokens, and passwords before hashing and storage. Th
 verifies the exact sanitized evidence retained in the database without deriving a digest from discarded secrets.
 Connectors must still avoid putting unrelated personal or secret data into evidence.
 
-Every raw reading stores a validated copy of its complete source identity. API reconstruction uses that immutable
-evidence rather than the mutable source registry, preserving the endpoint and source class observed at collection
-time. The ING-01 migration backfills existing readings from their referenced source/network rows before making
-the identity field mandatory.
+Every raw reading stores a validated copy of its complete source identity. A successful supply reading also keeps
+the complete normalized observation—ledger, component vector, total, derivation/checkpoint metadata—and its
+connector evidence. API reconstruction uses immutable evidence rather than the mutable source registry,
+preserving the endpoint and source class observed at collection time. The ING-01 migration backfills existing
+readings from their referenced source/network rows before making the identity field mandatory.
 
 The following evidence tables reject `UPDATE`, `DELETE`, and `TRUNCATE` through PostgreSQL triggers, even if an
 application role is accidentally granted those privileges: retrieval attempts, raw readings, source-health samples,
@@ -83,3 +100,7 @@ cycle cannot overwrite newer circuit state.
 Audit events and referenced evidence have indefinite retention by default. Any future retention policy must be a
 reviewed forward migration that preserves evidence referenced by unresolved discrepancies; ordinary application
 credentials have no deletion path.
+
+Backup schedules, PITR requirements, isolated restore verification, and retention classes are defined in the
+[data-protection runbook](./runbooks/data-protection.md). Incident and service-specific recovery procedures are
+indexed by the [operations runbook](./runbooks/README.md).

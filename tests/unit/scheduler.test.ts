@@ -13,7 +13,7 @@ const options = {
   pollIntervalMs: 5_000,
 }
 
-function job(subjectKey: string): DiscoveredIngestJob {
+function job(subjectKey: 'public' | 'testnet' | 'futurenet'): DiscoveredIngestJob {
   return {
     metric: 'latest_ledger',
     subjectKey,
@@ -45,6 +45,10 @@ function dependencies(jobs: DiscoveredIngestJob[], leases: ClaimedCycle[], handl
   const schedulerRepository = {
     reapExpiredLeases: vi.fn(async () => ({ retried: 0, abandoned: 0, finalized: 0 })),
     discoverLatestLedgerJobs: vi.fn(async () => jobs),
+    discoverSupplyJobs: vi.fn(async () => []),
+    discoverDepthJobs: vi.fn(async () => []),
+    discoverTrustlineJobs: vi.fn(async () => []),
+    discoverAnchorReserveJobs: vi.fn(async () => []),
     ensureScheduledCycle: vi.fn(async () => true),
     claimNextCycle: vi.fn(async () => queue.shift() ?? null),
     renewLease: vi.fn(async () => true),
@@ -76,7 +80,7 @@ describe('worker scheduler', () => {
   })
 
   it('bounds concurrent handlers while draining claimed work', async () => {
-    const jobs = ['public', 'testnet', 'futurenet'].map(job)
+    const jobs = (['public', 'testnet', 'futurenet'] as const).map(job)
     let active = 0
     let maximumActive = 0
     const handler = vi.fn(async ({ lease }: { lease: ClaimedCycle }) => {
@@ -95,6 +99,23 @@ describe('worker scheduler', () => {
     expect(fixture.persistenceRepositories.persistCompletedCycle).toHaveBeenCalledTimes(3)
   })
 
+  it('emits cycle and source correlation fields through the injected structured telemetry sink', async () => {
+    const discovered = job('public')
+    const lease = leaseFor(discovered)
+    const handler = vi.fn(async () => ({ readings: [{ sourceId: 'source-public' }] } as never))
+    const fixture = dependencies([discovered], [lease], handler)
+    const telemetry = vi.fn()
+
+    await runSchedulerOnce({ ...fixture.value, telemetry }, options)
+
+    expect(telemetry).toHaveBeenCalledWith('info', 'worker_cycle_started', expect.objectContaining({
+      trace_id: expect.stringMatching(/^[0-9a-f]{32}$/), cycle_id: lease.id, worker_id: 'worker-a',
+    }))
+    expect(telemetry).toHaveBeenCalledWith('info', 'worker_cycle_completed', expect.objectContaining({
+      cycle_id: lease.id, source_ids: ['source-public'], persistence_status: 'inserted',
+    }))
+  })
+
   it('acknowledges a durable winner when an overlapping retry resolves as a duplicate', async () => {
     const discovered = job('public')
     const handler = vi.fn(async () => ({ cycle: { id: 'winner' } } as never))
@@ -109,6 +130,94 @@ describe('worker scheduler', () => {
     expect(result).toMatchObject({ duplicates: 1, completed: 0, failed: 0 })
     expect(fixture.schedulerRepository.acknowledgeFinalized).toHaveBeenCalledOnce()
     expect(fixture.schedulerRepository.failLease).not.toHaveBeenCalled()
+  })
+
+  it('discovers and dispatches the registered supply methodology without replacing latest-ledger jobs', async () => {
+    const supplyJob: DiscoveredIngestJob = {
+      metric: 'circulating_supply',
+      subjectKey: `public:USDC:G${'A'.repeat(55)}`,
+      methodologyVersion: 'onchain-asset-supply-v0.1',
+      asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+      sources: [{
+        id: 'supply-source',
+        url: 'https://supply.example',
+        sourceClass: 'canonical_ledger',
+        adapter: 'horizon',
+        upstreamId: null,
+        networkId: 'public',
+        networkPassphrase: 'Public Global Stellar Network ; September 2015',
+      }],
+    }
+    const supplyLease = leaseFor(supplyJob)
+    const supplyHandler = vi.fn(async () => ({ cycle: { id: supplyLease.id } } as never))
+    const fixture = dependencies([], [supplyLease], vi.fn())
+    vi.mocked(fixture.schedulerRepository.discoverSupplyJobs).mockResolvedValue([supplyJob])
+    const dependenciesWithSupply: SchedulerDependencies = {
+      ...fixture.value,
+      supplyMethodologyVersion: 'onchain-asset-supply-v0.1',
+      handlers: { ...fixture.value.handlers, circulating_supply: supplyHandler },
+    }
+
+    const result = await runSchedulerOnce(dependenciesWithSupply, options)
+
+    expect(result).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
+    expect(fixture.schedulerRepository.discoverLatestLedgerJobs).toHaveBeenCalledWith('latest-ledger-v0.2')
+    expect(fixture.schedulerRepository.discoverSupplyJobs).toHaveBeenCalledWith('onchain-asset-supply-v0.1')
+    expect(supplyHandler).toHaveBeenCalledOnce()
+  })
+
+  it('discovers and dispatches trustline-state jobs through their registered handler', async () => {
+    const trustlineJob: DiscoveredIngestJob = {
+      metric: 'trustline_count', subjectKey: `public:USDC:G${'A'.repeat(55)}`, methodologyVersion: 'trustline-state-v0.1',
+      asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+      sources: [{ id: 'trustline-source', url: 'https://trustlines.example', sourceClass: 'canonical_ledger', adapter: 'horizon', upstreamId: null, networkId: 'public', networkPassphrase: 'Public Global Stellar Network ; September 2015' }],
+    }
+    const trustlineLease = leaseFor(trustlineJob)
+    const handler = vi.fn(async () => ({ cycle: { id: trustlineLease.id } } as never))
+    const fixture = dependencies([], [trustlineLease], vi.fn())
+    vi.mocked(fixture.schedulerRepository.discoverTrustlineJobs).mockResolvedValue([trustlineJob])
+    const configured: SchedulerDependencies = { ...fixture.value, trustlineMethodologyVersion: 'trustline-state-v0.1', handlers: { ...fixture.value.handlers, trustline_count: handler } }
+
+    expect(await runSchedulerOnce(configured, options)).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
+    expect(fixture.schedulerRepository.discoverTrustlineJobs).toHaveBeenCalledWith('trustline-state-v0.1')
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('discovers and dispatches internal anchor reserve comparison jobs', async () => {
+    const reserveJob: DiscoveredIngestJob = {
+      metric: 'anchor_reserves', subjectKey: `public:USDC:G${'A'.repeat(55)}`, methodologyVersion: 'anchor-reserve-comparison-v0.1', anchorId: 'anchor_1',
+      connectorProfile: 'axiom_json_v1',
+      asset: { kind: 'credit', code: 'USDC', issuer: `G${'A'.repeat(55)}` },
+      sources: [{ id: 'anchor-source', url: 'https://anchor.example/reserve.json', sourceClass: 'anchor_self_reported', adapter: 'anchor', upstreamId: 'anchor_1', networkId: 'public', networkPassphrase: 'Public Global Stellar Network ; September 2015' }],
+    }
+    const reserveLease = leaseFor(reserveJob)
+    const handler = vi.fn(async () => ({ cycle: { id: reserveLease.id } } as never))
+    const fixture = dependencies([], [reserveLease], vi.fn())
+    vi.mocked(fixture.schedulerRepository.discoverAnchorReserveJobs).mockResolvedValue([reserveJob])
+    const configured: SchedulerDependencies = { ...fixture.value, anchorReserveMethodologyVersion: 'anchor-reserve-comparison-v0.1', handlers: { ...fixture.value.handlers, anchor_reserves: handler } }
+
+    expect(await runSchedulerOnce(configured, options)).toMatchObject({ scheduled: 1, claimed: 1, completed: 1 })
+    expect(fixture.schedulerRepository.discoverAnchorReserveJobs).toHaveBeenCalledWith('anchor-reserve-comparison-v0.1')
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('executes a claimed lease from its immutable job snapshot after source configuration changes', async () => {
+    const original = job('public')
+    const lease = leaseFor(original)
+    const changed = {
+      ...original,
+      sources: [{ ...original.sources[0]!, url: 'https://replacement.example' }],
+    }
+    const handler = vi.fn(async () => ({ cycle: { id: lease.id } } as never))
+    const fixture = dependencies([changed], [lease], handler)
+
+    await runSchedulerOnce(fixture.value, options)
+
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      job: expect.objectContaining({
+        sources: [expect.objectContaining({ url: 'https://public.example' })],
+      }),
+    }))
   })
 
   it('releases a claimed lease when graceful shutdown cancels its handler', async () => {
